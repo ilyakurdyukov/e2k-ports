@@ -1,0 +1,91 @@
+From e7f86a66710e04029ab4c197352e89372efde559 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Sat, 30 Jan 2021 14:33:34 +0700
+Subject: [PATCH] TBB-2020.3 e2k support
+
+---
+ build/linux.gcc.inc            | 4 ++++
+ build/linux.inc                | 3 +++
+ include/tbb/tbb_config.h       | 2 +-
+ src/test/test_malloc_pools.cpp | 4 ++++
+ src/test/test_task_arena.cpp   | 4 ++++
+ 5 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/build/linux.gcc.inc b/build/linux.gcc.inc
+index d820c15..f6b8d98 100644
+--- a/build/linux.gcc.inc
++++ b/build/linux.gcc.inc
+@@ -105,6 +105,10 @@ ifeq (ppc32,$(arch))
+     LIB_LINK_FLAGS += -m32
+ endif
+ 
++ifeq (e2k,$(arch))
++    CPLUS_FLAGS += -mno-avx
++endif
++
+ ifeq (bg,$(arch))
+     CPLUS = $(firstword $(notdir $(shell which powerpc{64,32,}-bg{z..a}-linux-g++ 2>/dev/null)))
+     CONLY = $(firstword $(notdir $(shell which powerpc{64,32,}-bg{z..a}-linux-gcc 2>/dev/null)))
+diff --git a/build/linux.inc b/build/linux.inc
+index ad1841c..e02fa88 100644
+--- a/build/linux.inc
++++ b/build/linux.inc
+@@ -101,6 +101,9 @@ endif
+ ifeq ($(arch),armv7)
+         def_prefix = lin32
+ endif
++ifeq ($(arch),e2k)
++        def_prefix = lin64
++endif
+ ifeq (,$(def_prefix))
+     ifeq (64,$(findstring 64,$(arch)))
+             def_prefix = lin64
+diff --git a/include/tbb/tbb_config.h b/include/tbb/tbb_config.h
+index 7a8d06a..ea16da4 100644
+--- a/include/tbb/tbb_config.h
++++ b/include/tbb/tbb_config.h
+@@ -517,7 +517,7 @@ There are four cases that are supported:
+ 
+ /** __TBB_WEAK_SYMBOLS_PRESENT denotes that the system supports the weak symbol mechanism **/
+ #ifndef __TBB_WEAK_SYMBOLS_PRESENT
+-#define __TBB_WEAK_SYMBOLS_PRESENT ( !_WIN32 && !__APPLE__ && !__sun && (__TBB_GCC_VERSION >= 40000 || __INTEL_COMPILER ) )
++#define __TBB_WEAK_SYMBOLS_PRESENT ( !_WIN32 && !__APPLE__ && !__sun && !__e2k__ && (__TBB_GCC_VERSION >= 40000 || __INTEL_COMPILER ) )
+ #endif
+ 
+ /** __TBB_DYNAMIC_LOAD_ENABLED describes the system possibility to load shared libraries at run time **/
+diff --git a/src/test/test_malloc_pools.cpp b/src/test/test_malloc_pools.cpp
+index abacce3..eb42c5d 100644
+--- a/src/test/test_malloc_pools.cpp
++++ b/src/test/test_malloc_pools.cpp
+@@ -419,7 +419,11 @@ void TestFixedBufferPool()
+         }
+         {
+             size_t maxSz;
++#ifdef __e2k__
++            const int p = 128;
++#else
+             const int p = 512;
++#endif
+             Harness::SpinBarrier barrier(p);
+ 
+             // Find maximal useful object size. Start with MAX_OBJECT/2,
+diff --git a/src/test/test_task_arena.cpp b/src/test/test_task_arena.cpp
+index 32cf576..d38aa21 100644
+--- a/src/test/test_task_arena.cpp
++++ b/src/test/test_task_arena.cpp
+@@ -1451,8 +1451,12 @@ void TestDefaultWorkersLimit() {
+     // Shared RML might limit the number of workers even if you specify the limits
+     // by the reason of (default_concurrency==max_concurrency) for shared RML
+ #ifndef RML_USE_WCRM
++#ifdef __e2k__
++    TestAbilityToCreateWorkers(128);
++#else
+     TestAbilityToCreateWorkers(256);
+ #endif
++#endif
+ }
+ //--------------------------------------------------//
+ 
+-- 
+2.17.1
+
