@@ -1,6 +1,6 @@
-From 088b657342823e86cc5d2823fc26404c63bd46ef Mon Sep 17 00:00:00 2001
+From ffae99eacd5b57a9cfe7213fa9635d44c32226b9 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Thu, 18 Feb 2021 21:40:26 +0700
+Date: Wed, 17 Mar 2021 15:36:08 +0700
 Subject: [PATCH] x264-148 e2k support
 
 ---
@@ -13,14 +13,14 @@ Subject: [PATCH] x264-148 e2k support
  common/e2k/dct.h       |   73 +++
  common/e2k/deblock.c   |  236 +++++++
  common/e2k/deblock.h   |   36 ++
- common/e2k/e2kcommon.h |  208 ++++++
- common/e2k/mc.c        | 1386 ++++++++++++++++++++++++++++++++++++++++
+ common/e2k/e2kcommon.h |  253 ++++++++
+ common/e2k/mc.c        | 1401 ++++++++++++++++++++++++++++++++++++++++
  common/e2k/mc.h        |   34 +
- common/e2k/pixel.c     | 1063 ++++++++++++++++++++++++++++++
+ common/e2k/pixel.c     | 1168 +++++++++++++++++++++++++++++++++
  common/e2k/pixel.h     |   34 +
- common/e2k/predict.c   |  188 ++++++
+ common/e2k/predict.c   |  187 ++++++
  common/e2k/predict.h   |   36 ++
- common/e2k/quant.c     |  431 +++++++++++++
+ common/e2k/quant.c     |  439 +++++++++++++
  common/e2k/quant.h     |   77 +++
  common/mc.c            |    7 +
  common/pixel.c         |    9 +
@@ -31,7 +31,7 @@ Subject: [PATCH] x264-148 e2k support
  configure              |    7 +-
  tools/checkasm.c       |   17 +-
  x264.h                 |    3 +
- 27 files changed, 4798 insertions(+), 3 deletions(-)
+ 27 files changed, 4970 insertions(+), 3 deletions(-)
  create mode 100644 common/e2k/dct.c
  create mode 100644 common/e2k/dct.h
  create mode 100644 common/e2k/deblock.c
@@ -220,7 +220,7 @@ index 659fb35..b5b4990 100644
      {
 diff --git a/common/e2k/dct.c b/common/e2k/dct.c
 new file mode 100644
-index 0000000..c375994
+index 0000000..57acc17
 --- /dev/null
 +++ b/common/e2k/dct.c
 @@ -0,0 +1,828 @@
@@ -495,7 +495,7 @@ index 0000000..c375994
 + * IDCT transform:
 + ****************************************************************************/
 +
-+#define E2K_DC_SUM8_CLIP(i, c0) {                           \
++#define E2K_DC_SUM8_CLIP(i, c0) {                          \
 +    /* unaligned load */                                   \
 +    t0 = VEC_LD8(&p_dst[i * FDEC_STRIDE]);                 \
 +    t1 = VEC_LD8(&p_dst[(i + 1) * FDEC_STRIDE]);           \
@@ -1133,7 +1133,7 @@ index 0000000..e39b097
 +#endif
 diff --git a/common/e2k/deblock.c b/common/e2k/deblock.c
 new file mode 100644
-index 0000000..18c00e0
+index 0000000..349578f
 --- /dev/null
 +++ b/common/e2k/deblock.c
 @@ -0,0 +1,236 @@
@@ -1184,9 +1184,9 @@ index 0000000..18c00e0
 +
 +#define WRITE4(i, j) ((uint32_t*)dst)[(i * 4 + j) * (dst_stride >> 2)] = _mm_extract_epi32(r##i, j);
 +
-+static inline void write16x4(uint8_t *dst, int dst_stride,
-+                             vec_u8_t r0, vec_u8_t r1,
-+                             vec_u8_t r2, vec_u8_t r3) {
++static ALWAYS_INLINE void write16x4(uint8_t *dst, int dst_stride,
++                                    vec_u8_t r0, vec_u8_t r1,
++                                    vec_u8_t r2, vec_u8_t r3) {
 +
 +    WRITE4(0, 0) WRITE4(0, 1) WRITE4(0, 2) WRITE4(0, 3)
 +    WRITE4(1, 0) WRITE4(1, 1) WRITE4(1, 2) WRITE4(1, 3)
@@ -1215,52 +1215,52 @@ index 0000000..18c00e0
 +    r15 = VEC_LD8(src + st * 15);                                     \
 +                                                                      \
 +    /*Merge first pairs*/                                             \
-+    r0 = _mm_unpacklo_epi8(r0, r8);    /*0, 8*/                       \
-+    r1 = _mm_unpacklo_epi8(r1, r9);    /*1, 9*/                       \
-+    r2 = _mm_unpacklo_epi8(r2, r10);   /*2,10*/                       \
-+    r3 = _mm_unpacklo_epi8(r3, r11);   /*3,11*/                       \
-+    r4 = _mm_unpacklo_epi8(r4, r12);   /*4,12*/                       \
-+    r5 = _mm_unpacklo_epi8(r5, r13);   /*5,13*/                       \
-+    r6 = _mm_unpacklo_epi8(r6, r14);   /*6,14*/                       \
-+    r7 = _mm_unpacklo_epi8(r7, r15);   /*7,15*/                       \
++    r0 = _mm_unpacklo_epi8(r0, r4);    /*  0, 4 */                    \
++    r1 = _mm_unpacklo_epi8(r1, r5);    /*  1, 5 */                    \
++    r2 = _mm_unpacklo_epi8(r2, r6);    /*  2, 6 */                    \
++    r3 = _mm_unpacklo_epi8(r3, r7);    /*  3, 7 */                    \
++    r4 = _mm_unpacklo_epi8(r8, r12);   /*  8,12 */                    \
++    r5 = _mm_unpacklo_epi8(r9, r13);   /*  9,13 */                    \
++    r6 = _mm_unpacklo_epi8(r10, r14);  /* 10,14 */                    \
++    r7 = _mm_unpacklo_epi8(r11, r15);  /* 11,15 */                    \
 +                                                                      \
 +    /*Merge second pairs*/                                            \
-+    r8  = _mm_unpacklo_epi8(r0, r4);   /*0,4, 8,12 set 0*/            \
-+    r9  = _mm_unpackhi_epi8(r0, r4);   /*0,4, 8,12 set 1*/            \
-+    r10 = _mm_unpacklo_epi8(r1, r5);   /*1,5, 9,13 set 0*/            \
-+    r11 = _mm_unpackhi_epi8(r1, r5);   /*1,5, 9,13 set 1*/            \
-+    r12 = _mm_unpacklo_epi8(r2, r6);   /*2,6,10,14 set 0*/            \
-+    r13 = _mm_unpackhi_epi8(r2, r6);   /*2,6,10,14 set 1*/            \
-+    r14 = _mm_unpacklo_epi8(r3, r7);   /*3,7,11,15 set 0*/            \
-+    r15 = _mm_unpackhi_epi8(r3, r7);   /*3,7,11,15 set 1*/            \
++    r8  = _mm_unpacklo_epi8(r0, r2);   /* 0, 2, 4, 6 set 0 */         \
++    r9  = _mm_unpackhi_epi8(r0, r2);   /* 0, 2, 4, 6 set 1 */         \
++    r10 = _mm_unpacklo_epi8(r1, r3);   /* 1, 3, 5, 7 set 0 */         \
++    r11 = _mm_unpackhi_epi8(r1, r3);   /* 1, 3, 5, 7 set 1 */         \
++    r12 = _mm_unpacklo_epi8(r4, r6);   /* 8,10,12,14 set 0 */         \
++    r13 = _mm_unpackhi_epi8(r4, r6);   /* 8,10,12,14 set 1 */         \
++    r14 = _mm_unpacklo_epi8(r5, r7);   /* 9,11,13,15 set 0 */         \
++    r15 = _mm_unpackhi_epi8(r5, r7);   /* 9,11,13,15 set 1 */         \
 +                                                                      \
 +    /*Third merge*/                                                   \
-+    r0 = _mm_unpacklo_epi8(r8, r12);   /*0,2,4,6,8,10,12,14 set 0*/   \
-+    r1 = _mm_unpackhi_epi8(r8, r12);   /*0,2,4,6,8,10,12,14 set 1*/   \
-+    r2 = _mm_unpacklo_epi8(r9, r13);   /*0,2,4,6,8,10,12,14 set 2*/   \
-+    r4 = _mm_unpacklo_epi8(r10, r14);  /*1,3,5,7,9,11,13,15 set 0*/   \
-+    r5 = _mm_unpackhi_epi8(r10, r14);  /*1,3,5,7,9,11,13,15 set 1*/   \
-+    r6 = _mm_unpacklo_epi8(r11, r15);  /*1,3,5,7,9,11,13,15 set 2*/   \
++    r0 = _mm_unpacklo_epi8(r8, r10);   /* 0..7 set 0  */              \
++    r1 = _mm_unpackhi_epi8(r8, r10);   /* 0..7 set 1  */              \
++    r2 = _mm_unpacklo_epi8(r9, r11);   /* 0..7 set 2  */              \
++    r4 = _mm_unpacklo_epi8(r12, r14);  /* 8..15 set 0 */              \
++    r5 = _mm_unpackhi_epi8(r12, r14);  /* 8..15 set 1 */              \
++    r6 = _mm_unpacklo_epi8(r13, r15);  /* 8..15 set 2 */              \
 +    /* Don't need to compute 3 and 7*/                                \
 +                                                                      \
 +    /*Final merge*/                                                   \
-+    r8  = _mm_unpacklo_epi8(r0, r4);   /*all set 0*/                  \
-+    r9  = _mm_unpackhi_epi8(r0, r4);   /*all set 1*/                  \
-+    r10 = _mm_unpacklo_epi8(r1, r5);   /*all set 2*/                  \
-+    r11 = _mm_unpackhi_epi8(r1, r5);   /*all set 3*/                  \
-+    r12 = _mm_unpacklo_epi8(r2, r6);   /*all set 4*/                  \
-+    r13 = _mm_unpackhi_epi8(r2, r6);   /*all set 5*/                  \
++    r8  = _mm_unpacklo_epi64(r0, r4);   /* all set 0 */               \
++    r9  = _mm_unpackhi_epi64(r0, r4);   /* all set 1 */               \
++    r10 = _mm_unpacklo_epi64(r1, r5);   /* all set 2 */               \
++    r11 = _mm_unpackhi_epi64(r1, r5);   /* all set 3 */               \
++    r12 = _mm_unpacklo_epi64(r2, r6);   /* all set 4 */               \
++    r13 = _mm_unpackhi_epi64(r2, r6);   /* all set 5 */               \
 +    /* Don't need to compute 14 and 15*/                              \
 +}
 +
 +// out: o = |x-y| < a
-+static inline vec_u8_t diff_lt_e2k(vec_u8_t x, vec_u8_t y, vec_u8_t a) {
++static ALWAYS_INLINE vec_u8_t diff_lt_e2k(vec_u8_t x, vec_u8_t y, vec_u8_t a) {
 +    vec_u8_t o = _mm_or_si128(_mm_subs_epu8(x, y), _mm_subs_epu8(y, x)); /* |x-y| */
 +    return _mm_cmpgt_epi8(a, _mm_xor_si128(o, _mm_set1_epi8(-128)));
 +}
 +
-+static inline vec_u8_t h264_deblock_mask(vec_u8_t p0, vec_u8_t p1, vec_u8_t q0,
-+                                         vec_u8_t q1, vec_u8_t alpha, vec_u8_t beta) {
++static ALWAYS_INLINE vec_u8_t h264_deblock_mask(vec_u8_t p0, vec_u8_t p1, vec_u8_t q0,
++                                                vec_u8_t q1, vec_u8_t alpha, vec_u8_t beta) {
 +    vec_u8_t mask, tempmask;
 +
 +    mask = diff_lt_e2k(p0, q0, alpha);
@@ -1273,8 +1273,8 @@ index 0000000..18c00e0
 +}
 +
 +// out: newp1 = clip((p2 + ((p0 + q0 + 1) >> 1)) >> 1, p1-tc0, p1+tc0)
-+static inline vec_u8_t h264_deblock_q1(vec_u8_t p0, vec_u8_t p1, vec_u8_t p2,
-+                                       vec_u8_t q0, vec_u8_t tc0) {
++static ALWAYS_INLINE vec_u8_t h264_deblock_q1(vec_u8_t p0, vec_u8_t p1, vec_u8_t p2,
++                                              vec_u8_t q0, vec_u8_t tc0) {
 +
 +    vec_u8_t average = _mm_avg_epu8(p0, q0);
 +    vec_u8_t temp, uncliped;
@@ -1417,10 +1417,10 @@ index 0000000..cc3489e
 +#endif
 diff --git a/common/e2k/e2kcommon.h b/common/e2k/e2kcommon.h
 new file mode 100644
-index 0000000..1cd3fd0
+index 0000000..83d0a6c
 --- /dev/null
 +++ b/common/e2k/e2kcommon.h
-@@ -0,0 +1,208 @@
+@@ -0,0 +1,253 @@
 +/*****************************************************************************
 + * e2kcommon.h: e2k utility macros
 + *****************************************************************************
@@ -1446,6 +1446,9 @@ index 0000000..1cd3fd0
 + * This program is also available under a commercial proprietary license.
 + * For more information, contact us at licensing@x264.com.
 + *****************************************************************************/
++
++#ifndef X264_E2K_E2KCOMMON_H
++#define X264_E2K_E2KCOMMON_H
 +
 +#include <smmintrin.h> /* SSE4.1 */
 +
@@ -1629,12 +1632,54 @@ index 0000000..1cd3fd0
 +
 +#define VEC_SPLAT16(v, i) _mm_shuffle_epi8(v, _mm_set1_epi16((i) * 2 | ((i) * 2 + 1) << 8))
 +
++#if !defined(__iset__) || __iset__ < 5
++#define NEED_ALIGN8
++#define ALIGN8_COMMON uint64_t src_shr; __m64 src_tmp0, __attribute__((unused)) src_tmp1;
++#define ALIGN8_VARS(src) __m64 *src##_ptr, src##_next, src##_index;
++#define ALIGN8_START(ptr, src) \
++  src_shr = (intptr_t)(ptr - 1) & 7; \
++  src##_ptr = (__m64*)((intptr_t)(ptr - 1) & -8); \
++  src##_next = src##_ptr[src_shr == 7]; \
++  src##_index = _mm_add_pi8(_mm_set1_pi8(src_shr), \
++                            _mm_setr_pi8(1, 2, 3, 4, 5, 6, 7, 8));
++#define ALIGN8_READ8(v0, src, i) \
++  src_tmp0 = src##_ptr[i + 1]; \
++  v0 = _mm_shuffle2_pi8(src##_next, src_tmp0, src##_index); \
++  src##_next = src_tmp0;
++#define ALIGN8_READ16(v0, src, i) \
++  src_tmp1 = src##_ptr[i * 2 + 1]; \
++  src_tmp0 = _mm_shuffle2_pi8(src##_next, src_tmp1, src##_index); \
++  src##_next = src##_ptr[i * 2 + 2]; \
++  src_tmp1 = _mm_shuffle2_pi8(src_tmp1, src##_next, src##_index); \
++  v0 = _mm_setr_epi64(src_tmp0, src_tmp1);
++
++#define ALIGN8A_COMMON __m64 src_tmp0, src_tmp1;
++#define ALIGN8A_VARS(src) uint64_t src##_shr; __m64 *src##_ptr, src##_index;
++#define ALIGN8A_START(ptr, src) \
++  src##_shr = (intptr_t)(ptr - 1) & 7; \
++  src##_ptr = (__m64*)((intptr_t)(ptr - 1) & -8); \
++  src##_index = _mm_add_pi8(_mm_set1_pi8(src##_shr), \
++                            _mm_setr_pi8(1, 2, 3, 4, 5, 6, 7, 8)); \
++  src##_shr = src##_shr == 7;
++#define ALIGN8A_READ8(v0, src) \
++  src_tmp0 = src##_ptr[src##_shr]; \
++  src_tmp1 = src##_ptr[1]; \
++  v0 = _mm_shuffle2_pi8(src_tmp0, src_tmp1, src##_index);
++#define ALIGN8A_READ16(v0, src) \
++  src_tmp0 = src##_ptr[src##_shr]; \
++  src_tmp1 = src##_ptr[1]; \
++  src_tmp0 = _mm_shuffle2_pi8(src_tmp0, src_tmp1, src##_index); \
++  src_tmp1 = _mm_shuffle2_pi8(src_tmp1, src##_ptr[2], src##_index); \
++  v0 = _mm_setr_epi64(src_tmp0, src_tmp1);
++#endif
++
++#endif // X264_E2K_E2KCOMMON_H
 diff --git a/common/e2k/mc.c b/common/e2k/mc.c
 new file mode 100644
-index 0000000..598e487
+index 0000000..90dacf0
 --- /dev/null
 +++ b/common/e2k/mc.c
-@@ -0,0 +1,1386 @@
+@@ -0,0 +1,1401 @@
 +/*****************************************************************************
 + * mc.c: e2k motion compensation
 + *****************************************************************************
@@ -1673,6 +1718,7 @@ index 0000000..598e487
 +    int y;
 +    __m64 v0, v1;
 +
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < i_height; y++, dst += i_dst) {
 +        v0 = _mm_cvtsi32_si64(*(uint32_t*)src1); src1 += i_src1;
 +        v1 = _mm_cvtsi32_si64(*(uint32_t*)src2); src2 += i_src2;
@@ -1686,6 +1732,7 @@ index 0000000..598e487
 +    int y;
 +    __m64 v0, v1;
 +
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < i_height; y++, dst += i_dst) {
 +        v0 = *(__m64*)src1; src1 += i_src1;
 +        v1 = *(__m64*)src2; src2 += i_src2;
@@ -1699,6 +1746,7 @@ index 0000000..598e487
 +    int y;
 +    __m128i v0, v1;
 +
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < i_height; y++, dst += i_dst) {
 +        v0 = VEC_LD(src1); src1 += i_src1;
 +        v1 = VEC_LD(src2); src2 += i_src2;
@@ -1712,6 +1760,7 @@ index 0000000..598e487
 +    int y;
 +    __m128i v0, v1; __m64 h0, h1;
 +
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < i_height; y++, dst += i_dst) {
 +        v0 = VEC_LD(src1); h0 = _mm_cvtsi32_si64(*(uint32_t*)(src1 + 16));
 +        v1 = VEC_LD(src2); h1 = _mm_cvtsi32_si64(*(uint32_t*)(src2 + 16));
@@ -1812,7 +1861,8 @@ index 0000000..598e487
 +PIXEL_AVG_FN(4x16) {
 +    int y;
 +    INIT_AVG_4X2_E2K
-+PRAGMA_E2K("unroll(8)")
++    PRAGMA_E2K("unroll(8)")
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < 8; y++) {
 +        PIXEL_AVG_4X2_E2K
 +    }
@@ -1835,7 +1885,7 @@ index 0000000..598e487
 +    c0 = _mm_set1_epi16((weight & 255) | (64 - weight) << 8);
 +    c1 = _mm_set1_epi16(32);
 +
-+PRAGMA_E2K("ivdep")
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < i_height; y += 4) {
 +        PIXEL_AVG_8X2_E2K(0)
 +        PIXEL_AVG_8X2_E2K(1)
@@ -1852,7 +1902,7 @@ index 0000000..598e487
 +    c0 = _mm_set1_epi16((weight & 255) | (64 - weight) << 8);
 +    c1 = _mm_set1_epi16(32);
 +
-+PRAGMA_E2K("ivdep")
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < i_height; y++, dst += i_dst) {
 +        v0 = VEC_LD(src1); src1 += i_src1;
 +        v1 = VEC_LD(src2); src2 += i_src2;
@@ -1883,6 +1933,7 @@ index 0000000..598e487
 +static void name(uint8_t *dst, intptr_t i_dst,                    \
 +                 uint8_t *src, intptr_t i_src, int i_height) {    \
 +    int y;                                                        \
++    PRAGMA_E2K("ivdep")                                           \
 +    for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {  \
 +        *(T*)dst = *(T*)src;                                      \
 +    }                                                             \
@@ -1893,6 +1944,7 @@ index 0000000..598e487
 +static void mc_copy_w16_e2k(uint8_t *dst, intptr_t i_dst,
 +                            uint8_t *src, intptr_t i_src, int i_height) {
 +    int y;
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {
 +        __m128i v0 = VEC_LD(src);
 +        VEC_ST(dst, v0);
@@ -1902,6 +1954,7 @@ index 0000000..598e487
 +static void mc_copy_w16_aligned_e2k(uint8_t *dst, intptr_t i_dst,
 +                                    uint8_t *src, intptr_t i_src, int i_height) {
 +    int y;
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {
 +        __m128i v0 = VEC_LD(src);
 +        VEC_ST(dst, v0);
@@ -1915,6 +1968,7 @@ index 0000000..598e487
 +                                 9, 8, 11, 10, 13, 12, 15, 14);
 +
 +    for (y = 0; y < h; y++, dst += i_dst, src += i_src)
++        PRAGMA_E2K("ivdep")
 +        for (x = 0; x < 2 * w; x += 16) {
 +            __m128i v0 = VEC_LD(src + x);
 +            v0 = _mm_shuffle_epi8(v0, mask);
@@ -1931,6 +1985,7 @@ index 0000000..598e487
 +    if (w <= 0) return;
 +
 +    for (y = 0; y < h; y++, dst += i_dst, srcu += i_srcu, srcv += i_srcv)
++        PRAGMA_E2K("ivdep")
 +        for (x = 0; x < w; x += 16) {
 +            v0 = VEC_LD(srcu + x);
 +            v1 = VEC_LD(srcv + x);
@@ -1942,10 +1997,11 @@ index 0000000..598e487
 +}
 +
 +static void store_interleave_chroma_e2k(uint8_t *dst, intptr_t i_dst,
-+                                             uint8_t *srcu, uint8_t *srcv, int height) {
++                                        uint8_t *srcu, uint8_t *srcv, int height) {
 +    int y;
 +    __m128i v0, v1;
 +
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < height; y++, dst += i_dst, srcu += FDEC_STRIDE, srcv += FDEC_STRIDE) {
 +        v0 = VEC_LD8(srcu);
 +        v1 = VEC_LD8(srcv);
@@ -1959,6 +2015,7 @@ index 0000000..598e487
 +    __m128i v0, v1;
 +
 +    int y;
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < height; y += 2, dst += 2 * FENC_STRIDE, src += i_src * 2) {
 +        v0 = VEC_LD(src);
 +        v1 = VEC_LD(src + i_src);
@@ -1981,6 +2038,7 @@ index 0000000..598e487
 +    __m128i v0, v1;
 +
 +    int y;
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < height; y += 2, dst += 2 * FDEC_STRIDE, src += i_src * 2) {
 +        v0 = VEC_LD(src);
 +        v1 = VEC_LD(src + i_src);
@@ -1998,14 +2056,15 @@ index 0000000..598e487
 +#if defined(__iset__) && __iset__ >= 5
 +
 +static void plane_copy_deinterleave_e2k(uint8_t *dstu, intptr_t i_dstu,
-+                                             uint8_t *dstv, intptr_t i_dstv,
-+                                             uint8_t *src, intptr_t i_src, int w, int h) {
++                                        uint8_t *dstv, intptr_t i_dstv,
++                                        uint8_t *src, intptr_t i_src, int w, int h) {
 +    int x, y;
 +    __m128i v0, v1, v2, v3;
 +    __m128i index0 = _mm_setr_epi8(DEINTERLEAVE_INDEX(0), DEINTERLEAVE_INDEX(16));
 +    __m128i index1 = _mm_setr_epi8(DEINTERLEAVE_INDEX(1), DEINTERLEAVE_INDEX(17));
 +
 +    if (w <= 0) return;
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < h; y++, dstu += i_dstu, dstv += i_dstv, src += i_src) {
 +        for (x = 0; x < w; x += 16) {
 +            v0 = VEC_LD(src + 2 * x);
@@ -2022,10 +2081,10 @@ index 0000000..598e487
 +#define RGB_INDEX4(x) 0 + x, 4 + x, 8 + x, 12 + x, 16 + x, 20 + x, 24 + x, 28 + x
 +
 +static void plane_copy_deinterleave_rgb_e2k(uint8_t *dsta, intptr_t i_dsta,
-+                                                 uint8_t *dstb, intptr_t i_dstb,
-+                                                 uint8_t *dstc, intptr_t i_dstc,
-+                                                 uint8_t *src, intptr_t i_src,
-+                                                 int pw, int w, int h) {
++                                            uint8_t *dstb, intptr_t i_dstb,
++                                            uint8_t *dstc, intptr_t i_dstc,
++                                            uint8_t *src, intptr_t i_src,
++                                            int pw, int w, int h) {
 +    int x, y;
 +    __m128i v0, v1, v2, v3, v4, v5, v6, v7;
 +
@@ -2037,6 +2096,7 @@ index 0000000..598e487
 +        __m128i index3 = _mm_setr_epi8(RGB_INDEX3(10), RGB_INDEX3(11));
 +
 +        for (y = 0; y < h; y++, dsta += i_dsta, dstb += i_dstb, dstc += i_dstc, src += i_src) {
++            PRAGMA_E2K("ivdep")
 +            for (x = 0; x < w; x += 16) {
 +                v0 = VEC_LD(src + 3 * x);
 +                v1 = VEC_LD(src + 3 * x + 16);
@@ -2056,6 +2116,7 @@ index 0000000..598e487
 +        __m128i index1 = _mm_setr_epi8(RGB_INDEX4(2), RGB_INDEX4(3));
 +
 +        for (y = 0; y < h; y++, dsta += i_dsta, dstb += i_dstb, dstc += i_dstc, src += i_src) {
++            PRAGMA_E2K("ivdep")
 +            for (x = 0; x < w; x += 16) {
 +                v0 = VEC_LD(src + 4 * x);
 +                v1 = VEC_LD(src + 4 * x + 16);
@@ -2075,8 +2136,8 @@ index 0000000..598e487
 +}
 +#else
 +static void plane_copy_deinterleave_e2k(uint8_t *dstu, intptr_t i_dstu,
-+                                             uint8_t *dstv, intptr_t i_dstv,
-+                                             uint8_t *src, intptr_t i_src, int w, int h) {
++                                        uint8_t *dstv, intptr_t i_dstv,
++                                        uint8_t *src, intptr_t i_src, int w, int h) {
 +    int x, y;
 +    __m64 v0, v1, v2, v3, v4, v5;
 +    __m64 index0 = _mm_setr_pi8(DEINTERLEAVE_INDEX(0));
@@ -2084,6 +2145,7 @@ index 0000000..598e487
 +
 +    if (w <= 0) return;
 +    for (y = 0; y < h; y++, dstu += i_dstu, dstv += i_dstv, src += i_src) {
++        PRAGMA_E2K("ivdep")
 +        for (x = 0; x < w; x += 16) {
 +            v0 = *(__m64*)(src + 2 * x);
 +            v1 = *(__m64*)(src + 2 * x + 8);
@@ -2105,12 +2167,14 @@ index 0000000..598e487
 +#define RGB_INDEX4(x) 0 + x, 4 + x, 8 + x, 12 + x
 +
 +static void plane_copy_deinterleave_rgb_e2k(uint8_t *dsta, intptr_t i_dsta,
-+                                                 uint8_t *dstb, intptr_t i_dstb,
-+                                                 uint8_t *dstc, intptr_t i_dstc,
-+                                                 uint8_t *src, intptr_t i_src,
-+                                                 int pw, int w, int h) {
++                                            uint8_t *dstb, intptr_t i_dstb,
++                                            uint8_t *dstc, intptr_t i_dstc,
++                                            uint8_t *src, intptr_t i_src,
++                                            int pw, int w, int h) {
 +    int x, y;
-+    __m64 v0, v1, v2, v3, v4, v5, v6, v7, r0, r1, r2;
++    __m64 v0, v1, v2, v3, v4, v5, v6, v7;
++    ALIGN8_COMMON
++    ALIGN8_VARS(src)
 +
 +    if (h <= 0 || w <= 0) return;
 +    if (pw == 3) {
@@ -2118,32 +2182,22 @@ index 0000000..598e487
 +        __m64 index1 = _mm_setr_pi8(RGB_INDEX3(2), RGB_INDEX3(3));
 +        __m64 index2 = _mm_setr_pi8(RGB_INDEX3(4), RGB_INDEX3(5));
 +        __m64 index3 = _mm_setr_pi8(RGB_INDEX3(6), RGB_INDEX3(7));
-+
 +        for (y = 0; y < h; y++, dsta += i_dsta, dstb += i_dstb, dstc += i_dstc, src += i_src) {
-+            for (x = 0; x < w; x += 16) {
-+                v0 = *(__m64*)(src + 3 * x);
-+                v1 = *(__m64*)(src + 3 * x + 8);
-+                v2 = *(__m64*)(src + 3 * x + 16);
++            ALIGN8_START(src, src)
++            PRAGMA_E2K("ivdep")
++            PRAGMA_E2K("unroll(2)")
++            for (x = 0; x < w; x += 8) {
++                ALIGN8_READ8(v0, src, 0)
++                ALIGN8_READ8(v1, src, 1)
++                ALIGN8_READ8(v2, src, 2)
++                src_ptr += 3;
 +                v4 = _mm_shuffle2_pi8(v0, v1, index0); // rg0
 +                v5 = _mm_shuffle2_pi8(v0, v1, index1); // bx0
 +                v6 = _mm_shuffle2_pi8(v1, v2, index2); // rg1
 +                v7 = _mm_shuffle2_pi8(v1, v2, index3); // bx1
-+                r0 = _mm_unpacklo_pi32(v4, v6);
-+                r1 = _mm_unpackhi_pi32(v4, v6);
-+                r2 = _mm_unpacklo_pi32(v5, v7);
-+                v0 = *(__m64*)(src + 3 * x + 24);
-+                v1 = *(__m64*)(src + 3 * x + 32);
-+                v2 = *(__m64*)(src + 3 * x + 40);
-+                v4 = _mm_shuffle2_pi8(v0, v1, index0); // rg0
-+                v5 = _mm_shuffle2_pi8(v0, v1, index1); // bx0
-+                v6 = _mm_shuffle2_pi8(v1, v2, index2); // rg1
-+                v7 = _mm_shuffle2_pi8(v1, v2, index3); // bx1
-+                *(__m64*)(dsta + x) = r0;
-+                *(__m64*)(dstb + x) = r1;
-+                *(__m64*)(dstc + x) = r2;
-+                *(__m64*)(dsta + x + 8) = _mm_unpacklo_pi32(v4, v6);
-+                *(__m64*)(dstb + x + 8) = _mm_unpackhi_pi32(v4, v6);
-+                *(__m64*)(dstc + x + 8) = _mm_unpacklo_pi32(v5, v7);
++                *(__m64*)(dsta + x) = _mm_unpacklo_pi32(v4, v6);
++                *(__m64*)(dstb + x) = _mm_unpackhi_pi32(v4, v6);
++                *(__m64*)(dstc + x) = _mm_unpacklo_pi32(v5, v7);
 +            }
 +        }
 +    } else {
@@ -2151,32 +2205,22 @@ index 0000000..598e487
 +        __m64 index1 = _mm_setr_pi8(RGB_INDEX4(2), RGB_INDEX4(3));
 +
 +        for (y = 0; y < h; y++, dsta += i_dsta, dstb += i_dstb, dstc += i_dstc, src += i_src) {
-+            for (x = 0; x < w; x += 16) {
-+                v0 = *(__m64*)(src + 4 * x);
-+                v1 = *(__m64*)(src + 4 * x + 8);
-+                v2 = *(__m64*)(src + 4 * x + 16);
-+                v3 = *(__m64*)(src + 4 * x + 24);
++            ALIGN8_START(src, src)
++            PRAGMA_E2K("ivdep")
++            PRAGMA_E2K("unroll(2)")
++            for (x = 0; x < w; x += 8) {
++                ALIGN8_READ8(v0, src, 0)
++                ALIGN8_READ8(v1, src, 1)
++                ALIGN8_READ8(v2, src, 2)
++                ALIGN8_READ8(v3, src, 3)
++                src_ptr += 4;
 +                v4 = _mm_shuffle2_pi8(v0, v1, index0); // rg0
 +                v5 = _mm_shuffle2_pi8(v0, v1, index1); // bx0
 +                v6 = _mm_shuffle2_pi8(v2, v3, index0); // rg1
 +                v7 = _mm_shuffle2_pi8(v2, v3, index1); // bx1
-+                r0 = _mm_unpacklo_pi32(v4, v6);
-+                r1 = _mm_unpackhi_pi32(v4, v6);
-+                r2 = _mm_unpacklo_pi32(v5, v7);
-+                v0 = *(__m64*)(src + 4 * x + 32);
-+                v1 = *(__m64*)(src + 4 * x + 40);
-+                v2 = *(__m64*)(src + 4 * x + 48);
-+                v3 = *(__m64*)(src + 4 * x + 56);
-+                v4 = _mm_shuffle2_pi8(v0, v1, index0); // rg0
-+                v5 = _mm_shuffle2_pi8(v0, v1, index1); // bx0
-+                v6 = _mm_shuffle2_pi8(v2, v3, index0); // rg1
-+                v7 = _mm_shuffle2_pi8(v2, v3, index1); // bx1
-+                *(__m64*)(dsta + x) = r0;
-+                *(__m64*)(dstb + x) = r1;
-+                *(__m64*)(dstc + x) = r2;
-+                *(__m64*)(dsta + x + 8) = _mm_unpacklo_pi32(v4, v6);
-+                *(__m64*)(dstb + x + 8) = _mm_unpackhi_pi32(v4, v6);
-+                *(__m64*)(dstc + x + 8) = _mm_unpacklo_pi32(v5, v7);
++                *(__m64*)(dsta + x) = _mm_unpacklo_pi32(v4, v6);
++                *(__m64*)(dstb + x) = _mm_unpackhi_pi32(v4, v6);
++                *(__m64*)(dstc + x) = _mm_unpacklo_pi32(v5, v7);
 +            }
 +        }
 +    }
@@ -2279,6 +2323,7 @@ index 0000000..598e487
 +    h3 = *(__m64*)src; src += i_src;
 +    h3 = _mm_shuffle_pi8(h3, index);
 +
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < i_height; y += 2) {
 +        h1 = h3;
 +        h2 = *(__m64*)src; src += i_src;
@@ -2317,6 +2362,7 @@ index 0000000..598e487
 +    v2 = VEC_LD(src); src += i_src;
 +    v23 = _mm_unpacklo_epi8(v2, _mm_bsrli_si128(v2, 2));
 +
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < i_height; y += 2) {
 +        v01 = v23;
 +        v2 = VEC_LD(src); src += i_src;
@@ -2364,6 +2410,7 @@ index 0000000..598e487
 +    v23l = _mm_unpacklo_epi8(v2, v3);
 +    v23h = _mm_unpackhi_epi8(v2, v3);
 +
++    PRAGMA_E2K("ivdep")
 +    for (y = 0; y < i_height; y += 2) {
 +        v01l = v23l; v01h = v23h;
 +        v2 = VEC_LD(src); v3 = VEC_LD8(src + 16); src += i_src;
@@ -2580,6 +2627,7 @@ index 0000000..598e487
 +        tempdv = temp7v;
 +        tempev = temp1v;
 +
++        PRAGMA_E2K("ivdep")
 +        for (x = 16; x < i_width; x += 16) {
 +            /* horizontal_filter */
 +            HPEL_FILTER_HORIZONTAL();
@@ -2637,6 +2685,7 @@ index 0000000..598e487
 +        avg0v = _mm_avg_epu8(src0v, src1v);
 +        avg1v = _mm_avg_epu8(src1v, src2v);
 +
++        PRAGMA_E2K("ivdep")
 +        for (x = 0; x < w; x++) {
 +            lv = VEC_LD(src0 + 16 * (x * 2 + 1));
 +            src1v = VEC_LD(src1 + 16 * (x * 2 + 1));
@@ -2714,6 +2763,7 @@ index 0000000..598e487
 +    if (denom >= 1) {
 +        roundv = _mm_set1_epi16(1 << (denom - 1));
 +
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {
 +            srcv = VEC_LD8(src);
 +            weightv = vec_u8_to_s16(srcv);
@@ -2726,6 +2776,7 @@ index 0000000..598e487
 +            *(uint16_t*)dst = _mm_extract_epi16(srcv, 0);
 +        }
 +    } else {
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {
 +            srcv = VEC_LD8(src);
 +            weightv = vec_u8_to_s16(srcv);
@@ -2751,6 +2802,7 @@ index 0000000..598e487
 +    if (denom >= 1) {
 +        roundv = _mm_set1_epi16(1 << (denom - 1));
 +
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {
 +            srcv = VEC_LD8(src);
 +            weightv = vec_u8_to_s16(srcv);
@@ -2763,6 +2815,7 @@ index 0000000..598e487
 +            *(uint32_t*)dst = _mm_extract_epi32(srcv, 0);
 +        }
 +    } else {
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {
 +            srcv = VEC_LD8(src);
 +            weightv = vec_u8_to_s16(srcv);
@@ -2788,6 +2841,7 @@ index 0000000..598e487
 +    if (denom >= 1) {
 +        roundv = _mm_set1_epi16(1 << (denom - 1));
 +
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {
 +            srcv = VEC_LD(src);
 +            weightv = vec_u8_to_s16(srcv);
@@ -2800,6 +2854,7 @@ index 0000000..598e487
 +            VEC_STL(dst, srcv);
 +        }
 +    } else {
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {
 +            srcv = VEC_LD(src);
 +            weightv = vec_u8_to_s16(srcv);
@@ -2825,6 +2880,7 @@ index 0000000..598e487
 +    if (denom >= 1) {
 +        roundv = _mm_set1_epi16(1 << (denom - 1));
 +
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {
 +            srcv = VEC_LD(src);
 +            weight_hv = vec_u8_to_s16_h(srcv);
@@ -2841,6 +2897,7 @@ index 0000000..598e487
 +            VEC_ST(dst, srcv);
 +        }
 +    } else {
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {
 +            srcv = VEC_LD(src);
 +            weight_hv = vec_u8_to_s16_h(srcv);
@@ -2869,6 +2926,7 @@ index 0000000..598e487
 +    if (denom >= 1) {
 +        roundv = _mm_set1_epi16(1 << (denom - 1));
 +
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {
 +            srcv = VEC_LD(src);
 +            srcv2 = VEC_LD8(src + 16);
@@ -2895,6 +2953,7 @@ index 0000000..598e487
 +            *(uint32_t*)(dst + 16) = _mm_extract_epi32(srcv2, 0);
 +        }
 +    } else {
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < i_height; y++, dst += i_dst, src += i_src) {
 +            srcv = VEC_LD(src);
 +            srcv2 = VEC_LD8(src + 16);
@@ -2946,8 +3005,8 @@ index 0000000..598e487
 +
 +// v210 input is only compatible with bit-depth of 10 bits
 +static void plane_copy_deinterleave_v210_e2k(uint16_t *dsty, intptr_t i_dsty,
-+                                                  uint16_t *dstc, intptr_t i_dstc,
-+                                                  uint32_t *src, intptr_t i_src, int w, int h) {
++                                             uint16_t *dstc, intptr_t i_dstc,
++                                             uint32_t *src, intptr_t i_src, int w, int h) {
 +    __m128i idx0 = _mm_setr_epi8(
 +        0x00, 0x01, 0x02, 0x03, 0x05, 0x06, 0x08, 0x09, 0x01, 0x02, 0x04, 0x05, 0x06, 0x07, 0x09, 0x0A);
 +    __m128i idx1 = _mm_setr_epi8(
@@ -2965,6 +3024,7 @@ index 0000000..598e487
 +    for (i = 0; i < h; i++, dsty += i_dsty, dstc += i_dstc, src += i_src) {
 +        int offset = 0, s = 0;
 +
++        PRAGMA_E2K("ivdep")
 +        for (j = 0; j < w; j += 24, s += 16) {
 +            v0 = VEC_LD(src + s);
 +            v2 = VEC_LD(src + s + 4);
@@ -3063,10 +3123,10 @@ index 0000000..3663e74
 +#endif
 diff --git a/common/e2k/pixel.c b/common/e2k/pixel.c
 new file mode 100644
-index 0000000..1c4d989
+index 0000000..020f7fb
 --- /dev/null
 +++ b/common/e2k/pixel.c
-@@ -0,0 +1,1063 @@
+@@ -0,0 +1,1168 @@
 +/*****************************************************************************
 + * pixel.c: e2k pixel metrics
 + *****************************************************************************
@@ -3104,10 +3164,113 @@ index 0000000..1c4d989
 +
 +#define SAD_LD8(pix) *(__m64*)pix
 +#define SAD_LD16(pix) VEC_LD(pix)
-+#define SAD_NEXT8(sumv, fencv, pixv) sumv = _mm_add_pi16(sumv, _mm_sad_pu8(fencv, pixv))
-+#define SAD_NEXT16(sumv, fencv, pixv) sumv = _mm_add_epi16(sumv, _mm_sad_epu8(fencv, pixv))
-+#define SAD_SUM8(sumv) _mm_extract_pi16(sumv, 0)
-+#define SAD_SUM16(sumv) _mm_extract_epi16(sumv, 0) + _mm_extract_epi16(sumv, 4)
++#define SAD_NEXT8(sumv, fencv, pixv) sumv = _mm_add_pi32(sumv, _mm_sad_pu8(fencv, pixv))
++#define SAD_NEXT16(sumv, fencv, pixv) sumv = _mm_add_epi32(sumv, _mm_sad_epu8(fencv, pixv))
++#define SAD_SUM8(sumv) _mm_extract_pi32(sumv, 0)
++#define SAD_SUM16(sumv) _mm_extract_epi32(sumv, 0) + _mm_extract_epi32(sumv, 2)
++
++#ifdef NEED_ALIGN8
++#define PIXEL_SAD_E2K(lx, ly, vec, zerov)                                \
++static int pixel_sad_##lx##x##ly##_e2k(uint8_t *pix1, intptr_t i_pix1,   \
++                                       uint8_t *pix2, intptr_t i_pix2) { \
++    vec v0, v1, sumv = zerov;                                            \
++    int y;                                                               \
++    for (y = 0; y < ly; y++) {                                           \
++        v0 = SAD_LD##lx(pix1); pix1 += i_pix1;                           \
++        v1 = SAD_LD##lx(pix2); pix2 += i_pix2;                           \
++        SAD_NEXT##lx(sumv, v0, v1);                                      \
++    }                                                                    \
++    return SAD_SUM##lx(sumv);                                            \
++}                                                                        \
++static void pixel_sad_x4_##lx##x##ly##_e2k(uint8_t *fenc,                \
++            uint8_t *pix0, uint8_t *pix1, uint8_t *pix2, uint8_t *pix3,  \
++            intptr_t stride, int scores[4]) {                            \
++    vec fencv, pix0v, pix1v, pix2v, pix3v;                               \
++    vec sum0v = zerov, sum1v = sum0v, sum2v = sum0v, sum3v = sum0v;      \
++    int y;                                                               \
++    if (!(stride & 7) && !(FENC_STRIDE & 7)) {                           \
++      ALIGN8A_COMMON                                                     \
++      ALIGN8A_VARS(fenc)                                                 \
++      ALIGN8A_VARS(pix0)                                                 \
++      ALIGN8A_VARS(pix1)                                                 \
++      ALIGN8A_VARS(pix2)                                                 \
++      ALIGN8A_VARS(pix3)                                                 \
++      stride >>= 3;                                                      \
++      ALIGN8A_START(fenc, fenc)                                          \
++      ALIGN8A_START(pix0, pix0)                                          \
++      ALIGN8A_START(pix1, pix1)                                          \
++      ALIGN8A_START(pix2, pix2)                                          \
++      ALIGN8A_START(pix3, pix3)                                          \
++      for (y = 0; y < ly; y++) {                                         \
++        ALIGN8A_READ##lx(pix0v, pix0); pix0_ptr += stride;               \
++        ALIGN8A_READ##lx(pix1v, pix1); pix1_ptr += stride;               \
++        ALIGN8A_READ##lx(fencv, fenc); fenc_ptr += FENC_STRIDE / 8;      \
++        ALIGN8A_READ##lx(pix2v, pix2); pix2_ptr += stride;               \
++        ALIGN8A_READ##lx(pix3v, pix3); pix3_ptr += stride;               \
++        SAD_NEXT##lx(sum0v, fencv, pix0v);                               \
++        SAD_NEXT##lx(sum1v, fencv, pix1v);                               \
++        SAD_NEXT##lx(sum2v, fencv, pix2v);                               \
++        SAD_NEXT##lx(sum3v, fencv, pix3v);                               \
++      }                                                                  \
++    } else                                                               \
++    for (y = 0; y < ly; y++) {                                           \
++        pix0v = SAD_LD##lx(pix0); pix0 += stride;                        \
++        pix1v = SAD_LD##lx(pix1); pix1 += stride;                        \
++        fencv = SAD_LD##lx(fenc); fenc += FENC_STRIDE;                   \
++        pix2v = SAD_LD##lx(pix2); pix2 += stride;                        \
++        pix3v = SAD_LD##lx(pix3); pix3 += stride;                        \
++        SAD_NEXT##lx(sum0v, fencv, pix0v);                               \
++        SAD_NEXT##lx(sum1v, fencv, pix1v);                               \
++        SAD_NEXT##lx(sum2v, fencv, pix2v);                               \
++        SAD_NEXT##lx(sum3v, fencv, pix3v);                               \
++    }                                                                    \
++    scores[0] = SAD_SUM##lx(sum0v);                                      \
++    scores[1] = SAD_SUM##lx(sum1v);                                      \
++    scores[2] = SAD_SUM##lx(sum2v);                                      \
++    scores[3] = SAD_SUM##lx(sum3v);                                      \
++}                                                                        \
++static void pixel_sad_x3_##lx##x##ly##_e2k(uint8_t *fenc,                \
++            uint8_t *pix0, uint8_t *pix1, uint8_t *pix2,                 \
++            intptr_t stride, int scores[4]) {                            \
++    vec fencv, pix0v, pix1v, pix2v;                                      \
++    vec sum0v = zerov, sum1v = sum0v, sum2v = sum0v;                     \
++    int y;                                                               \
++    if (!(stride & 7) && !(FENC_STRIDE & 7)) {                           \
++      ALIGN8A_COMMON                                                     \
++      ALIGN8A_VARS(fenc)                                                 \
++      ALIGN8A_VARS(pix0)                                                 \
++      ALIGN8A_VARS(pix1)                                                 \
++      ALIGN8A_VARS(pix2)                                                 \
++      stride >>= 3;                                                      \
++      ALIGN8A_START(fenc, fenc)                                          \
++      ALIGN8A_START(pix0, pix0)                                          \
++      ALIGN8A_START(pix1, pix1)                                          \
++      ALIGN8A_START(pix2, pix2)                                          \
++      for (y = 0; y < ly; y++) {                                         \
++        ALIGN8A_READ##lx(pix0v, pix0); pix0_ptr += stride;               \
++        ALIGN8A_READ##lx(pix1v, pix1); pix1_ptr += stride;               \
++        ALIGN8A_READ##lx(fencv, fenc); fenc_ptr += FENC_STRIDE / 8;      \
++        ALIGN8A_READ##lx(pix2v, pix2); pix2_ptr += stride;               \
++        SAD_NEXT##lx(sum0v, fencv, pix0v);                               \
++        SAD_NEXT##lx(sum1v, fencv, pix1v);                               \
++        SAD_NEXT##lx(sum2v, fencv, pix2v);                               \
++      }                                                                  \
++    } else                                                               \
++    for (y = 0; y < ly; y++) {                                           \
++        pix0v = SAD_LD##lx(pix0); pix0 += stride;                        \
++        pix1v = SAD_LD##lx(pix1); pix1 += stride;                        \
++        fencv = SAD_LD##lx(fenc); fenc += FENC_STRIDE;                   \
++        pix2v = SAD_LD##lx(pix2); pix2 += stride;                        \
++        SAD_NEXT##lx(sum0v, fencv, pix0v);                               \
++        SAD_NEXT##lx(sum1v, fencv, pix1v);                               \
++        SAD_NEXT##lx(sum2v, fencv, pix2v);                               \
++    }                                                                    \
++    scores[0] = SAD_SUM##lx(sum0v);                                      \
++    scores[1] = SAD_SUM##lx(sum1v);                                      \
++    scores[2] = SAD_SUM##lx(sum2v);                                      \
++}
++
++#else
 +
 +#define PIXEL_SAD_E2K(lx, ly, vec, zerov)                                \
 +static int pixel_sad_##lx##x##ly##_e2k(uint8_t *pix1, intptr_t i_pix1,   \
@@ -3123,16 +3286,16 @@ index 0000000..1c4d989
 +}                                                                        \
 +static void pixel_sad_x4_##lx##x##ly##_e2k(uint8_t *fenc,                \
 +            uint8_t *pix0, uint8_t *pix1, uint8_t *pix2, uint8_t *pix3,  \
-+            intptr_t stride, int scores[4]) {                          \
++            intptr_t stride, int scores[4]) {                            \
 +    vec fencv, pix0v, pix1v, pix2v, pix3v;                               \
 +    vec sum0v = zerov, sum1v = sum0v, sum2v = sum0v, sum3v = sum0v;      \
 +    int y;                                                               \
 +    for (y = 0; y < ly; y++) {                                           \
-+        pix0v = SAD_LD##lx(pix0); pix0 += stride;                      \
-+        pix1v = SAD_LD##lx(pix1); pix1 += stride;                      \
++        pix0v = SAD_LD##lx(pix0); pix0 += stride;                        \
++        pix1v = SAD_LD##lx(pix1); pix1 += stride;                        \
 +        fencv = SAD_LD##lx(fenc); fenc += FENC_STRIDE;                   \
-+        pix2v = SAD_LD##lx(pix2); pix2 += stride;                      \
-+        pix3v = SAD_LD##lx(pix3); pix3 += stride;                      \
++        pix2v = SAD_LD##lx(pix2); pix2 += stride;                        \
++        pix3v = SAD_LD##lx(pix3); pix3 += stride;                        \
 +        SAD_NEXT##lx(sum0v, fencv, pix0v);                               \
 +        SAD_NEXT##lx(sum1v, fencv, pix1v);                               \
 +        SAD_NEXT##lx(sum2v, fencv, pix2v);                               \
@@ -3145,15 +3308,15 @@ index 0000000..1c4d989
 +}                                                                        \
 +static void pixel_sad_x3_##lx##x##ly##_e2k(uint8_t *fenc,                \
 +            uint8_t *pix0, uint8_t *pix1, uint8_t *pix2,                 \
-+            intptr_t stride, int scores[4]) {                          \
++            intptr_t stride, int scores[4]) {                            \
 +    vec fencv, pix0v, pix1v, pix2v;                                      \
 +    vec sum0v = zerov, sum1v = sum0v, sum2v = sum0v;                     \
 +    int y;                                                               \
 +    for (y = 0; y < ly; y++) {                                           \
-+        pix0v = SAD_LD##lx(pix0); pix0 += stride;                      \
-+        pix1v = SAD_LD##lx(pix1); pix1 += stride;                      \
++        pix0v = SAD_LD##lx(pix0); pix0 += stride;                        \
++        pix1v = SAD_LD##lx(pix1); pix1 += stride;                        \
 +        fencv = SAD_LD##lx(fenc); fenc += FENC_STRIDE;                   \
-+        pix2v = SAD_LD##lx(pix2); pix2 += stride;                      \
++        pix2v = SAD_LD##lx(pix2); pix2 += stride;                        \
 +        SAD_NEXT##lx(sum0v, fencv, pix0v);                               \
 +        SAD_NEXT##lx(sum1v, fencv, pix1v);                               \
 +        SAD_NEXT##lx(sum2v, fencv, pix2v);                               \
@@ -3162,6 +3325,8 @@ index 0000000..1c4d989
 +    scores[1] = SAD_SUM##lx(sum1v);                                      \
 +    scores[2] = SAD_SUM##lx(sum2v);                                      \
 +}
++
++#endif
 +
 +PIXEL_SAD_E2K(8, 8, __m64, _mm_setzero_si64())
 +PIXEL_SAD_E2K(8, 16, __m64, _mm_setzero_si64())
@@ -4172,10 +4337,10 @@ index 0000000..0d5adbc
 +#endif
 diff --git a/common/e2k/predict.c b/common/e2k/predict.c
 new file mode 100644
-index 0000000..5091411
+index 0000000..f67790e
 --- /dev/null
 +++ b/common/e2k/predict.c
-@@ -0,0 +1,188 @@
+@@ -0,0 +1,187 @@
 +/*****************************************************************************
 + * predict.c: e2k intra prediction
 + *****************************************************************************
@@ -4216,17 +4381,17 @@ index 0000000..5091411
 +        V += (i + 1) * (src[(i + 4) * FDEC_STRIDE - 1] - src[(2 - i) * FDEC_STRIDE - 1]);
 +    }
 +
-+    int a = 16 * (src[-1+7*FDEC_STRIDE] + src[7 - FDEC_STRIDE]);
++    int a = 16 * (src[7 * FDEC_STRIDE - 1] + src[7 - FDEC_STRIDE]);
 +    int b = (17 * H + 16) >> 5;
 +    int c = (17 * V + 16) >> 5;
-+    int i00 = a -3*b -3*c + 16;
++    int i00 = a - b * 3 - c * 3 + 16;
 +
 +    vec_s16_t i00_v, b_v, c_v;
 +    i00_v = _mm_set1_epi16(i00);
 +    b_v = _mm_set1_epi16(b);
 +    c_v = _mm_set1_epi16(c);
 +
-+    vec_s16_t induc_v  = _mm_setr_epi16(0, 1, 2, 3, 4, 5, 6, 7);
++    vec_s16_t induc_v = _mm_setr_epi16(0, 1, 2, 3, 4, 5, 6, 7);
 +    vec_s16_t add0 = _mm_add_epi16(_mm_mullo_epi16(induc_v, b_v), i00_v);
 +
 +    for (i = 0; i < 8; ++i) {
@@ -4234,7 +4399,6 @@ index 0000000..5091411
 +        VEC_STL(src, _mm_packus_epi16(shiftv, shiftv));
 +        src += FDEC_STRIDE;
 +        add0 = _mm_adds_epi16(add0, c_v);
-+
 +    }
 +}
 +
@@ -4251,7 +4415,7 @@ index 0000000..5091411
 +        V += i * (src[(7 + i) * FDEC_STRIDE - 1] - src[(7 - i) * FDEC_STRIDE - 1]);
 +    }
 +
-+    int a = 16 * (src[15*FDEC_STRIDE -1] + src[15 - FDEC_STRIDE]);
++    int a = 16 * (src[15 * FDEC_STRIDE - 1] + src[15 - FDEC_STRIDE]);
 +    int b = (5 * H + 32) >> 6;
 +    int c = (5 * V + 32) >> 6;
 +    int i00 = a - b * 7 - c * 7 + 16;
@@ -4261,7 +4425,7 @@ index 0000000..5091411
 +    b_v = _mm_set1_epi16(b);
 +    c_v = _mm_set1_epi16(c);
 +
-+    vec_s16_t induc_v  = _mm_setr_epi16(0,  1,  2,  3,  4,  5,  6,  7);
++    vec_s16_t induc_v = _mm_setr_epi16(0, 1, 2, 3, 4, 5, 6, 7);
 +    vec_s16_t b8_v = _mm_slli_epi16(b_v, 3);
 +    vec_s16_t add0 = _mm_add_epi16(_mm_mullo_epi16(induc_v, b_v), i00_v);
 +    vec_s16_t add1 = _mm_adds_epi16(b8_v, add0);
@@ -4408,10 +4572,10 @@ index 0000000..4801055
 +#endif
 diff --git a/common/e2k/quant.c b/common/e2k/quant.c
 new file mode 100644
-index 0000000..8eb6c11
+index 0000000..9993a80
 --- /dev/null
 +++ b/common/e2k/quant.c
-@@ -0,0 +1,431 @@
+@@ -0,0 +1,439 @@
 +/*****************************************************************************
 + * quant.c: e2k quantization
 + *****************************************************************************
@@ -4527,6 +4691,7 @@ index 0000000..8eb6c11
 +    vec_s16_t nz = zerov, temp1v, temp2v;
 +    int i;
 +
++    PRAGMA_E2K("ivdep")
 +    for (i = 0; i < 64; i += 16) {
 +        LOAD_MF_BIAS(i);
 +        QUANT_16_U(dct + i, biasvA, biasvB, mfvA, mfvB);
@@ -4568,9 +4733,11 @@ index 0000000..8eb6c11
 +    vec_s32_t mf1v, mf2v, temp1v, temp2v;
 +
 +    if (i_qbits >= 0) {
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < 16; y += 8) DEQUANT_SHL();
 +    } else {
 +        vec_s32_t fv = _mm_set1_epi32(1 << (-i_qbits-1));
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < 16; y += 8) DEQUANT_SHR();
 +    }
 +}
@@ -4582,6 +4749,7 @@ index 0000000..8eb6c11
 +
 +    if (i_qbits >= 0) {
 +        mfv = _mm_set1_epi16(dequant_mf[i_mf][0] << i_qbits);
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < 16; y += 8) {
 +            dctv = VEC_LD(dct + y);
 +            dctv = _mm_mullo_epi16(dctv, mfv);
@@ -4591,6 +4759,7 @@ index 0000000..8eb6c11
 +        vec_s32_t fv = _mm_set1_epi32(1 << (-i_qbits-1));
 +        mfv = _mm_set1_epi32(dequant_mf[i_mf][0]);
 +        mfv = _mm_packs_epi32(mfv, mfv);
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < 16; y += 8) {
 +            dctv = VEC_LD(dct + y);
 +            mult1v = _mm_mulhi_epi16(dctv, mfv);
@@ -4613,9 +4782,11 @@ index 0000000..8eb6c11
 +    vec_s32_t mf1v, mf2v, temp1v, temp2v;
 +
 +    if (i_qbits >= 0) {
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < 64; y += 8) DEQUANT_SHL();
 +    } else {
 +        vec_s32_t fv = _mm_set1_epi32(1 << (-i_qbits-1));
++        PRAGMA_E2K("ivdep")
 +        for (y = 0; y < 64; y += 8) DEQUANT_SHR();
 +    }
 +}
@@ -4625,6 +4796,7 @@ index 0000000..8eb6c11
 +    int i;
 +    LOAD_ZERO;
 +
++    PRAGMA_E2K("ivdep")
 +    for (i = 0; i < size; i += 8) {
 +        __m128i v0, v1, v2, v3, v4;
 +        v0 = VEC_LD(dct + i);
