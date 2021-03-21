@@ -1,6 +1,6 @@
-From e554c92765905a0703a180f0f613f9bdb2a55e22 Mon Sep 17 00:00:00 2001
+From d7331718ca2f131032b398f76a80f4dad1bced39 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Wed, 17 Mar 2021 16:15:20 +0700
+Date: Sun, 21 Mar 2021 17:27:02 +0700
 Subject: [PATCH] ffmpeg-4.3.1 e2k support
 
 ---
@@ -9,7 +9,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavcodec/audiodsp.h                |    1 +
  libavcodec/blockdsp.c                |    2 +
  libavcodec/blockdsp.h                |    1 +
- libavcodec/e2k/Makefile              |   28 +
+ libavcodec/e2k/Makefile              |   30 +
  libavcodec/e2k/audiodsp.c            |   62 +
  libavcodec/e2k/blockdsp.c            |   72 +
  libavcodec/e2k/dctdsp.h              |   27 +
@@ -41,6 +41,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavcodec/e2k/vorbisdsp.c           |   62 +
  libavcodec/e2k/vp3dsp.c              |  169 +++
  libavcodec/e2k/vp8dsp.c              |  428 ++++++
+ libavcodec/e2k/vp9dsp.c              | 1740 ++++++++++++++++++++++
  libavcodec/fdctdsp.c                 |    2 +
  libavcodec/fdctdsp.h                 |    2 +
  libavcodec/fft.h                     |    1 +
@@ -89,6 +90,8 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavcodec/vp3dsp.h                  |    1 +
  libavcodec/vp8dsp.c                  |    2 +
  libavcodec/vp8dsp.h                  |    1 +
+ libavcodec/vp9dsp.c                  |    1 +
+ libavcodec/vp9dsp.h                  |    1 +
  libavutil/cpu.c                      |    8 +
  libavutil/cpu.h                      |    2 +
  libavutil/cpu_internal.h             |    2 +
@@ -98,7 +101,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavutil/e2k/float_dsp.c            |  120 ++
  libavutil/e2k/intreadwrite.h         |   54 +
  libavutil/e2k/timer.h                |   35 +
- libavutil/e2k/util_e2k.h             |  201 +++
+ libavutil/e2k/util_e2k.h             |  146 ++
  libavutil/float_dsp.c                |    2 +
  libavutil/float_dsp.h                |    1 +
  libavutil/intreadwrite.h             |    2 +
@@ -116,7 +119,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libswscale/yuv2rgb.c                 |    2 +
  tests/checkasm/checkasm.c            |    2 +
  tests/checkasm/huffyuvdsp.c          |    8 +-
- 112 files changed, 9341 insertions(+), 5 deletions(-)
+ 115 files changed, 11030 insertions(+), 5 deletions(-)
  create mode 100644 libavcodec/e2k/Makefile
  create mode 100644 libavcodec/e2k/audiodsp.c
  create mode 100644 libavcodec/e2k/blockdsp.c
@@ -149,6 +152,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  create mode 100644 libavcodec/e2k/vorbisdsp.c
  create mode 100644 libavcodec/e2k/vp3dsp.c
  create mode 100644 libavcodec/e2k/vp8dsp.c
+ create mode 100644 libavcodec/e2k/vp9dsp.c
  create mode 100644 libavcodec/tests/e2k/dct.c
  create mode 100644 libavutil/e2k/Makefile
  create mode 100644 libavutil/e2k/cpu.c
@@ -282,10 +286,10 @@ index 26fc2ea..8eccb47 100644
  
 diff --git a/libavcodec/e2k/Makefile b/libavcodec/e2k/Makefile
 new file mode 100644
-index 0000000..5242f83
+index 0000000..eb764a0
 --- /dev/null
 +++ b/libavcodec/e2k/Makefile
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,30 @@
 +# subsystems
 +OBJS-$(CONFIG_AUDIODSP)                += e2k/audiodsp.o
 +OBJS-$(CONFIG_BLOCKDSP)                += e2k/blockdsp.o
@@ -314,6 +318,8 @@ index 0000000..5242f83
 +OBJS-$(CONFIG_SVQ1_ENCODER)            += e2k/svq1enc.o
 +OBJS-$(CONFIG_VORBIS_DECODER)          += e2k/vorbisdsp.o
 +OBJS-$(CONFIG_VP7_DECODER)             += e2k/vp8dsp.o
++OBJS-$(CONFIG_VP9_DECODER)             += e2k/vp9dsp.o
++
 diff --git a/libavcodec/e2k/audiodsp.c b/libavcodec/e2k/audiodsp.c
 new file mode 100644
 index 0000000..c2e4433
@@ -6658,6 +6664,1752 @@ index 0000000..61b46b3
 +    c->put_vp8_epel_pixels_tab[2][1][2] = put_vp8_epel4_h6v4_e2k;
 +    c->put_vp8_epel_pixels_tab[2][2][1] = put_vp8_epel4_h4v6_e2k;
 +}
+diff --git a/libavcodec/e2k/vp9dsp.c b/libavcodec/e2k/vp9dsp.c
+new file mode 100644
+index 0000000..5b80070
+--- /dev/null
++++ b/libavcodec/e2k/vp9dsp.c
+@@ -0,0 +1,1740 @@
++/*
++ * VP9 compatible video decoder
++ *
++ * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
++ * Copyright (C) 2013 Ronald S. Bultje <rsbultje gmail com>
++ * Copyright (C) 2013 Clément Bœsch <u pkh me>
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#define BIT_DEPTH 8
++
++#include "config.h"
++#include "libavutil/cpu.h"
++#include "libavutil/e2k/cpu.h"
++#include "libavutil/e2k/util_e2k.h"
++
++#include "libavutil/common.h"
++#include "libavutil/intreadwrite.h"
++#include "libavcodec/vp9dsp.h"
++
++#define pixel   uint8_t
++
++#define itxfm_wrapper4(type_a, type_b, sz, bits, has_dconly) \
++static void type_a##_##type_b##_##sz##x##sz##_add_e2k(uint8_t *dst, \
++                                                      ptrdiff_t stride, \
++                                                      int16_t *block, int eob) \
++{ \
++    int j; \
++    int16_t tmp[sz * sz], out[sz * sz]; \
++    __m64 h0, h1, h2, round, zerov = _mm_setzero_si64(); \
++\
++    if (has_dconly && eob == 1) { \
++        int t = ((((int)block[0] * 11585 + (1 << 13)) >> 14) \
++                                 * 11585 + (1 << 13)) >> 14; \
++        block[0] = 0; \
++        t = bits ? (t + (1 << (bits - 1))) >> bits : t; \
++        h1 = _mm_set1_pi16(t); \
++        h2 = _mm_set1_pi16(-t); \
++        h1 = _mm_packs_pu16(h1, h1); \
++        h2 = _mm_packs_pu16(h2, h2); \
++        \
++        PRAGMA_E2K("ivdep") \
++        for (j = 0; j < sz; j++, dst += stride) { \
++            h0 = _mm_cvtsi32_si64(*(uint32_t*)dst); \
++            h0 = _mm_subs_pu8(_mm_adds_pu8(h0, h1), h2); \
++            *(uint32_t*)dst = _mm_cvtsi64_si32(h0); \
++        } \
++        return; \
++    } \
++    \
++    type_a##sz##_1d(block, tmp, 0); \
++    memset(block, 0, sz * sz * sizeof(*block)); \
++    type_b##sz##_1d(tmp, out, 1); \
++    round = _mm_set1_pi16((1 << bits) >> 1); \
++    PRAGMA_E2K("ivdep") \
++    for (j = 0; j < sz; j++, dst += stride) { \
++         h1 = *(__m64*)(out + j * sz); \
++         h1 = _mm_srai_pi16(_mm_add_pi16(h1, round), bits); \
++         h0 = _mm_cvtsi32_si64(*(uint32_t*)dst); \
++         h0 = _mm_unpacklo_pi8(h0, zerov); \
++         h0 = _mm_add_pi16(h0, h1); \
++         h0 = _mm_packs_pu16(h0, h0); \
++         *(uint32_t*)dst = _mm_cvtsi64_si32(h0); \
++    } \
++}
++
++#define itxfm_wrapper8(type_a, type_b, sz, bits, has_dconly) \
++static void type_a##_##type_b##_##sz##x##sz##_add_e2k(uint8_t *dst, \
++                                                      ptrdiff_t stride, \
++                                                      int16_t *block, int eob) \
++{ \
++    int j; \
++    int16_t tmp[sz * sz], out[sz * sz]; \
++    __m128i v0, v1, round; \
++    LOAD_ZERO; \
++\
++    if (has_dconly && eob == 1) { \
++        __m64 h0, h1, h2; \
++        int t = ((((int)block[0] * 11585 + (1 << 13)) >> 14) \
++                                 * 11585 + (1 << 13)) >> 14; \
++        block[0] = 0; \
++        t = bits ? (t + (1 << (bits - 1))) >> bits : t; \
++        h1 = _mm_set1_pi16(t); \
++        h2 = _mm_set1_pi16(-t); \
++        h1 = _mm_packs_pu16(h1, h1); \
++        h2 = _mm_packs_pu16(h2, h2); \
++        \
++        PRAGMA_E2K("ivdep") \
++        for (j = 0; j < sz; j++, dst += stride) { \
++            h0 = *(__m64*)dst; \
++            h0 = _mm_subs_pu8(_mm_adds_pu8(h0, h1), h2); \
++            *(__m64*)dst = h0; \
++        } \
++        return; \
++    } \
++    \
++    type_a##sz##_1d(block, tmp, 0); \
++    memset(block, 0, sz * sz * sizeof(*block)); \
++    type_b##sz##_1d(tmp, out, 1); \
++    round = _mm_set1_epi16((1 << bits) >> 1); \
++    PRAGMA_E2K("ivdep") \
++    for (j = 0; j < sz; j++, dst += stride) { \
++         v1 = VEC_LD(out + j * sz); \
++         v1 = _mm_srai_epi16(_mm_add_epi16(v1, round), bits); \
++         v0 = VEC_LD8(dst); \
++         v0 = _mm_unpacklo_epi8(v0, zerov); \
++         v0 = _mm_add_epi16(v0, v1); \
++         v0 = _mm_packus_epi16(v0, v0); \
++         VEC_STL(dst, v0); \
++    } \
++}
++
++#define itxfm_wrapper16(type_a, type_b, sz, bits, has_dconly) \
++static void type_a##_##type_b##_##sz##x##sz##_add_e2k(uint8_t *dst, \
++                                                      ptrdiff_t stride, \
++                                                      int16_t *block, int eob) \
++{ \
++    int i, j; \
++    int16_t tmp[sz * sz], out[sz * sz]; \
++    __m128i v0, v1, v2, v3, round; \
++    LOAD_ZERO; \
++\
++    if (has_dconly && eob == 1) { \
++        int t = ((((int)block[0] * 11585 + (1 << 13)) >> 14) \
++                                 * 11585 + (1 << 13)) >> 14; \
++        block[0] = 0; \
++        t = bits ? (t + (1 << (bits - 1))) >> bits : t; \
++        v1 = _mm_set1_epi16(t); \
++        v2 = _mm_set1_epi16(-t); \
++        v1 = _mm_packus_epi16(v1, v1); \
++        v2 = _mm_packus_epi16(v2, v2); \
++        \
++        for (j = 0; j < sz; j++, dst += stride) \
++        PRAGMA_E2K("ivdep") \
++        for (i = 0; i < sz; i += 16) { \
++            v0 = VEC_LD(dst + i); \
++            v0 = _mm_subs_epu8(_mm_adds_epu8(v0, v1), v2); \
++            VEC_ST(dst + i, v0); \
++        } \
++        return; \
++    } \
++    \
++    type_a##sz##_1d(block, tmp, 0); \
++    memset(block, 0, sz * sz * sizeof(*block)); \
++    type_b##sz##_1d(tmp, out, 1); \
++    round = _mm_set1_epi16((1 << bits) >> 1); \
++    for (j = 0; j < sz; j++, dst += stride) \
++    PRAGMA_E2K("ivdep") \
++    for (i = 0; i < sz; i += 16) { \
++         v2 = VEC_LD(out + j * sz + i); \
++         v3 = VEC_LD(out + j * sz + i + 8); \
++         v2 = _mm_srai_epi16(_mm_add_epi16(v2, round), bits); \
++         v3 = _mm_srai_epi16(_mm_add_epi16(v3, round), bits); \
++         v1 = VEC_LD(dst + i); \
++         v0 = _mm_unpacklo_epi8(v1, zerov); \
++         v1 = _mm_unpackhi_epi8(v1, zerov); \
++         v0 = _mm_add_epi16(v0, v2); \
++         v1 = _mm_add_epi16(v1, v3); \
++         v0 = _mm_packus_epi16(v0, v1); \
++         VEC_ST(dst + i, v0); \
++    } \
++}
++
++#define IN(x) VEC_LD8(in + (x) * sz)
++
++#define X1(x, a, b) \
++    __m128i x = _mm_set1_epi32((a & 0xffff) | b << 16);
++
++#define X2(x, y, i0, i1) \
++    v1 = _mm_unpacklo_epi16(IN(i0), IN(i1)); \
++    v0 = _mm_madd_epi16(v1, f##x); \
++    v1 = _mm_madd_epi16(v1, f##y); \
++    t##x##a = _mm_srai_epi32(_mm_add_epi32(v0, round), 14); \
++    t##y##a = _mm_srai_epi32(_mm_add_epi32(v1, round), 14);
++
++#define X3(x, y, i0, i1) \
++    v0 = _mm_mullo_epi32(_mm_sub_epi32(i0, i1), c11585); \
++    v1 = _mm_mullo_epi32(_mm_add_epi32(i0, i1), c11585); \
++    x = _mm_srai_epi32(_mm_add_epi32(v0, round), 14); \
++    y = _mm_srai_epi32(_mm_add_epi32(v1, round), 14);
++
++#define X4(x, y, i0, i1, m0, m1) \
++    v0 = _mm_add_epi32(_mm_mullo_epi32(i0, m0), _mm_mullo_epi32(i1, m1)); \
++    v1 = _mm_sub_epi32(_mm_mullo_epi32(i0, m1), _mm_mullo_epi32(i1, m0)); \
++    x = _mm_srai_epi32(_mm_add_epi32(v0, round), 14); \
++    y = _mm_srai_epi32(_mm_add_epi32(v1, round), 14);
++
++#define X5(d, add, a0, a1, a2, a3, b0, b1, b2, b3) \
++    v0 = _mm_##add##_epi32(a0, b0); \
++    v1 = _mm_##add##_epi32(a1, b1); \
++    v2 = _mm_##add##_epi32(a2, b2); \
++    v3 = _mm_##add##_epi32(a3, b3); \
++    v0 = _mm_packs_epi32(v0, v1); \
++    v1 = _mm_packs_epi32(v2, v3); \
++    v2 = _mm_unpacklo_epi16(v0, v1); \
++    v3 = _mm_unpackhi_epi16(v0, v1); \
++    v0 = _mm_unpacklo_epi16(v2, v3); \
++    v1 = _mm_unpackhi_epi16(v2, v3); \
++    VEC_STL(out + d + sz * 0, v0); \
++    VEC_STH(out + d + sz * 1, v0); \
++    VEC_STL(out + d + sz * 2, v1); \
++    VEC_STH(out + d + sz * 3, v1);
++
++#define X6(d, add, a0, a1, a2, a3, b0, b1, b2, b3) \
++    v0 = _mm_##add##_epi32(a0, b0); \
++    v1 = _mm_##add##_epi32(a1, b1); \
++    v2 = _mm_##add##_epi32(a2, b2); \
++    v3 = _mm_##add##_epi32(a3, b3); \
++    v0 = _mm_packs_epi32(v0, v1); \
++    v1 = _mm_packs_epi32(v2, v3); \
++    VEC_STL(out + sz * (d + 0), v0); \
++    VEC_STH(out + sz * (d + 1), v0); \
++    VEC_STL(out + sz * (d + 2), v1); \
++    VEC_STH(out + sz * (d + 3), v1);
++
++static av_always_inline void idct4_1d(const int16_t *in,
++                                      int16_t *out, int pass)
++{
++    __m128i v0, v1, v2, v3;
++    __m128i t0a, t1a, t2a, t3a;
++    __m128i round = _mm_set1_epi32(1 << 13);
++    int sz = 4;
++
++    X1(f0, 11585, 11585)
++    X1(f1, 11585, -11585)
++    X1(f2, 6270, -15137)
++    X1(f3, 15137, 6270)
++
++    X2(0, 1, 0, 2)
++    X2(2, 3, 1, 3)
++
++    v0 = _mm_add_epi32(t0a, t3a);
++    v1 = _mm_add_epi32(t1a, t2a);
++    v2 = _mm_sub_epi32(t1a, t2a);
++    v3 = _mm_sub_epi32(t0a, t3a);
++    v0 = _mm_packs_epi32(v0, v1);
++    v1 = _mm_packs_epi32(v2, v3);
++    if (!pass) {
++        v2 = _mm_unpacklo_epi16(v0, v1);
++        v3 = _mm_unpackhi_epi16(v0, v1);
++        v0 = _mm_unpacklo_epi16(v2, v3);
++        v1 = _mm_unpackhi_epi16(v2, v3);
++    }
++    VEC_STL(out + sz * 0, v0);
++    VEC_STH(out + sz * 1, v0);
++    VEC_STL(out + sz * 2, v1);
++    VEC_STH(out + sz * 3, v1);
++}
++
++static av_always_inline void idct8_1d(const int16_t *in,
++                                      int16_t *out, int pass)
++{
++    __m128i v0, v1, v2, v3;
++    __m128i t0a, t1a, t2a, t3a, t4a, t5a, t6a, t7a;
++    __m128i t0, t1, t2, t3, t4, t5, t6, t7;
++    __m128i round = _mm_set1_epi32(1 << 13);
++    __m128i c11585 = _mm_set1_epi32(11585);
++
++    X1(f0, 11585, 11585)
++    X1(f1, 11585, -11585)
++    X1(f2, 6270, -15137)
++    X1(f3, 15137, 6270)
++
++    X1(f4, 3196, -16069)
++    X1(f7, 16069, 3196)
++    X1(f5, 13623, -9102)
++    X1(f6, 9102, 13623)
++
++    int i, sz = 8;
++    PRAGMA_E2K("ivdep")
++    for (i = 0; i < sz; i += 4, in += 4) {
++        X2(0, 1, 0, 4)
++        X2(2, 3, 2, 6)
++        X2(4, 7, 1, 7)
++        X2(5, 6, 5, 3)
++
++        t0  = _mm_add_epi32(t0a, t3a);
++        t1  = _mm_add_epi32(t1a, t2a);
++        t2  = _mm_sub_epi32(t1a, t2a);
++        t3  = _mm_sub_epi32(t0a, t3a);
++        t4  = _mm_add_epi32(t4a, t5a);
++        t5a = _mm_sub_epi32(t4a, t5a);
++        t7  = _mm_add_epi32(t7a, t6a);
++        t6a = _mm_sub_epi32(t7a, t6a);
++
++        X3(t5, t6, t6a, t5a)
++
++        if (!pass) {
++            X5(0, add, t0, t1, t2, t3, t7, t6, t5, t4)
++            X5(4, sub, t3, t2, t1, t0, t4, t5, t6, t7)
++            out += 4 * sz;
++        } else {
++            X6(0, add, t0, t1, t2, t3, t7, t6, t5, t4)
++            X6(4, sub, t3, t2, t1, t0, t4, t5, t6, t7)
++            out += 4;
++        }
++    }
++}
++
++static av_always_inline void idct16_1d(const int16_t *in,
++                                       int16_t *out, int pass)
++{
++    __m128i v0, v1, v2, v3;
++    __m128i t0a, t1a, t2a, t3a, t4a, t5a, t6a, t7a;
++    __m128i t8a, t9a, t10a, t11a, t12a, t13a, t14a, t15a;
++    __m128i t0, t1, t2, t3, t4, t5, t6, t7;
++    __m128i t8, t9, t10, t11, t12, t13, t14, t15;
++    __m128i round = _mm_set1_epi32(1 << 13);
++    __m128i c11585 = _mm_set1_epi32(11585);
++    __m128i m15137 = _mm_set1_epi32(-15137), c6270 = _mm_set1_epi32(6270);
++
++    X1(f0, 11585, 11585)
++    X1(f1, 11585, -11585)
++    X1(f2, 6270, -15137)
++    X1(f3, 15137, 6270)
++
++    X1(f4, 3196, -16069)
++    X1(f7, 16069, 3196)
++    X1(f5, 13623, -9102)
++    X1(f6, 9102, 13623)
++
++    X1(f8, 1606, -16305)
++    X1(f15, 16305, 1606)
++    X1(f9, 12665, -10394)
++    X1(f14, 10394, 12665)
++    X1(f10, 7723, -14449)
++    X1(f13, 14449, 7723)
++    X1(f11, 15679, -4756)
++    X1(f12, 4756, 15679)
++
++    int i, sz = 16;
++    PRAGMA_E2K("ivdep")
++    for (i = 0; i < sz; i += 4, in += 4) {
++        X2( 0,  1,  0,  8)
++        X2( 2,  3,  4, 12)
++        X2( 4,  7,  2, 14)
++        X2( 5,  6, 10,  6)
++        X2( 8, 15,  1, 15)
++        X2( 9, 14,  9,  7)
++        X2(10, 13,  5, 11)
++        X2(11, 12, 13,  3)
++
++        t0  = _mm_add_epi32(t0a, t3a);
++        t1  = _mm_add_epi32(t1a, t2a);
++        t2  = _mm_sub_epi32(t1a, t2a);
++        t3  = _mm_sub_epi32(t0a, t3a);
++        t4  = _mm_add_epi32(t4a, t5a);
++        t5  = _mm_sub_epi32(t4a, t5a);
++        t6  = _mm_sub_epi32(t7a, t6a);
++        t7  = _mm_add_epi32(t7a, t6a);
++        t8  = _mm_add_epi32(t8a, t9a);
++        t9  = _mm_sub_epi32(t8a, t9a);
++        t10 = _mm_sub_epi32(t11a, t10a);
++        t11 = _mm_add_epi32(t11a, t10a);
++        t12 = _mm_add_epi32(t12a, t13a);
++        t13 = _mm_sub_epi32(t12a, t13a);
++        t14 = _mm_sub_epi32(t15a, t14a);
++        t15 = _mm_add_epi32(t15a, t14a);
++
++        X3( t5a,  t6a, t6,  t5)
++        X4( t9a, t14a, t9,  t14, m15137, c6270)
++        X4(t13a, t10a, t13, t10, c6270, m15137)
++
++        t0a  = _mm_add_epi32(t0, t7);
++        t1a  = _mm_add_epi32(t1, t6a);
++        t2a  = _mm_add_epi32(t2, t5a);
++        t3a  = _mm_add_epi32(t3, t4);
++        t4   = _mm_sub_epi32(t3, t4);
++        t5   = _mm_sub_epi32(t2, t5a);
++        t6   = _mm_sub_epi32(t1, t6a);
++        t7   = _mm_sub_epi32(t0, t7);
++        t8a  = _mm_add_epi32(t8, t11);
++        t9   = _mm_add_epi32(t9a, t10a);
++        t10  = _mm_sub_epi32(t9a, t10a);
++        t11a = _mm_sub_epi32(t8, t11);
++        t12a = _mm_sub_epi32(t15, t12);
++        t13  = _mm_sub_epi32(t14a, t13a);
++        t14  = _mm_add_epi32(t14a, t13a);
++        t15a = _mm_add_epi32(t15, t12);
++
++        X3(t10a, t13a, t13, t10)
++        X3(t11, t12, t12a, t11a)
++
++        if (!pass) {
++            X5( 0, add, t0a, t1a, t2a, t3a, t15a, t14, t13a, t12)
++            X5( 4, add, t4,  t5,  t6,  t7,  t11, t10a, t9, t8a)
++            X5( 8, sub, t7,  t6,  t5,  t4,  t8a, t9, t10a, t11)
++            X5(12, sub, t3a, t2a, t1a, t0a, t12, t13a, t14, t15a)
++            out += 4 * sz;
++        } else {
++            X6( 0, add, t0a, t1a, t2a, t3a, t15a, t14, t13a, t12)
++            X6( 4, add, t4,  t5,  t6,  t7,  t11, t10a, t9, t8a)
++            X6( 8, sub, t7,  t6,  t5,  t4,  t8a, t9, t10a, t11)
++            X6(12, sub, t3a, t2a, t1a, t0a, t12, t13a, t14, t15a)
++            out += 4;
++        }
++    }
++}
++
++static av_always_inline void idct32_1d(const int16_t *in,
++                                       int16_t *out, int pass)
++{
++    __m128i v0, v1, v2, v3;
++    __m128i t0a, t1a, t2a, t3a, t4a, t5a, t6a, t7a;
++    __m128i t8a, t9a, t10a, t11a, t12a, t13a, t14a, t15a;
++    __m128i t16a, t17a, t18a, t19a, t20a, t21a, t22a, t23a;
++    __m128i t24a, t25a, t26a, t27a, t28a, t29a, t30a, t31a;
++    __m128i t0, t1, t2, t3, t4, t5, t6, t7;
++    __m128i t8, t9, t10, t11, t12, t13, t14, t15;
++    __m128i t16, t17, t18, t19, t20, t21, t22, t23;
++    __m128i t24, t25, t26, t27, t28, t29, t30, t31;
++    __m128i round = _mm_set1_epi32(1 << 13);
++    __m128i c11585 = _mm_set1_epi32(11585);
++    __m128i m15137 = _mm_set1_epi32(-15137), c6270 = _mm_set1_epi32(6270);
++    __m128i m16069 = _mm_set1_epi32(-16069), c3196 = _mm_set1_epi32(3196);
++    __m128i m9102 = _mm_set1_epi32(-9102), c13623 = _mm_set1_epi32(13623);
++
++    X1(f0, 11585, 11585)
++    X1(f1, 11585, -11585)
++    X1(f2, 6270, -15137)
++    X1(f3, 15137, 6270)
++
++    X1(f4, 3196, -16069)
++    X1(f7, 16069, 3196)
++    X1(f5, 13623, -9102)
++    X1(f6, 9102, 13623)
++
++    X1(f8, 1606, -16305)
++    X1(f15, 16305, 1606)
++    X1(f9, 12665, -10394)
++    X1(f14, 10394, 12665)
++    X1(f10, 7723, -14449)
++    X1(f13, 14449, 7723)
++    X1(f11, 15679, -4756)
++    X1(f12, 4756, 15679)
++
++    X1(f16, 804, -16364)
++    X1(f31, 16364, 804)
++    X1(f17, 12140, -11003)
++    X1(f30, 11003, 12140)
++    X1(f18, 7005, -14811)
++    X1(f29, 14811, 7005)
++    X1(f19, 15426, -5520)
++    X1(f28, 5520, 15426)
++    X1(f20, 3981, -15893)
++    X1(f27, 15893, 3981)
++    X1(f21, 14053, -8423U)
++    X1(f26, 8423U, 14053)
++    X1(f22, 9760, -13160)
++    X1(f25, 13160, 9760)
++    X1(f23, 16207, -2404)
++    X1(f24, 2404, 16207)
++
++    int i, sz = 32;
++    PRAGMA_E2K("ivdep")
++    for (i = 0; i < sz; i += 4, in += 4) {
++        X2( 0,  1,  0, 16)
++        X2( 2,  3,  8, 24)
++        X2( 4,  7,  4, 28)
++        X2( 5,  6, 20, 12)
++        X2( 8, 15,  2, 30)
++        X2( 9, 14, 18, 14)
++        X2(10, 13, 10, 22)
++        X2(11, 12, 26,  6)
++        X2(16, 31,  1, 31)
++        X2(17, 30, 17, 15)
++        X2(18, 29,  9, 23)
++        X2(19, 28, 25,  7)
++        X2(20, 27,  5, 27)
++        X2(21, 26, 21, 11)
++        X2(22, 25, 13, 19)
++        X2(23, 24, 29,  3)
++
++        t0  = _mm_add_epi32(t0a, t3a);
++        t1  = _mm_add_epi32(t1a, t2a);
++        t2  = _mm_sub_epi32(t1a, t2a);
++        t3  = _mm_sub_epi32(t0a, t3a);
++        t4  = _mm_add_epi32(t4a, t5a);
++        t5  = _mm_sub_epi32(t4a, t5a);
++        t6  = _mm_sub_epi32(t7a, t6a);
++        t7  = _mm_add_epi32(t7a, t6a);
++        t8  = _mm_add_epi32(t8a, t9a);
++        t9  = _mm_sub_epi32(t8a, t9a);
++        t10 = _mm_sub_epi32(t11a, t10a);
++        t11 = _mm_add_epi32(t11a, t10a);
++        t12 = _mm_add_epi32(t12a, t13a);
++        t13 = _mm_sub_epi32(t12a, t13a);
++        t14 = _mm_sub_epi32(t15a, t14a);
++        t15 = _mm_add_epi32(t15a, t14a);
++        t16 = _mm_add_epi32(t16a, t17a);
++        t17 = _mm_sub_epi32(t16a, t17a);
++        t18 = _mm_sub_epi32(t19a, t18a);
++        t19 = _mm_add_epi32(t19a, t18a);
++        t20 = _mm_add_epi32(t20a, t21a);
++        t21 = _mm_sub_epi32(t20a, t21a);
++        t22 = _mm_sub_epi32(t23a, t22a);
++        t23 = _mm_add_epi32(t23a, t22a);
++        t24 = _mm_add_epi32(t24a, t25a);
++        t25 = _mm_sub_epi32(t24a, t25a);
++        t26 = _mm_sub_epi32(t27a, t26a);
++        t27 = _mm_add_epi32(t27a, t26a);
++        t28 = _mm_add_epi32(t28a, t29a);
++        t29 = _mm_sub_epi32(t28a, t29a);
++        t30 = _mm_sub_epi32(t31a, t30a);
++        t31 = _mm_add_epi32(t31a, t30a);
++
++        X3( t5a,  t6a, t6,  t5)
++        X4( t9a, t14a, t9,  t14, m15137, c6270)
++        X4(t13a, t10a, t13, t10, c6270, m15137)
++        X4(t17a, t30a, t17, t30, m16069, c3196)
++        X4(t29a, t18a, t29, t18, c3196, m16069)
++        X4(t21a, t26a, t21, t26, m9102, c13623)
++        X4(t25a, t22a, t25, t22, c13623, m9102)
++
++        t0a  = _mm_add_epi32(t0, t7);
++        t1a  = _mm_add_epi32(t1, t6a);
++        t2a  = _mm_add_epi32(t2, t5a);
++        t3a  = _mm_add_epi32(t3, t4);
++        t4a  = _mm_sub_epi32(t3, t4);
++        t5   = _mm_sub_epi32(t2, t5a);
++        t6   = _mm_sub_epi32(t1, t6a);
++        t7a  = _mm_sub_epi32(t0, t7);
++        t8a  = _mm_add_epi32(t8, t11);
++        t9   = _mm_add_epi32(t9a, t10a);
++        t10  = _mm_sub_epi32(t9a, t10a);
++        t11a = _mm_sub_epi32(t8, t11);
++        t12a = _mm_sub_epi32(t15, t12);
++        t13  = _mm_sub_epi32(t14a, t13a);
++        t14  = _mm_add_epi32(t14a, t13a);
++        t15a = _mm_add_epi32(t15, t12);
++        t16a = _mm_add_epi32(t16, t19);
++        t17  = _mm_add_epi32(t17a, t18a);
++        t18  = _mm_sub_epi32(t17a, t18a);
++        t19a = _mm_sub_epi32(t16, t19);
++        t20a = _mm_sub_epi32(t23, t20);
++        t21  = _mm_sub_epi32(t22a, t21a);
++        t22  = _mm_add_epi32(t22a, t21a);
++        t23a = _mm_add_epi32(t23, t20);
++        t24a = _mm_add_epi32(t24, t27);
++        t25  = _mm_add_epi32(t25a, t26a);
++        t26  = _mm_sub_epi32(t25a, t26a);
++        t27a = _mm_sub_epi32(t24, t27);
++        t28a = _mm_sub_epi32(t31, t28);
++        t29  = _mm_sub_epi32(t30a, t29a);
++        t30  = _mm_add_epi32(t30a, t29a);
++        t31a = _mm_add_epi32(t31, t28);
++
++        X3(t10a, t13a, t13, t10)
++        X3(t11, t12, t12a, t11a)
++        X4(t18a, t29a, t18, t29, m15137, c6270)
++        X4(t19, t28, t19a, t28a, m15137, c6270)
++        X4(t27, t20, t27a, t20a, c6270, m15137)
++        X4(t26a, t21a, t26, t21, c6270, m15137)
++
++        t0   = _mm_add_epi32(t0a, t15a);
++        t1   = _mm_add_epi32(t1a, t14);
++        t2   = _mm_add_epi32(t2a, t13a);
++        t3   = _mm_add_epi32(t3a, t12);
++        t4   = _mm_add_epi32(t4a, t11);
++        t5a  = _mm_add_epi32(t5, t10a);
++        t6a  = _mm_add_epi32(t6, t9);
++        t7   = _mm_add_epi32(t7a, t8a);
++        t8   = _mm_sub_epi32(t7a, t8a);
++        t9a  = _mm_sub_epi32(t6, t9);
++        t10  = _mm_sub_epi32(t5, t10a);
++        t11a = _mm_sub_epi32(t4a, t11);
++        t12a = _mm_sub_epi32(t3a, t12);
++        t13  = _mm_sub_epi32(t2a, t13a);
++        t14a = _mm_sub_epi32(t1a, t14);
++        t15  = _mm_sub_epi32(t0a, t15a);
++        t16  = _mm_add_epi32(t16a, t23a);
++        t17a = _mm_add_epi32(t17, t22);
++        t18  = _mm_add_epi32(t18a, t21a);
++        t19a = _mm_add_epi32(t19, t20);
++        t20a = _mm_sub_epi32(t19, t20);
++        t21  = _mm_sub_epi32(t18a, t21a);
++        t22a = _mm_sub_epi32(t17, t22);
++        t23  = _mm_sub_epi32(t16a, t23a);
++        t24  = _mm_sub_epi32(t31a, t24a);
++        t25a = _mm_sub_epi32(t30, t25);
++        t26  = _mm_sub_epi32(t29a, t26a);
++        t27a = _mm_sub_epi32(t28, t27);
++        t28a = _mm_add_epi32(t28, t27);
++        t29  = _mm_add_epi32(t29a, t26a);
++        t30a = _mm_add_epi32(t30, t25);
++        t31  = _mm_add_epi32(t31a, t24a);
++
++        X3(t20, t27, t27a, t20a)
++        X3(t21a, t26a, t26, t21)
++        X3(t22, t25, t25a, t22a)
++        X3(t23a, t24a, t24, t23)
++
++        if (!pass) {
++            X5( 0, add, t0,   t1,  t2,   t3,   t31, t30a, t29, t28a)
++            X5( 4, add, t4,   t5a, t6a,  t7,   t27, t26a, t25, t24a)
++            X5( 8, add, t8,   t9a, t10,  t11a, t23a, t22, t21a, t20)
++            X5(12, add, t12a, t13, t14a, t15,  t19a, t18, t17a, t16)
++            X5(16, sub, t15,  t14a, t13, t12a, t16, t17a, t18, t19a)
++            X5(20, sub, t11a, t10,  t9a, t8,   t20, t21a, t22, t23a)
++            X5(24, sub, t7,   t6a,  t5a, t4,   t24a, t25, t26a, t27)
++            X5(28, sub, t3,   t2,   t1,  t0,   t28a, t29, t30a, t31)
++            out += 4 * sz;
++        } else {
++            X6( 0, add, t0,   t1,  t2,   t3,   t31, t30a, t29, t28a)
++            X6( 4, add, t4,   t5a, t6a,  t7,   t27, t26a, t25, t24a)
++            X6( 8, add, t8,   t9a, t10,  t11a, t23a, t22, t21a, t20)
++            X6(12, add, t12a, t13, t14a, t15,  t19a, t18, t17a, t16)
++            X6(16, sub, t15,  t14a, t13, t12a, t16, t17a, t18, t19a)
++            X6(20, sub, t11a, t10,  t9a, t8,   t20, t21a, t22, t23a)
++            X6(24, sub, t7,   t6a,  t5a, t4,   t24a, t25, t26a, t27)
++            X6(28, sub, t3,   t2,   t1,  t0,   t28a, t29, t30a, t31)
++            out += 4;
++        }
++    }
++}
++
++#undef IN
++#undef X1
++#undef X2
++#undef X3
++#undef X4
++#undef X5
++#undef X6
++
++itxfm_wrapper4(idct, idct, 4, 4, 1)
++itxfm_wrapper8(idct, idct, 8, 5, 1)
++itxfm_wrapper16(idct, idct, 16, 6, 1)
++itxfm_wrapper16(idct, idct, 32, 6, 1)
++
++#undef itxfm_wrapper4
++#undef itxfm_wrapper8
++#undef itxfm_wrapper16
++
++static av_cold void ff_vp9dsp_itxfm_init_8_e2k(VP9DSPContext *dsp)
++{
++
++#define init_idct(tx, nm) \
++    dsp->itxfm_add[tx][DCT_DCT]   = \
++    dsp->itxfm_add[tx][ADST_DCT]  = \
++    dsp->itxfm_add[tx][DCT_ADST]  = \
++    dsp->itxfm_add[tx][ADST_ADST] = nm##_add_e2k
++
++    dsp->itxfm_add[TX_4X4][DCT_DCT] = idct_idct_4x4_add_e2k;
++    dsp->itxfm_add[TX_8X8][DCT_DCT] = idct_idct_8x8_add_e2k;
++    dsp->itxfm_add[TX_16X16][DCT_DCT] = idct_idct_16x16_add_e2k;
++
++    init_idct(TX_32X32, idct_idct_32x32);
++
++#undef init_idct
++}
++
++#define LOAD_TRANSPOSE8(dst, a0, a1, a2, a3, a4, a5, a6, a7) \
++    t0 = VEC_LD8(dst + stride * 0); \
++    t1 = VEC_LD8(dst + stride * 1); \
++    t2 = VEC_LD8(dst + stride * 2); \
++    t3 = VEC_LD8(dst + stride * 3); \
++    t4 = VEC_LD8(dst + stride * 4); \
++    t5 = VEC_LD8(dst + stride * 5); \
++    t6 = VEC_LD8(dst + stride * 6); \
++    t7 = VEC_LD8(dst + stride * 7); \
++    t0 = _mm_unpacklo_epi8(t0, t4); \
++    t1 = _mm_unpacklo_epi8(t1, t5); \
++    t2 = _mm_unpacklo_epi8(t2, t6); \
++    t3 = _mm_unpacklo_epi8(t3, t7); \
++    t4 = _mm_unpacklo_epi8(t0, t2); \
++    t5 = _mm_unpackhi_epi8(t0, t2); \
++    t6 = _mm_unpacklo_epi8(t1, t3); \
++    t7 = _mm_unpackhi_epi8(t1, t3); \
++    t0 = _mm_unpacklo_epi8(t4, t6); \
++    t1 = _mm_unpackhi_epi8(t4, t6); \
++    t2 = _mm_unpacklo_epi8(t5, t7); \
++    t3 = _mm_unpackhi_epi8(t5, t7); \
++    a0 = _mm_unpacklo_epi8(t0, zerov); \
++    a1 = _mm_unpackhi_epi8(t0, zerov); \
++    a2 = _mm_unpacklo_epi8(t1, zerov); \
++    a3 = _mm_unpackhi_epi8(t1, zerov); \
++    a4 = _mm_unpacklo_epi8(t2, zerov); \
++    a5 = _mm_unpackhi_epi8(t2, zerov); \
++    a6 = _mm_unpacklo_epi8(t3, zerov); \
++    a7 = _mm_unpackhi_epi8(t3, zerov)
++
++#define STORE_TRANSPOSE8(dst, a0, a1, a2, a3, a4, a5, a6, a7) \
++    t0 = _mm_packus_epi16(a0, a1); \
++    t1 = _mm_packus_epi16(a2, a3); \
++    t2 = _mm_packus_epi16(a4, a5); \
++    t3 = _mm_packus_epi16(a6, a7); \
++    t4 = _mm_unpacklo_epi8(t0, t2); \
++    t5 = _mm_unpackhi_epi8(t0, t2); \
++    t6 = _mm_unpacklo_epi8(t1, t3); \
++    t7 = _mm_unpackhi_epi8(t1, t3); \
++    t0 = _mm_unpacklo_epi8(t4, t6); \
++    t1 = _mm_unpackhi_epi8(t4, t6); \
++    t2 = _mm_unpacklo_epi8(t5, t7); \
++    t3 = _mm_unpackhi_epi8(t5, t7); \
++    t4 = _mm_unpacklo_epi8(t0, t2); \
++    t5 = _mm_unpackhi_epi8(t0, t2); \
++    t6 = _mm_unpacklo_epi8(t1, t3); \
++    t7 = _mm_unpackhi_epi8(t1, t3); \
++    VEC_STL(dst + stride * 0, t4); \
++    VEC_STH(dst + stride * 1, t4); \
++    VEC_STL(dst + stride * 2, t5); \
++    VEC_STH(dst + stride * 3, t5); \
++    VEC_STL(dst + stride * 4, t6); \
++    VEC_STH(dst + stride * 5, t6); \
++    VEC_STL(dst + stride * 6, t7); \
++    VEC_STH(dst + stride * 7, t7)
++
++
++static av_always_inline void loop_filter_h(uint8_t *dst, int E, int I, int H,
++                                           ptrdiff_t stride, int wd)
++{
++    int F = 1;
++    LOAD_ZERO;
++    __m128i t0, t1, t2, t3, t4, t5, t6, t7;
++    __m128i vfm, vflat8out, vflat8in, vhev;
++    __m128i p2a, p1a, p0a, q0a, q1a, q2a;
++    __m128i p6a, p5a, p4a, p3a, q3a, q4a, q5a, q6a;
++
++    __m128i vF = _mm_set1_epi16(F);
++    __m128i vI = _mm_set1_epi16(I);
++    __m128i vE = _mm_set1_epi16(E);
++    __m128i vH = _mm_set1_epi16(H);
++
++    __m128i p7, p6, p5, p4, p3, p2, p1, p0;
++    __m128i q0, q1, q2, q3, q4, q5, q6, q7;
++
++    if (wd >= 16) {
++        LOAD_TRANSPOSE8(dst - 8, p7, p6, p5, p4, p3, p2, p1, p0);
++        LOAD_TRANSPOSE8(dst    , q0, q1, q2, q3, q4, q5, q6, q7);
++        p6a = p6; p5a = p5;
++        p4a = p4; p3a = p3;
++        q3a = q3; q4a = q4;
++        q5a = q5; q6a = q6;
++    } else {
++        LOAD_TRANSPOSE8(dst - 4, p3, p2, p1, p0, q0, q1, q2, q3);
++    }
++
++    t0 = _mm_abs_epi16(_mm_sub_epi16(p3, p2));
++    t1 = _mm_abs_epi16(_mm_sub_epi16(p2, p1));
++    t2 = _mm_abs_epi16(_mm_sub_epi16(p1, p0));
++    t3 = _mm_abs_epi16(_mm_sub_epi16(q1, q0));
++    t4 = _mm_abs_epi16(_mm_sub_epi16(q2, q1));
++    t5 = _mm_abs_epi16(_mm_sub_epi16(q3, q2));
++    vhev = _mm_or_si128(_mm_cmpgt_epi16(t2, vH), _mm_cmpgt_epi16(t3, vH));
++    t0 = _mm_cmpgt_epi16(t0, vI);
++    t1 = _mm_cmpgt_epi16(t1, vI);
++    t2 = _mm_cmpgt_epi16(t2, vI);
++    t3 = _mm_cmpgt_epi16(t3, vI);
++    t4 = _mm_cmpgt_epi16(t4, vI);
++    t5 = _mm_cmpgt_epi16(t5, vI);
++
++    t0 = _mm_or_si128(_mm_or_si128(t0, t1), t2);
++    t3 = _mm_or_si128(_mm_or_si128(t3, t4), t5);
++    t0 = _mm_or_si128(t0, t3);
++
++    t6 = _mm_abs_epi16(_mm_sub_epi16(p0, q0));
++    t7 = _mm_abs_epi16(_mm_sub_epi16(p1, q1));
++    t6 = _mm_add_epi16(_mm_slli_epi16(t6, 1), _mm_srai_epi16(t7, 1));
++    t6 = _mm_cmpgt_epi16(t6, vE);
++    vfm = _mm_or_si128(t0, t6); // !fm
++
++    if (_mm_movemask_epi8(vfm) == 0xffff) return;
++
++    if (wd >= 8) {
++        t0 = _mm_abs_epi16(_mm_sub_epi16(p3, p0));
++        t1 = _mm_abs_epi16(_mm_sub_epi16(p2, p0));
++        t2 = _mm_abs_epi16(_mm_sub_epi16(p1, p0));
++        t3 = _mm_abs_epi16(_mm_sub_epi16(q1, q0));
++        t4 = _mm_abs_epi16(_mm_sub_epi16(q2, q0));
++        t5 = _mm_abs_epi16(_mm_sub_epi16(q3, q0));
++        t0 = _mm_cmpgt_epi16(t0, vF);
++        t1 = _mm_cmpgt_epi16(t1, vF);
++        t2 = _mm_cmpgt_epi16(t2, vF);
++        t3 = _mm_cmpgt_epi16(t3, vF);
++        t4 = _mm_cmpgt_epi16(t4, vF);
++        t5 = _mm_cmpgt_epi16(t5, vF);
++
++        t0 = _mm_or_si128(_mm_or_si128(t0, t1), t2);
++        t3 = _mm_or_si128(_mm_or_si128(t3, t4), t5);
++        vflat8in = _mm_or_si128(_mm_or_si128(t0, t3), vfm);
++    }
++
++    {
++        __m128i c1 = _mm_set1_epi16(1);
++        __m128i c127 = _mm_set1_epi16(127);
++        __m128i m128 = _mm_set1_epi16(-128);
++        __m128i c43 = _mm_setr_epi8(4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3);
++        t0 = _mm_and_si128(vhev, _mm_sub_epi16(p1, q1));
++        t1 = _mm_sub_epi16(q0, p0);
++        t0 = _mm_min_epi16(_mm_max_epi16(t0, m128), c127);
++        // f = av_clip_intp2(p1 - q1, 7) & hev;
++        t1 = _mm_add_epi16(_mm_add_epi16(t1, t0), _mm_add_epi16(t1, t1));
++        t1 = _mm_andnot_si128(vfm, t1);
++        t1 = _mm_packs_epi16(t1, t1);
++        // f = av_clip_intp2(3 * (q0 - p0) + f, 7);
++        t3 = _mm_adds_epi8(t1, c43);
++        t2 = _mm_srai_epi16(_mm_unpacklo_epi8(t3, t3), 8 + 3);
++        // f1 = FFMIN(f + 4, 0x7f) >> 3;
++        t3 = _mm_srai_epi16(_mm_unpackhi_epi8(t3, t3), 8 + 3);
++        // f2 = FFMIN(f + 3, 0x7f) >> 3;
++        t4 = _mm_srai_epi16(_mm_add_epi16(t2, c1), 1);
++        t4 = _mm_andnot_si128(vhev, t4); // f3 = ((f1 + 1) >> 1) & ~hev;
++        p1a = _mm_add_epi16(p1, t4); // av_clip_uint8(p1 + f3);
++        p0a = _mm_add_epi16(p0, t3); // av_clip_uint8(p0 + f2);
++        q0a = _mm_sub_epi16(q0, t2); // av_clip_uint8(q0 - f1);
++        q1a = _mm_sub_epi16(q1, t4); // av_clip_uint8(q1 - f3);
++    }
++
++    p2a = p2; q2a = q2;
++
++    if (wd >= 8 && (_mm_movemask_epi8(vflat8in) != 0xffff)) {
++        __m128i c4 = _mm_set1_epi16(4);
++        t0 = _mm_add_epi16(_mm_slli_epi16(p3, 2), c4);
++        t1 = _mm_add_epi16(_mm_add_epi16(q0, p0), _mm_add_epi16(p1, p2));
++        t0 = _mm_sub_epi16(t0, p3);
++        t0 = _mm_add_epi16(t0, t1);
++        t1 = _mm_srai_epi16(_mm_add_epi16(p2, t0), 3);
++        t0 = _mm_add_epi16(t0, _mm_sub_epi16(q1, p3));
++        t2 = _mm_srai_epi16(_mm_add_epi16(p1, t0), 3);
++        p2a = _mm_blendv_epi8(t1, p2, vflat8in);
++        p1a = _mm_blendv_epi8(t2, p1a, vflat8in);
++
++        t0 = _mm_add_epi16(t0, _mm_sub_epi16(q2, p3));
++        t1 = _mm_srai_epi16(_mm_add_epi16(p0, t0), 3);
++        t0 = _mm_add_epi16(t0, _mm_sub_epi16(q3, p3));
++        t2 = _mm_srai_epi16(_mm_add_epi16(q0, t0), 3);
++        p0a = _mm_blendv_epi8(t1, p0a, vflat8in);
++        q0a = _mm_blendv_epi8(t2, q0a, vflat8in);
++
++        t0 = _mm_add_epi16(t0, _mm_sub_epi16(q3, p2));
++        t1 = _mm_srai_epi16(_mm_add_epi16(q1, t0), 3);
++        t0 = _mm_add_epi16(t0, _mm_sub_epi16(q3, p1));
++        t2 = _mm_srai_epi16(_mm_add_epi16(q2, t0), 3);
++        q1a = _mm_blendv_epi8(t1, q1a, vflat8in);
++        q2a = _mm_blendv_epi8(t2, q2, vflat8in);
++
++        if (wd >= 16) {
++            t0 = _mm_abs_epi16(_mm_sub_epi16(p7, p0));
++            t1 = _mm_abs_epi16(_mm_sub_epi16(p6, p0));
++            t2 = _mm_abs_epi16(_mm_sub_epi16(p5, p0));
++            t3 = _mm_abs_epi16(_mm_sub_epi16(p4, p0));
++            t4 = _mm_abs_epi16(_mm_sub_epi16(q4, q0));
++            t5 = _mm_abs_epi16(_mm_sub_epi16(q5, q0));
++            t6 = _mm_abs_epi16(_mm_sub_epi16(q6, q0));
++            t7 = _mm_abs_epi16(_mm_sub_epi16(q7, q0));
++
++            t0 = _mm_cmpgt_epi16(t0, vF);
++            t1 = _mm_cmpgt_epi16(t1, vF);
++            t2 = _mm_cmpgt_epi16(t2, vF);
++            t3 = _mm_cmpgt_epi16(t3, vF);
++            t4 = _mm_cmpgt_epi16(t4, vF);
++            t5 = _mm_cmpgt_epi16(t5, vF);
++            t6 = _mm_cmpgt_epi16(t6, vF);
++            t7 = _mm_cmpgt_epi16(t7, vF);
++
++            t0 = _mm_or_si128(_mm_or_si128(t0, t1), _mm_or_si128(t2, t3));
++            t4 = _mm_or_si128(_mm_or_si128(t4, t5), _mm_or_si128(t6, t7));
++            vflat8out = _mm_or_si128(t0, t4);
++            vflat8out = _mm_or_si128(vflat8out, vflat8in);
++
++            if (_mm_movemask_epi8(vflat8out) != 0xffff) {
++                __m128i c8 = _mm_set1_epi16(8);
++                t0 = _mm_add_epi16(_mm_slli_epi16(p7, 3), c8);
++                t1 = _mm_add_epi16(_mm_add_epi16(q0, p0), _mm_add_epi16(p1, p2));
++                t2 = _mm_add_epi16(_mm_add_epi16(p3, p4), _mm_add_epi16(p5, p6));
++                t0 = _mm_sub_epi16(t0, p7);
++                t0 = _mm_add_epi16(t0, t1);
++                t0 = _mm_add_epi16(t0, t2);
++                t1 = _mm_srai_epi16(_mm_add_epi16(p6, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q1, p7));
++                t2 = _mm_srai_epi16(_mm_add_epi16(p5, t0), 4);
++                p6a = _mm_blendv_epi8(t1, p6, vflat8out);
++                p5a = _mm_blendv_epi8(t2, p5, vflat8out);
++
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q2, p7));
++                t1 = _mm_srai_epi16(_mm_add_epi16(p4, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q3, p7));
++                t2 = _mm_srai_epi16(_mm_add_epi16(p3, t0), 4);
++                p4a = _mm_blendv_epi8(t1, p4, vflat8out);
++                p3a = _mm_blendv_epi8(t2, p3, vflat8out);
++
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q4, p7));
++                t1 = _mm_srai_epi16(_mm_add_epi16(p2, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q5, p7));
++                t2 = _mm_srai_epi16(_mm_add_epi16(p1, t0), 4);
++                p2a = _mm_blendv_epi8(t1, p2a, vflat8out);
++                p1a = _mm_blendv_epi8(t2, p1a, vflat8out);
++
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q6, p7));
++                t1 = _mm_srai_epi16(_mm_add_epi16(p0, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p7));
++                t2 = _mm_srai_epi16(_mm_add_epi16(q0, t0), 4);
++                p0a = _mm_blendv_epi8(t1, p0a, vflat8out);
++                q0a = _mm_blendv_epi8(t2, q0a, vflat8out);
++
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p6));
++                t1 = _mm_srai_epi16(_mm_add_epi16(q1, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p5));
++                t2 = _mm_srai_epi16(_mm_add_epi16(q2, t0), 4);
++                q1a = _mm_blendv_epi8(t1, q1a, vflat8out);
++                q2a = _mm_blendv_epi8(t2, q2a, vflat8out);
++
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p4));
++                t1 = _mm_srai_epi16(_mm_add_epi16(q3, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p3));
++                t2 = _mm_srai_epi16(_mm_add_epi16(q4, t0), 4);
++                q3a = _mm_blendv_epi8(t1, q3, vflat8out);
++                q4a = _mm_blendv_epi8(t2, q4, vflat8out);
++
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p2));
++                t1 = _mm_srai_epi16(_mm_add_epi16(q5, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p1));
++                t2 = _mm_srai_epi16(_mm_add_epi16(q6, t0), 4);
++                q5a = _mm_blendv_epi8(t1, q5, vflat8out);
++                q6a = _mm_blendv_epi8(t2, q6, vflat8out);
++            }
++        }
++    }
++
++    if (wd >= 16) {
++        STORE_TRANSPOSE8(dst - 8, p7,  p6a, p5a, p4a, p3a, p2a, p1a, p0a);
++        STORE_TRANSPOSE8(dst    , q0a, q1a, q2a, q3a, q4a, q5a, q6a, q7 );
++    } else if (wd >= 8) {
++        STORE_TRANSPOSE8(dst - 4, p3,  p2a, p1a, p0a, q0a, q1a, q2a, q3 );
++    } else {
++        t0 = _mm_packus_epi16(p1a, p0a);
++        t1 = _mm_packus_epi16(q0a, q1a);
++        t2 = _mm_unpacklo_epi8(t0, t1);
++        t3 = _mm_unpackhi_epi8(t0, t1);
++        t0 = _mm_unpacklo_epi8(t2, t3);
++        t1 = _mm_unpackhi_epi8(t2, t3);
++        *(uint32_t*)(dst - 2 + stride * 0) = _mm_extract_epi32(t0, 0);
++        *(uint32_t*)(dst - 2 + stride * 1) = _mm_extract_epi32(t0, 1);
++        *(uint32_t*)(dst - 2 + stride * 2) = _mm_extract_epi32(t0, 2);
++        *(uint32_t*)(dst - 2 + stride * 3) = _mm_extract_epi32(t0, 3);
++        *(uint32_t*)(dst - 2 + stride * 4) = _mm_extract_epi32(t1, 0);
++        *(uint32_t*)(dst - 2 + stride * 5) = _mm_extract_epi32(t1, 1);
++        *(uint32_t*)(dst - 2 + stride * 6) = _mm_extract_epi32(t1, 2);
++        *(uint32_t*)(dst - 2 + stride * 7) = _mm_extract_epi32(t1, 3);
++    }
++}
++
++#undef LOAD_TRANSPOSE8
++#undef STORE_TRANSPOSE8
++
++static av_always_inline void loop_filter_v(uint8_t *dst, int E, int I, int H,
++                                           ptrdiff_t stride, int wd)
++{
++    int F = 1;
++    LOAD_ZERO;
++    __m128i t0, t1, t2, t3, t4, t5, t6, t7;
++    __m128i vfm, vflat8out, vflat8in, vhev;
++    __m128i p2a, p1a, p0a, q0a, q1a, q2a;
++
++    __m128i vF = _mm_set1_epi16(F);
++    __m128i vI = _mm_set1_epi16(I);
++    __m128i vE = _mm_set1_epi16(E);
++    __m128i vH = _mm_set1_epi16(H);
++
++    __m128i p7, p6, p5, p4;
++    __m128i p3 = VEC_LD8(dst - stride * 4), p2 = VEC_LD8(dst - stride * 3);
++    __m128i p1 = VEC_LD8(dst - stride * 2), p0 = VEC_LD8(dst - stride * 1);
++    __m128i q0 = VEC_LD8(dst + stride * 0), q1 = VEC_LD8(dst + stride * 1);
++    __m128i q2 = VEC_LD8(dst + stride * 2), q3 = VEC_LD8(dst + stride * 3);
++    __m128i q4, q5, q6, q7;
++
++    p3 = _mm_unpacklo_epi8(p3, zerov);
++    p2 = _mm_unpacklo_epi8(p2, zerov);
++    p1 = _mm_unpacklo_epi8(p1, zerov);
++    p0 = _mm_unpacklo_epi8(p0, zerov);
++    q0 = _mm_unpacklo_epi8(q0, zerov);
++    q1 = _mm_unpacklo_epi8(q1, zerov);
++    q2 = _mm_unpacklo_epi8(q2, zerov);
++    q3 = _mm_unpacklo_epi8(q3, zerov);
++
++    t0 = _mm_abs_epi16(_mm_sub_epi16(p3, p2));
++    t1 = _mm_abs_epi16(_mm_sub_epi16(p2, p1));
++    t2 = _mm_abs_epi16(_mm_sub_epi16(p1, p0));
++    t3 = _mm_abs_epi16(_mm_sub_epi16(q1, q0));
++    t4 = _mm_abs_epi16(_mm_sub_epi16(q2, q1));
++    t5 = _mm_abs_epi16(_mm_sub_epi16(q3, q2));
++    vhev = _mm_or_si128(_mm_cmpgt_epi16(t2, vH), _mm_cmpgt_epi16(t3, vH));
++    t0 = _mm_cmpgt_epi16(t0, vI);
++    t1 = _mm_cmpgt_epi16(t1, vI);
++    t2 = _mm_cmpgt_epi16(t2, vI);
++    t3 = _mm_cmpgt_epi16(t3, vI);
++    t4 = _mm_cmpgt_epi16(t4, vI);
++    t5 = _mm_cmpgt_epi16(t5, vI);
++
++    t0 = _mm_or_si128(_mm_or_si128(t0, t1), t2);
++    t3 = _mm_or_si128(_mm_or_si128(t3, t4), t5);
++    t0 = _mm_or_si128(t0, t3);
++
++    t6 = _mm_abs_epi16(_mm_sub_epi16(p0, q0));
++    t7 = _mm_abs_epi16(_mm_sub_epi16(p1, q1));
++    t6 = _mm_add_epi16(_mm_slli_epi16(t6, 1), _mm_srai_epi16(t7, 1));
++    t6 = _mm_cmpgt_epi16(t6, vE);
++    vfm = _mm_or_si128(t0, t6); // !fm
++
++    if (_mm_movemask_epi8(vfm) == 0xffff) return;
++
++    if (wd >= 8) {
++        t0 = _mm_abs_epi16(_mm_sub_epi16(p3, p0));
++        t1 = _mm_abs_epi16(_mm_sub_epi16(p2, p0));
++        t2 = _mm_abs_epi16(_mm_sub_epi16(p1, p0));
++        t3 = _mm_abs_epi16(_mm_sub_epi16(q1, q0));
++        t4 = _mm_abs_epi16(_mm_sub_epi16(q2, q0));
++        t5 = _mm_abs_epi16(_mm_sub_epi16(q3, q0));
++        t0 = _mm_cmpgt_epi16(t0, vF);
++        t1 = _mm_cmpgt_epi16(t1, vF);
++        t2 = _mm_cmpgt_epi16(t2, vF);
++        t3 = _mm_cmpgt_epi16(t3, vF);
++        t4 = _mm_cmpgt_epi16(t4, vF);
++        t5 = _mm_cmpgt_epi16(t5, vF);
++
++        t0 = _mm_or_si128(_mm_or_si128(t0, t1), t2);
++        t3 = _mm_or_si128(_mm_or_si128(t3, t4), t5);
++        vflat8in = _mm_or_si128(_mm_or_si128(t0, t3), vfm);
++    }
++
++    {
++        __m128i c1 = _mm_set1_epi16(1);
++        __m128i c127 = _mm_set1_epi16(127);
++        __m128i m128 = _mm_set1_epi16(-128);
++        __m128i c43 = _mm_setr_epi8(4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3);
++        t0 = _mm_and_si128(vhev, _mm_sub_epi16(p1, q1));
++        t1 = _mm_sub_epi16(q0, p0);
++        t0 = _mm_min_epi16(_mm_max_epi16(t0, m128), c127);
++        // f = av_clip_intp2(p1 - q1, 7) & hev;
++        t1 = _mm_add_epi16(_mm_add_epi16(t1, t0), _mm_add_epi16(t1, t1));
++        t1 = _mm_andnot_si128(vfm, t1);
++        t1 = _mm_packs_epi16(t1, t1);
++        // f = av_clip_intp2(3 * (q0 - p0) + f, 7);
++        t3 = _mm_adds_epi8(t1, c43);
++        t2 = _mm_srai_epi16(_mm_unpacklo_epi8(t3, t3), 8 + 3);
++        // f1 = FFMIN(f + 4, 0x7f) >> 3;
++        t3 = _mm_srai_epi16(_mm_unpackhi_epi8(t3, t3), 8 + 3);
++        // f2 = FFMIN(f + 3, 0x7f) >> 3;
++        t4 = _mm_srai_epi16(_mm_add_epi16(t2, c1), 1);
++        t4 = _mm_andnot_si128(vhev, t4); // f3 = ((f1 + 1) >> 1) & ~hev;
++        p1a = _mm_add_epi16(p1, t4); // av_clip_uint8(p1 + f3);
++        p0a = _mm_add_epi16(p0, t3); // av_clip_uint8(p0 + f2);
++        q0a = _mm_sub_epi16(q0, t2); // av_clip_uint8(q0 - f1);
++        q1a = _mm_sub_epi16(q1, t4); // av_clip_uint8(q1 - f3);
++    }
++
++    if (wd >= 8 && _mm_movemask_epi8(vflat8in) != 0xffff) {
++        __m128i c4 = _mm_set1_epi16(4);
++        t0 = _mm_add_epi16(_mm_slli_epi16(p3, 2), c4);
++        t1 = _mm_add_epi16(_mm_add_epi16(q0, p0), _mm_add_epi16(p1, p2));
++        t0 = _mm_sub_epi16(t0, p3);
++        t0 = _mm_add_epi16(t0, t1);
++        t1 = _mm_srai_epi16(_mm_add_epi16(p2, t0), 3);
++        t0 = _mm_add_epi16(t0, _mm_sub_epi16(q1, p3));
++        t2 = _mm_srai_epi16(_mm_add_epi16(p1, t0), 3);
++        p2a = _mm_blendv_epi8(t1, p2, vflat8in);
++        p1a = _mm_blendv_epi8(t2, p1a, vflat8in);
++
++        t0 = _mm_add_epi16(t0, _mm_sub_epi16(q2, p3));
++        t1 = _mm_srai_epi16(_mm_add_epi16(p0, t0), 3);
++        t0 = _mm_add_epi16(t0, _mm_sub_epi16(q3, p3));
++        t2 = _mm_srai_epi16(_mm_add_epi16(q0, t0), 3);
++        p0a = _mm_blendv_epi8(t1, p0a, vflat8in);
++        q0a = _mm_blendv_epi8(t2, q0a, vflat8in);
++
++        t0 = _mm_add_epi16(t0, _mm_sub_epi16(q3, p2));
++        t1 = _mm_srai_epi16(_mm_add_epi16(q1, t0), 3);
++        t0 = _mm_add_epi16(t0, _mm_sub_epi16(q3, p1));
++        t2 = _mm_srai_epi16(_mm_add_epi16(q2, t0), 3);
++        q1a = _mm_blendv_epi8(t1, q1a, vflat8in);
++        q2a = _mm_blendv_epi8(t2, q2, vflat8in);
++
++        if (wd >= 16) {
++            p7 = VEC_LD8(dst - stride * 8);
++            p6 = VEC_LD8(dst - stride * 7);
++            p5 = VEC_LD8(dst - stride * 6);
++            p4 = VEC_LD8(dst - stride * 5);
++            q4 = VEC_LD8(dst + stride * 4);
++            q5 = VEC_LD8(dst + stride * 5);
++            q6 = VEC_LD8(dst + stride * 6);
++            q7 = VEC_LD8(dst + stride * 7);
++
++            p7 = _mm_unpacklo_epi8(p7, zerov);
++            p6 = _mm_unpacklo_epi8(p6, zerov);
++            p5 = _mm_unpacklo_epi8(p5, zerov);
++            p4 = _mm_unpacklo_epi8(p4, zerov);
++            q4 = _mm_unpacklo_epi8(q4, zerov);
++            q5 = _mm_unpacklo_epi8(q5, zerov);
++            q6 = _mm_unpacklo_epi8(q6, zerov);
++            q7 = _mm_unpacklo_epi8(q7, zerov);
++
++            t0 = _mm_abs_epi16(_mm_sub_epi16(p7, p0));
++            t1 = _mm_abs_epi16(_mm_sub_epi16(p6, p0));
++            t2 = _mm_abs_epi16(_mm_sub_epi16(p5, p0));
++            t3 = _mm_abs_epi16(_mm_sub_epi16(p4, p0));
++            t4 = _mm_abs_epi16(_mm_sub_epi16(q4, q0));
++            t5 = _mm_abs_epi16(_mm_sub_epi16(q5, q0));
++            t6 = _mm_abs_epi16(_mm_sub_epi16(q6, q0));
++            t7 = _mm_abs_epi16(_mm_sub_epi16(q7, q0));
++
++            t0 = _mm_cmpgt_epi16(t0, vF);
++            t1 = _mm_cmpgt_epi16(t1, vF);
++            t2 = _mm_cmpgt_epi16(t2, vF);
++            t3 = _mm_cmpgt_epi16(t3, vF);
++            t4 = _mm_cmpgt_epi16(t4, vF);
++            t5 = _mm_cmpgt_epi16(t5, vF);
++            t6 = _mm_cmpgt_epi16(t6, vF);
++            t7 = _mm_cmpgt_epi16(t7, vF);
++
++            t0 = _mm_or_si128(_mm_or_si128(t0, t1), _mm_or_si128(t2, t3));
++            t4 = _mm_or_si128(_mm_or_si128(t4, t5), _mm_or_si128(t6, t7));
++            vflat8out = _mm_or_si128(t0, t4);
++
++            vflat8out = _mm_or_si128(vflat8out, vflat8in);
++            if (_mm_movemask_epi8(vflat8out) != 0xffff) {
++                __m128i c8 = _mm_set1_epi16(8);
++                t0 = _mm_add_epi16(_mm_slli_epi16(p7, 3), c8);
++                t1 = _mm_add_epi16(_mm_add_epi16(q0, p0), _mm_add_epi16(p1, p2));
++                t2 = _mm_add_epi16(_mm_add_epi16(p3, p4), _mm_add_epi16(p5, p6));
++                t0 = _mm_sub_epi16(t0, p7);
++                t0 = _mm_add_epi16(t0, t1);
++                t0 = _mm_add_epi16(t0, t2);
++                t1 = _mm_srai_epi16(_mm_add_epi16(p6, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q1, p7));
++                t2 = _mm_srai_epi16(_mm_add_epi16(p5, t0), 4);
++                t1 = _mm_blendv_epi8(t1, p6, vflat8out);
++                t2 = _mm_blendv_epi8(t2, p5, vflat8out);
++                t1 = _mm_packus_epi16(t1, t2);
++                VEC_STL(dst - stride * 7, t1);
++                VEC_STH(dst - stride * 6, t1);
++
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q2, p7));
++                t1 = _mm_srai_epi16(_mm_add_epi16(p4, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q3, p7));
++                t2 = _mm_srai_epi16(_mm_add_epi16(p3, t0), 4);
++                t1 = _mm_blendv_epi8(t1, p4, vflat8out);
++                t2 = _mm_blendv_epi8(t2, p3, vflat8out);
++                t1 = _mm_packus_epi16(t1, t2);
++                VEC_STL(dst - stride * 5, t1);
++                VEC_STH(dst - stride * 4, t1);
++
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q4, p7));
++                t1 = _mm_srai_epi16(_mm_add_epi16(p2, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q5, p7));
++                t2 = _mm_srai_epi16(_mm_add_epi16(p1, t0), 4);
++                p2a = _mm_blendv_epi8(t1, p2a, vflat8out);
++                p1a = _mm_blendv_epi8(t2, p1a, vflat8out);
++
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q6, p7));
++                t1 = _mm_srai_epi16(_mm_add_epi16(p0, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p7));
++                t2 = _mm_srai_epi16(_mm_add_epi16(q0, t0), 4);
++                p0a = _mm_blendv_epi8(t1, p0a, vflat8out);
++                q0a = _mm_blendv_epi8(t2, q0a, vflat8out);
++
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p6));
++                t1 = _mm_srai_epi16(_mm_add_epi16(q1, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p5));
++                t2 = _mm_srai_epi16(_mm_add_epi16(q2, t0), 4);
++                q1a = _mm_blendv_epi8(t1, q1a, vflat8out);
++                q2a = _mm_blendv_epi8(t2, q2a, vflat8out);
++
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p4));
++                t1 = _mm_srai_epi16(_mm_add_epi16(q3, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p3));
++                t2 = _mm_srai_epi16(_mm_add_epi16(q4, t0), 4);
++                t1 = _mm_blendv_epi8(t1, q3, vflat8out);
++                t2 = _mm_blendv_epi8(t2, q4, vflat8out);
++                t1 = _mm_packus_epi16(t1, t2);
++                VEC_STL(dst + stride * 3, t1);
++                VEC_STH(dst + stride * 4, t1);
++
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p2));
++                t1 = _mm_srai_epi16(_mm_add_epi16(q5, t0), 4);
++                t0 = _mm_add_epi16(t0, _mm_sub_epi16(q7, p1));
++                t2 = _mm_srai_epi16(_mm_add_epi16(q6, t0), 4);
++                t1 = _mm_blendv_epi8(t1, q5, vflat8out);
++                t2 = _mm_blendv_epi8(t2, q6, vflat8out);
++                t1 = _mm_packus_epi16(t1, t2);
++                VEC_STL(dst + stride * 5, t1);
++                VEC_STH(dst + stride * 6, t1);
++            }
++        }
++        t1 = _mm_packus_epi16(p2a, q2a);
++        VEC_STL(dst - stride * 3, t1);
++        VEC_STH(dst + stride * 2, t1);
++    }
++
++    t0 = _mm_packus_epi16(p1a, p0a);
++    t1 = _mm_packus_epi16(q0a, q1a);
++    VEC_STL(dst - stride * 2, t0);
++    VEC_STH(dst - stride * 1, t0);
++    VEC_STL(dst + stride * 0, t1);
++    VEC_STH(dst + stride * 1, t1);
++}
++
++#define lf_8_fns(wd) \
++static void loop_filter_h_##wd##_8_e2k(uint8_t *dst, \
++                                       ptrdiff_t stride, \
++                                       int E, int I, int H) \
++{ \
++    loop_filter_h(dst, E, I, H, stride, wd); \
++} \
++static void loop_filter_v_##wd##_8_e2k(uint8_t *dst, \
++                                       ptrdiff_t stride, \
++                                       int E, int I, int H) \
++{ \
++    loop_filter_v(dst, E, I, H, stride, wd); \
++}
++
++lf_8_fns(4)
++lf_8_fns(8)
++lf_8_fns(16)
++
++#undef lf_8_fn
++#undef lf_8_fns
++
++#define lf_16_fn(dir, stridea) \
++static void loop_filter_##dir##_16_16_e2k(uint8_t *dst, \
++                                          ptrdiff_t stride, \
++                                          int E, int I, int H) \
++{ \
++    loop_filter_##dir##_16_8_e2k(dst, stride, E, I, H); \
++    loop_filter_##dir##_16_8_e2k(dst + 8 * stridea, stride, E, I, H); \
++}
++
++lf_16_fn(h, stride)
++lf_16_fn(v, sizeof(pixel))
++
++#undef lf_16_fn
++
++#define lf_mix_fn(dir, wd1, wd2, stridea) \
++static void loop_filter_##dir##_##wd1##wd2##_16_e2k(uint8_t *dst, \
++                                                    ptrdiff_t stride, \
++                                                    int E, int I, int H) \
++{ \
++    loop_filter_##dir##_##wd1##_8_e2k(dst, stride, E & 0xff, I & 0xff, H & 0xff); \
++    loop_filter_##dir##_##wd2##_8_e2k(dst + 8 * stridea, stride, E >> 8, I >> 8, H >> 8); \
++}
++
++#define lf_mix_fns(wd1, wd2) \
++lf_mix_fn(h, wd1, wd2, stride) \
++lf_mix_fn(v, wd1, wd2, sizeof(pixel))
++
++lf_mix_fns(4, 4)
++lf_mix_fns(4, 8)
++lf_mix_fns(8, 4)
++lf_mix_fns(8, 8)
++
++#undef lf_mix_fn
++#undef lf_mix_fns
++
++static av_cold void ff_vp9dsp_loopfilter_init_8_e2k(VP9DSPContext *dsp)
++{
++    dsp->loop_filter_8[0][0] = loop_filter_h_4_8_e2k;
++    dsp->loop_filter_8[0][1] = loop_filter_v_4_8_e2k;
++    dsp->loop_filter_8[1][0] = loop_filter_h_8_8_e2k;
++    dsp->loop_filter_8[1][1] = loop_filter_v_8_8_e2k;
++    dsp->loop_filter_8[2][0] = loop_filter_h_16_8_e2k;
++    dsp->loop_filter_8[2][1] = loop_filter_v_16_8_e2k;
++
++    dsp->loop_filter_16[0] = loop_filter_h_16_16_e2k;
++    dsp->loop_filter_16[1] = loop_filter_v_16_16_e2k;
++
++    dsp->loop_filter_mix2[0][0][0] = loop_filter_h_44_16_e2k;
++    dsp->loop_filter_mix2[0][0][1] = loop_filter_v_44_16_e2k;
++    dsp->loop_filter_mix2[0][1][0] = loop_filter_h_48_16_e2k;
++    dsp->loop_filter_mix2[0][1][1] = loop_filter_v_48_16_e2k;
++    dsp->loop_filter_mix2[1][0][0] = loop_filter_h_84_16_e2k;
++    dsp->loop_filter_mix2[1][0][1] = loop_filter_v_84_16_e2k;
++    dsp->loop_filter_mix2[1][1][0] = loop_filter_h_88_16_e2k;
++    dsp->loop_filter_mix2[1][1][1] = loop_filter_v_88_16_e2k;
++}
++
++#if BIT_DEPTH != 12
++
++static av_always_inline void copy_e2k(uint8_t *dst, ptrdiff_t dst_stride,
++                                      const uint8_t *src, ptrdiff_t src_stride,
++                                      int w, int h)
++{
++    do {
++        memcpy(dst, src, w);
++        dst += dst_stride;
++        src += src_stride;
++    } while (--h);
++}
++
++static av_always_inline void avg_e2k(uint8_t *dst, ptrdiff_t dst_stride,
++                                     const uint8_t *src, ptrdiff_t src_stride,
++                                     int w, int h)
++{
++    int y;
++    __m128i v0, v1, v2, v3; __m64 h0, h1;
++    if (w >= 64) {
++        PRAGMA_E2K("ivdep")
++        for (y = 0; y < h; y++) {
++            v0 = VEC_LD(src);
++            v1 = VEC_LD(src + 16);
++            v2 = VEC_LD(src + 32);
++            v3 = VEC_LD(src + 48);
++            v0 = _mm_avg_epu8(v0, VEC_LD(dst));
++            v1 = _mm_avg_epu8(v1, VEC_LD(dst + 16));
++            v2 = _mm_avg_epu8(v2, VEC_LD(dst + 32));
++            v3 = _mm_avg_epu8(v3, VEC_LD(dst + 48));
++            VEC_ST(dst, v0);
++            VEC_ST(dst + 16, v1);
++            VEC_ST(dst + 32, v2);
++            VEC_ST(dst + 48, v3);
++            src += src_stride;
++            dst += dst_stride;
++        }
++    } else if (w >= 32) {
++        PRAGMA_E2K("ivdep")
++        for (y = 0; y < h; y++) {
++            v0 = VEC_LD(src);
++            v1 = VEC_LD(src + 16);
++            v0 = _mm_avg_epu8(v0, VEC_LD(dst));
++            v1 = _mm_avg_epu8(v1, VEC_LD(dst + 16));
++            VEC_ST(dst, v0);
++            VEC_ST(dst + 16, v1);
++            src += src_stride;
++            dst += dst_stride;
++        }
++    } else if (w >= 16) {
++        PRAGMA_E2K("ivdep")
++        for (y = 0; y < h; y++) {
++            v0 = VEC_LD(src);
++            v0 = _mm_avg_epu8(v0, VEC_LD(dst));
++            VEC_ST(dst, v0);
++            src += src_stride;
++            dst += dst_stride;
++        }
++    } else if (w >= 8) {
++        PRAGMA_E2K("ivdep")
++        for (y = 0; y < h; y++) {
++            h0 = *(__m64*)src;
++            h1 = *(__m64*)dst;
++            h0 = _mm_avg_pu8(h0, h1);
++            *(__m64*)dst = h0;
++            src += src_stride;
++            dst += dst_stride;
++        }
++    } else {
++        PRAGMA_E2K("ivdep")
++        for (y = 0; y < h; y++) {
++            h0 = _mm_cvtsi32_si64(*(uint32_t*)src);
++            h1 = _mm_cvtsi32_si64(*(uint32_t*)dst);
++            h0 = _mm_avg_pu8(h0, h1);
++            *(uint32_t*)dst = _mm_cvtsi64_si32(h0);
++            src += src_stride;
++            dst += dst_stride;
++        }
++    }
++}
++
++#define fpel_fn(type, sz) \
++static void type##sz##_e2k(uint8_t *dst, ptrdiff_t dst_stride, \
++                           const uint8_t *src, ptrdiff_t src_stride, \
++                           int h, int mx, int my) \
++{ \
++    type##_e2k(dst, dst_stride, src, src_stride, sz, h); \
++}
++
++#define copy_avg_fn(sz) \
++fpel_fn(copy, sz) \
++fpel_fn(avg,  sz)
++
++copy_avg_fn(64)
++copy_avg_fn(32)
++copy_avg_fn(16)
++copy_avg_fn(8)
++copy_avg_fn(4)
++
++#undef fpel_fn
++#undef copy_avg_fn
++
++#endif /* BIT_DEPTH != 12 */
++
++static av_always_inline void do_8tap_1d_v_e2k(uint8_t *dst, ptrdiff_t dst_stride,
++                                              const uint8_t *src, ptrdiff_t src_stride,
++                                              int w, int h, const int16_t *filter, int avg)
++{
++    int x, y;
++    const uint8_t *s; uint8_t *d;
++
++    if (w >= 8) {
++        __m128i a0, a1, a2, a3, a4, a5, a6, a7;
++        __m128i v0, v1, v2, v3;
++        __m128i f0, f1, f2, f3, c64; __m64 h0, h1;
++        f0 = _mm_set1_epi16((filter[0] & 255) | filter[1] << 8);
++        f1 = _mm_set1_epi16((filter[2] & 255) | filter[3] << 8);
++        f2 = _mm_set1_epi16((filter[4] & 255) | filter[5] << 8);
++        f3 = _mm_set1_epi16((filter[6] & 255) | filter[7] << 8);
++        c64 = _mm_set1_epi16(64);
++
++        for (x = 0; x < w; x += 8) {
++            a0 = VEC_LD8(&src[x - 3 * src_stride]);
++            a1 = VEC_LD8(&src[x - 2 * src_stride]);
++            a2 = VEC_LD8(&src[x - 1 * src_stride]);
++            a3 = VEC_LD8(&src[x + 0 * src_stride]);
++            a4 = VEC_LD8(&src[x + 1 * src_stride]);
++            a5 = VEC_LD8(&src[x + 2 * src_stride]);
++            a6 = VEC_LD8(&src[x + 3 * src_stride]);
++            s = src + x + 4 * src_stride;
++            d = dst + x;
++
++            PRAGMA_E2K("ivdep")
++            for (y = 0; y < h; y++) {
++                a7 = VEC_LD8(s);
++                v0 = _mm_unpacklo_epi8(a0, a1);
++                v1 = _mm_unpacklo_epi8(a2, a3);
++                v2 = _mm_unpacklo_epi8(a4, a5);
++                v3 = _mm_unpacklo_epi8(a6, a7);
++                v0 = _mm_maddubs_epi16(v0, f0);
++                v1 = _mm_maddubs_epi16(v1, f1);
++                v2 = _mm_maddubs_epi16(v2, f2);
++                v3 = _mm_maddubs_epi16(v3, f3);
++                v0 = _mm_add_epi16(v0, v2);
++                v1 = _mm_add_epi16(v1, v3);
++                v0 = _mm_add_epi16(v0, c64);
++                v0 = _mm_adds_epi16(v0, v1);
++                v0 = _mm_srai_epi16(v0, 7);
++                v0 = _mm_packus_epi16(v0, v0);
++                h0 = _mm_movepi64_pi64(v0);
++                if (avg) {
++                    h1 = *(__m64*)d;
++                    h0 = _mm_avg_pu8(h0, h1);
++                }
++                *(__m64*)d = h0;
++                s += src_stride;
++                d += dst_stride;
++                a0 = a1; a1 = a2; a2 = a3; a3 = a4;
++                a4 = a5; a5 = a6; a6 = a7;
++            }
++        }
++    } else {
++        __m64 a0, a1, a2, a3, a4, a5, a6, a7;
++        __m64 v0, v1, v2, v3;
++        __m64 f0, f1, f2, f3, c64;
++        f0 = _mm_set1_pi16((filter[0] & 255) | filter[1] << 8);
++        f1 = _mm_set1_pi16((filter[2] & 255) | filter[3] << 8);
++        f2 = _mm_set1_pi16((filter[4] & 255) | filter[5] << 8);
++        f3 = _mm_set1_pi16((filter[6] & 255) | filter[7] << 8);
++        c64 = _mm_set1_pi16(64);
++
++        a0 = _mm_cvtsi32_si64(*(uint32_t*)(src - 3 * src_stride));
++        a1 = _mm_cvtsi32_si64(*(uint32_t*)(src - 2 * src_stride));
++        a2 = _mm_cvtsi32_si64(*(uint32_t*)(src - 1 * src_stride));
++        a3 = _mm_cvtsi32_si64(*(uint32_t*)(src + 0 * src_stride));
++        a4 = _mm_cvtsi32_si64(*(uint32_t*)(src + 1 * src_stride));
++        a5 = _mm_cvtsi32_si64(*(uint32_t*)(src + 2 * src_stride));
++        a6 = _mm_cvtsi32_si64(*(uint32_t*)(src + 3 * src_stride));
++        s = src + 4 * src_stride;
++        d = dst;
++
++        PRAGMA_E2K("ivdep")
++        for (y = 0; y < h; y++) {
++            a7 = _mm_cvtsi32_si64(*(uint32_t*)s);
++            v0 = _mm_unpacklo_pi8(a0, a1);
++            v1 = _mm_unpacklo_pi8(a2, a3);
++            v2 = _mm_unpacklo_pi8(a4, a5);
++            v3 = _mm_unpacklo_pi8(a6, a7);
++            v0 = _mm_maddubs_pi16(v0, f0);
++            v1 = _mm_maddubs_pi16(v1, f1);
++            v2 = _mm_maddubs_pi16(v2, f2);
++            v3 = _mm_maddubs_pi16(v3, f3);
++            v0 = _mm_add_pi16(v0, v2);
++            v1 = _mm_add_pi16(v1, v3);
++            v0 = _mm_add_pi16(v0, c64);
++            v0 = _mm_adds_pi16(v0, v1);
++            v0 = _mm_srai_pi16(v0, 7);
++            v0 = _mm_packs_pu16(v0, v0);
++            if (avg) {
++                v1 = _mm_cvtsi32_si64(*(uint32_t*)d);
++                v0 = _mm_avg_pu8(v0, v1);
++            }
++            *(uint32_t*)d = _mm_cvtsi64_si32(v0);
++            s += src_stride;
++            d += dst_stride;
++            a0 = a1; a1 = a2; a2 = a3; a3 = a4;
++            a4 = a5; a5 = a6; a6 = a7;
++        }
++    }
++}
++
++static av_always_inline void do_8tap_1d_h_e2k(uint8_t *dst, ptrdiff_t dst_stride,
++                                              const uint8_t *src, ptrdiff_t src_stride,
++                                              int w, int h, const int16_t *filter, int avg)
++{
++    int x, y;
++
++    if (w >= 8) {
++        __m64 a0, a1, a2, a3;
++        __m128i v0, v1, v2, v3;
++        __m128i f0, f1, f2, f3, c64; __m64 h0, h1;
++        f0 = _mm_set1_epi16((filter[0] & 255) | filter[1] << 8);
++        f1 = _mm_set1_epi16((filter[2] & 255) | filter[3] << 8);
++        f2 = _mm_set1_epi16((filter[4] & 255) | filter[5] << 8);
++        f3 = _mm_set1_epi16((filter[6] & 255) | filter[7] << 8);
++        c64 = _mm_set1_epi16(64);
++
++        for (y = 0; y < h; y++) {
++            PRAGMA_E2K("ivdep")
++            for (x = 0; x < w; x += 8) {
++                a0 = *(__m64*)(src + x - 3);
++                a1 = *(__m64*)(src + x - 3 + 7);
++                a0 = _mm_slli_si64(a0, 8);
++                a2 = _mm_alignr_pi8(a1, a0, 1);
++                a3 = _mm_alignr_pi8(a1, a0, 2);
++                v0 = _mm_unpacklo_epi8(_mm_movpi64_epi64(a2), _mm_movpi64_epi64(a3));
++                a2 = _mm_alignr_pi8(a1, a0, 3);
++                a3 = _mm_alignr_pi8(a1, a0, 4);
++                v1 = _mm_unpacklo_epi8(_mm_movpi64_epi64(a2), _mm_movpi64_epi64(a3));
++                a2 = _mm_alignr_pi8(a1, a0, 5);
++                a3 = _mm_alignr_pi8(a1, a0, 6);
++                v2 = _mm_unpacklo_epi8(_mm_movpi64_epi64(a2), _mm_movpi64_epi64(a3));
++                a2 = _mm_alignr_pi8(a1, a0, 7);
++                v3 = _mm_unpacklo_epi8(_mm_movpi64_epi64(a2), _mm_movpi64_epi64(a1));
++
++                v0 = _mm_maddubs_epi16(v0, f0);
++                v1 = _mm_maddubs_epi16(v1, f1);
++                v2 = _mm_maddubs_epi16(v2, f2);
++                v3 = _mm_maddubs_epi16(v3, f3);
++                v0 = _mm_add_epi16(v0, v2);
++                v1 = _mm_add_epi16(v1, v3);
++                v0 = _mm_add_epi16(v0, c64);
++                v0 = _mm_adds_epi16(v0, v1);
++                v0 = _mm_srai_epi16(v0, 7);
++                v0 = _mm_packus_epi16(v0, v0);
++                h0 = _mm_movepi64_pi64(v0);
++                if (avg) {
++                    h1 = *(__m64*)(dst + x);
++                    h0 = _mm_avg_pu8(h0, h1);
++                }
++                *(__m64*)(dst + x) = h0;
++            }
++            src += src_stride;
++            dst += dst_stride;
++        }
++    } else {
++        __m64 a0, a1, a2, a3;
++        __m64 v0, v1, v2, v3;
++        __m64 f0, f1, f2, f3, c64;
++        f0 = _mm_set1_pi16((filter[0] & 255) | filter[1] << 8);
++        f1 = _mm_set1_pi16((filter[2] & 255) | filter[3] << 8);
++        f2 = _mm_set1_pi16((filter[4] & 255) | filter[5] << 8);
++        f3 = _mm_set1_pi16((filter[6] & 255) | filter[7] << 8);
++        c64 = _mm_set1_pi16(64);
++
++        PRAGMA_E2K("ivdep")
++        for (y = 0; y < h; y++) {
++            a0 = *(__m64*)(src - 3);
++            a1 = _mm_cvtsi32_si64(*(uint32_t*)(src - 3 + 7));
++            a0 = _mm_slli_si64(a0, 8);
++            a2 = _mm_alignr_pi8(a1, a0, 1);
++            a3 = _mm_alignr_pi8(a1, a0, 2);
++            v0 = _mm_unpacklo_pi8(a2, a3);
++            a2 = _mm_alignr_pi8(a1, a0, 3);
++            a3 = _mm_alignr_pi8(a1, a0, 4);
++            v1 = _mm_unpacklo_pi8(a2, a3);
++            a2 = _mm_alignr_pi8(a1, a0, 5);
++            a3 = _mm_alignr_pi8(a1, a0, 6);
++            v2 = _mm_unpacklo_pi8(a2, a3);
++            a2 = _mm_alignr_pi8(a1, a0, 7);
++            v3 = _mm_unpacklo_pi8(a2, a1);
++
++            v0 = _mm_maddubs_pi16(v0, f0);
++            v1 = _mm_maddubs_pi16(v1, f1);
++            v2 = _mm_maddubs_pi16(v2, f2);
++            v3 = _mm_maddubs_pi16(v3, f3);
++            v0 = _mm_add_pi16(v0, v2);
++            v1 = _mm_add_pi16(v1, v3);
++            v0 = _mm_add_pi16(v0, c64);
++            v0 = _mm_adds_pi16(v0, v1);
++            v0 = _mm_srai_pi16(v0, 7);
++            v0 = _mm_packs_pu16(v0, v0);
++            if (avg) {
++                v1 = _mm_cvtsi32_si64(*(uint32_t*)dst);
++                v0 = _mm_avg_pu8(v0, v1);
++            }
++            *(uint32_t*)dst = _mm_cvtsi64_si32(v0);
++            src += src_stride;
++            dst += dst_stride;
++        }
++    }
++}
++
++#define filter_8tap_1d_fn(opn, opa) \
++static av_noinline void opn##_8tap_1d_v_e2k(uint8_t *dst, ptrdiff_t dst_stride, \
++                                            const uint8_t *src, ptrdiff_t src_stride, \
++                                            int w, int h, const int16_t *filter) \
++{ \
++    do_8tap_1d_v_e2k(dst, dst_stride, src, src_stride, w, h, filter, opa); \
++} \
++static av_noinline void opn##_8tap_1d_h_e2k(uint8_t *dst, ptrdiff_t dst_stride, \
++                                            const uint8_t *src, ptrdiff_t src_stride, \
++                                            int w, int h, const int16_t *filter) \
++{ \
++    do_8tap_1d_h_e2k(dst, dst_stride, src, src_stride, w, h, filter, opa); \
++}
++
++filter_8tap_1d_fn(put, 0)
++filter_8tap_1d_fn(avg, 1)
++
++#undef filter_8tap_1d_fn
++
++#define filter_fn_1d(sz, dir, dir_m, type, type_idx, avg) \
++static void avg##_8tap_##type##_##sz##dir##_e2k(uint8_t *dst, ptrdiff_t dst_stride, \
++                                                const uint8_t *src, ptrdiff_t src_stride, \
++                                                int h, int mx, int my) \
++{ \
++    avg##_8tap_1d_##dir##_e2k(dst, dst_stride, src, src_stride, sz, h, \
++                              ff_vp9_subpel_filters[type_idx][dir_m]); \
++}
++
++#define put_opa 0
++#define avg_opa 1
++#define filter_fn_2d(sz, type, type_idx, avg) \
++static void avg##_8tap_##type##_##sz##hv_e2k(uint8_t *dst, ptrdiff_t dst_stride, \
++                                             const uint8_t *src, ptrdiff_t src_stride, \
++                                             int h, int mx, int my) \
++{ \
++    int w = sz; \
++    pixel tmp[sz * (64 + 7)]; \
++    src -= src_stride * 3; \
++    do_8tap_1d_h_e2k(tmp, sz, src, src_stride, w, h + 7, ff_vp9_subpel_filters[type_idx][mx], 0); \
++    do_8tap_1d_v_e2k(dst, dst_stride, tmp + sz * 3, sz, w, h, ff_vp9_subpel_filters[type_idx][my], avg##_opa); \
++}
++
++#define bilinf_fn_1d(sz, dir, dir_m, avg)
++#define bilinf_fn_2d(sz, avg)
++
++#define filter_fn(sz, avg) \
++filter_fn_1d(sz, h, mx, regular, FILTER_8TAP_REGULAR, avg) \
++filter_fn_1d(sz, v, my, regular, FILTER_8TAP_REGULAR, avg) \
++filter_fn_2d(sz,        regular, FILTER_8TAP_REGULAR, avg) \
++filter_fn_1d(sz, h, mx, smooth,  FILTER_8TAP_SMOOTH,  avg) \
++filter_fn_1d(sz, v, my, smooth,  FILTER_8TAP_SMOOTH,  avg) \
++filter_fn_2d(sz,        smooth,  FILTER_8TAP_SMOOTH,  avg) \
++filter_fn_1d(sz, h, mx, sharp,   FILTER_8TAP_SHARP,   avg) \
++filter_fn_1d(sz, v, my, sharp,   FILTER_8TAP_SHARP,   avg) \
++filter_fn_2d(sz,        sharp,   FILTER_8TAP_SHARP,   avg) \
++bilinf_fn_1d(sz, h, mx,                               avg) \
++bilinf_fn_1d(sz, v, my,                               avg) \
++bilinf_fn_2d(sz,                                      avg)
++
++#define filter_fn_set(avg) \
++filter_fn(64, avg) \
++filter_fn(32, avg) \
++filter_fn(16, avg) \
++filter_fn(8,  avg) \
++filter_fn(4,  avg)
++
++filter_fn_set(put)
++filter_fn_set(avg)
++
++#undef filter_fn
++#undef filter_fn_set
++#undef filter_fn_1d
++#undef filter_fn_2d
++#undef bilinf_fn_1d
++#undef bilinf_fn_2d
++
++static av_cold void ff_vp9dsp_mc_init_8_e2k(VP9DSPContext *dsp)
++{
++#define init_fpel(idx1, idx2, sz, type) \
++    dsp->mc[idx1][FILTER_8TAP_SMOOTH ][idx2][0][0] = type##sz##_e2k; \
++    dsp->mc[idx1][FILTER_8TAP_REGULAR][idx2][0][0] = type##sz##_e2k; \
++    dsp->mc[idx1][FILTER_8TAP_SHARP  ][idx2][0][0] = type##sz##_e2k
++
++#define init_copy_avg(idx, sz) \
++    init_fpel(idx, 0, sz, copy); \
++    init_fpel(idx, 1, sz, avg)
++
++    init_copy_avg(0, 64);
++    init_copy_avg(1, 32);
++    init_copy_avg(2, 16);
++    init_copy_avg(3,  8);
++    init_copy_avg(4,  4);
++
++#undef init_copy_avg
++#undef init_fpel
++
++#define init_subpel1_bd_aware(idx1, idx2, idxh, idxv, sz, dir, type) \
++    dsp->mc[idx1][FILTER_8TAP_SMOOTH ][idx2][idxh][idxv] = type##_8tap_smooth_##sz##dir##_e2k; \
++    dsp->mc[idx1][FILTER_8TAP_REGULAR][idx2][idxh][idxv] = type##_8tap_regular_##sz##dir##_e2k; \
++    dsp->mc[idx1][FILTER_8TAP_SHARP  ][idx2][idxh][idxv] = type##_8tap_sharp_##sz##dir##_e2k
++
++#define init_subpel1(idx1, idx2, idxh, idxv, sz, dir, type) \
++    init_subpel1_bd_aware(idx1, idx2, idxh, idxv, sz, dir, type)
++
++#define init_subpel2(idx, idxh, idxv, dir, type) \
++    init_subpel1(0, idx, idxh, idxv, 64, dir, type); \
++    init_subpel1(1, idx, idxh, idxv, 32, dir, type); \
++    init_subpel1(2, idx, idxh, idxv, 16, dir, type); \
++    init_subpel1(3, idx, idxh, idxv,  8, dir, type); \
++    init_subpel1(4, idx, idxh, idxv,  4, dir, type)
++
++#define init_subpel3(idx, type) \
++    init_subpel2(idx, 1, 1, hv, type); \
++    init_subpel2(idx, 0, 1, v, type); \
++    init_subpel2(idx, 1, 0, h, type)
++
++    init_subpel3(0, put);
++    init_subpel3(1, avg);
++
++#undef init_subpel1
++#undef init_subpel2
++#undef init_subpel3
++#undef init_subpel1_bd_aware
++}
++
++av_cold void ff_vp9dsp_init_e2k(VP9DSPContext *dsp, int bpp, int bitexact)
++{
++    if (!E2K_BASE(av_get_cpu_flags()))
++        return;
++
++    // checkasm
++    // doesn't check all cases for loopfilter 
++    if (bpp == 8) {
++        ff_vp9dsp_itxfm_init_8_e2k(dsp);
++        ff_vp9dsp_loopfilter_init_8_e2k(dsp);
++        ff_vp9dsp_mc_init_8_e2k(dsp);
++    }
++}
 diff --git a/libavcodec/fdctdsp.c b/libavcodec/fdctdsp.c
 index b9c2c86..69e6302 100644
 --- a/libavcodec/fdctdsp.c
@@ -7283,6 +9035,29 @@ index cfe1524..be4f412 100644
  void ff_vp78dsp_init_x86(VP8DSPContext *c);
  
  void ff_vp8dsp_init(VP8DSPContext *c);
+diff --git a/libavcodec/vp9dsp.c b/libavcodec/vp9dsp.c
+index f6d73f7..03df9c0 100644
+--- a/libavcodec/vp9dsp.c
++++ b/libavcodec/vp9dsp.c
+@@ -95,5 +95,6 @@ av_cold void ff_vp9dsp_init(VP9DSPContext *dsp, int bpp, int bitexact)
+     if (ARCH_AARCH64) ff_vp9dsp_init_aarch64(dsp, bpp);
+     if (ARCH_ARM) ff_vp9dsp_init_arm(dsp, bpp);
+     if (ARCH_X86) ff_vp9dsp_init_x86(dsp, bpp, bitexact);
++    if (ARCH_E2K) ff_vp9dsp_init_e2k(dsp, bpp, bitexact);
+     if (ARCH_MIPS) ff_vp9dsp_init_mips(dsp, bpp);
+ }
+diff --git a/libavcodec/vp9dsp.h b/libavcodec/vp9dsp.h
+index e225631..f6dfe01 100644
+--- a/libavcodec/vp9dsp.h
++++ b/libavcodec/vp9dsp.h
+@@ -131,6 +131,7 @@ void ff_vp9dsp_init_12(VP9DSPContext *dsp);
+ void ff_vp9dsp_init_aarch64(VP9DSPContext *dsp, int bpp);
+ void ff_vp9dsp_init_arm(VP9DSPContext *dsp, int bpp);
+ void ff_vp9dsp_init_x86(VP9DSPContext *dsp, int bpp, int bitexact);
++void ff_vp9dsp_init_e2k(VP9DSPContext *dsp, int bpp, int bitexact);
+ void ff_vp9dsp_init_mips(VP9DSPContext *dsp, int bpp);
+ 
+ #endif /* AVCODEC_VP9DSP_H */
 diff --git a/libavutil/cpu.c b/libavutil/cpu.c
 index 6548cc3..78e3f79 100644
 --- a/libavutil/cpu.c
@@ -7671,10 +9446,10 @@ index 0000000..ea78175
 +#endif /* AVUTIL_E2K_TIMER_H */
 diff --git a/libavutil/e2k/util_e2k.h b/libavutil/e2k/util_e2k.h
 new file mode 100644
-index 0000000..d0bfa21
+index 0000000..f5cea7c
 --- /dev/null
 +++ b/libavutil/e2k/util_e2k.h
-@@ -0,0 +1,201 @@
+@@ -0,0 +1,146 @@
 +/*
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
 + *
@@ -7761,41 +9536,6 @@ index 0000000..d0bfa21
 + **********************************************************************/
 +#define LOAD_ZERO const __m128i zerov = _mm_setzero_si128()
 +
-+#define zero_u8v  zerov
-+#define zero_s8v  zerov
-+#define zero_u16v zerov
-+#define zero_s16v zerov
-+#define zero_u32v zerov
-+#define zero_s32v zerov
-+
-+/*
-+// used to build registers permutation vectors (vcprm)
-+// the 's' are for words in the _s_econd vector
-+#define WORD_0 0x00,0x01,0x02,0x03
-+#define WORD_1 0x04,0x05,0x06,0x07
-+#define WORD_2 0x08,0x09,0x0a,0x0b
-+#define WORD_3 0x0c,0x0d,0x0e,0x0f
-+#define WORD_s0 0x10,0x11,0x12,0x13
-+#define WORD_s1 0x14,0x15,0x16,0x17
-+#define WORD_s2 0x18,0x19,0x1a,0x1b
-+#define WORD_s3 0x1c,0x1d,0x1e,0x1f
-+#define vcprm(a, b, c, d) _mm_setr_epi8(WORD_##a, WORD_##b, WORD_##c, WORD_##d)
-+#define _mm_shuffle2_ps(a, b, c) _mm_castsi128_ps(_mm_shuffle2_epi8(_mm_castps_si128(a), _mm_castps_si128(b), c))
-+
-+#define SWP_W2S0 0x02,0x03,0x00,0x01
-+#define SWP_W2S1 0x06,0x07,0x04,0x05
-+#define SWP_W2S2 0x0a,0x0b,0x08,0x09
-+#define SWP_W2S3 0x0e,0x0f,0x0c,0x0d
-+#define SWP_W2Ss0 0x12,0x13,0x10,0x11
-+#define SWP_W2Ss1 0x16,0x17,0x14,0x15
-+#define SWP_W2Ss2 0x1a,0x1b,0x18,0x19
-+#define SWP_W2Ss3 0x1e,0x1f,0x1c,0x1d
-+#define vcswapi2s(a,b,c,d) (const vector unsigned char){SWP_W2S ## a, SWP_W2S ## b, SWP_W2S ## c, SWP_W2S ## d}
-+
-+#define vcswapc() \
-+  (const vector unsigned char){0x0f,0x0e,0x0d,0x0c,0x0b,0x0a,0x09,0x08,0x07,0x06,0x05,0x04,0x03,0x02,0x01,0x00}
-+*/
-+
 +// Transpose 8x8 matrix of 16-bit elements (in-place)
 +#define TRANSPOSE8(a0, a1, a2, a3, a4, a5, a6, a7) \
 +do { \
@@ -7836,26 +9576,6 @@ index 0000000..d0bfa21
 +#define VEC_STH(a, b) _mm_storeh_pd((double*)(a), _mm_castsi128_pd(b));
 +
 +#define VEC_SPLAT16(v, i) _mm_shuffle_epi8(v, _mm_set1_epi16((i) * 2 | ((i) * 2 + 1) << 8))
-+
-+/*
-+#define VEC_LD(a) _mm_loadu_si128(a)
-+#define VEC_ST(a,b) _mm_storeu_si128(a,b)
-+
-+#define unaligned_load(a,b) VEC_LD(a,b)
-+#define load_with_perm_vec(a,b,c) VEC_LD(a,b)
-+
-+#define vec_unaligned_load(b)  VEC_LD(0, b)
-+
-+#define VEC_MERGEH(a, b) vec_mergeh(b, a)
-+#define VEC_MERGEL(a, b) vec_mergel(b, a)
-+
-+#define VEC_SPLAT16(a,b) vec_splat((vec_s16)(vec_perm(a, a, vcswapi2s(0,1,2,3))), b)
-+#define VEC_SLD16(a,b,c) vec_sld(b, a, c)
-+
-+#define vsx_ld_u8_s16(off, p)                               \
-+    ((vec_s16)vec_mergeh((vec_u8)vec_vsx_ld((off), (p)),    \
-+                         (vec_u8)vec_splat_u8(0)))
-+*/
 +
 +#if !defined(__iset__) || __iset__ < 5
 +#define NEED_ALIGN8

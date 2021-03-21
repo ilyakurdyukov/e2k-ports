@@ -1,0 +1,81 @@
+From ce13a013299719680c0677a7004a067d3aa36d10 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Sat, 20 Mar 2021 10:31:00 +0700
+Subject: [PATCH] vdo-6.2.4 e2k support
+
+---
+ utils/uds/atomicDefs.h | 13 +++++++++++--
+ utils/uds/cpu.h        |  2 ++
+ 2 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/utils/uds/atomicDefs.h b/utils/uds/atomicDefs.h
+index 4b7a655..5091f1a 100644
+--- a/utils/uds/atomicDefs.h
++++ b/utils/uds/atomicDefs.h
+@@ -24,6 +24,9 @@
+ 
+ #include "compiler.h"
+ #include "typeDefs.h"
++#ifdef __e2k__
++#include <x86intrin.h>
++#endif
+ 
+ // The atomic interfaces are chosen to exactly match those interfaces defined
+ // by the Linux kernel.  This is the matching user-mode implementation.
+@@ -96,6 +99,8 @@ static INLINE void smp_mb(void)
+   __asm__ __volatile__("bcr 14,0" : : : "memory");
+ #elif defined __PPC__
+   __asm__ __volatile__("sync" : : : "memory");
++#elif defined __e2k__
++  __builtin_ia32_mfence();
+ #else
+ #error "no fence defined"
+ #endif
+@@ -121,6 +126,8 @@ static INLINE void smp_rmb(void)
+   __asm__ __volatile__("bcr 14,0" : : : "memory");
+ #elif defined __PPC__
+   __asm__ __volatile__("lwsync" : : : "memory");
++#elif defined __e2k__
++  __builtin_ia32_lfence();
+ #else
+ #error "no fence defined"
+ #endif
+@@ -146,6 +153,8 @@ static INLINE void smp_wmb(void)
+   __asm__ __volatile__("bcr 14,0" : : : "memory");
+ #elif defined __PPC__
+   __asm__ __volatile__("lwsync" : : : "memory");
++#elif defined __e2k__
++  __builtin_ia32_sfence();
+ #else
+ #error "no fence defined"
+ #endif
+@@ -172,11 +181,11 @@ static INLINE void smp_mb__before_atomic(void)
+ static INLINE void smp_read_barrier_depends(void)
+ {
+ #if defined(__x86_64__) || defined(__PPC__) || defined(__s390__) \
+-  || defined(__aarch64__)
++  || defined(__aarch64__) || defined(__e2k__)
+   // Nothing needed for these architectures.
+ #else
+   // Default to playing it safe.
+-  rmb();
++  smp_rmb();
+ #endif
+ }
+ 
+diff --git a/utils/uds/cpu.h b/utils/uds/cpu.h
+index 9314985..b7845ce 100644
+--- a/utils/uds/cpu.h
++++ b/utils/uds/cpu.h
+@@ -38,6 +38,8 @@
+ #define CACHE_LINE_BYTES 256
+ #elif defined(__x86_64__) || defined(__aarch64__)
+ #define CACHE_LINE_BYTES  64
++#elif defined(__e2k__)
++#define CACHE_LINE_BYTES  32
+ #else
+ #error "unknown cache line size"
+ #endif
+-- 
+2.17.1
+
