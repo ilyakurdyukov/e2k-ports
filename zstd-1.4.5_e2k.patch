@@ -1,0 +1,79 @@
+From fc1440e9bd2e037defdd9c9b961ad73b1909f662 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Tue, 23 Mar 2021 17:43:33 +0700
+Subject: [PATCH] zstd-1.4.5 e2k support
+
+---
+ lib/common/compiler.h | 2 +-
+ lib/common/mem.h      | 2 +-
+ lib/common/xxhash.c   | 4 ++--
+ programs/util.c       | 5 +++++
+ 4 files changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/lib/common/compiler.h b/lib/common/compiler.h
+index 95e9483..6a64333 100644
+--- a/lib/common/compiler.h
++++ b/lib/common/compiler.h
+@@ -139,7 +139,7 @@
+ 
+ /* vectorization
+  * older GCC (pre gcc-4.3 picked as the cutoff) uses a different syntax */
+-#if !defined(__INTEL_COMPILER) && !defined(__clang__) && defined(__GNUC__)
++#if !defined(__INTEL_COMPILER) && !defined(__clang__) && !defined(__e2k__) && defined(__GNUC__)
+ #  if (__GNUC__ == 4 && __GNUC_MINOR__ > 3) || (__GNUC__ >= 5)
+ #    define DONT_VECTORIZE __attribute__((optimize("no-tree-vectorize")))
+ #  else
+diff --git a/lib/common/mem.h b/lib/common/mem.h
+index 89c8aea..a6e2990 100644
+--- a/lib/common/mem.h
++++ b/lib/common/mem.h
+@@ -173,7 +173,7 @@ void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
+  * Prefer these methods in priority order (0 > 1 > 2)
+  */
+ #ifndef MEM_FORCE_MEMORY_ACCESS   /* can be defined externally, on command line for example */
+-#  if defined(__GNUC__) && ( defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || defined(__ARM_ARCH_6K__) || defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || defined(__ARM_ARCH_6T2__) )
++#  if defined(__GNUC__) && ( defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || defined(__ARM_ARCH_6K__) || defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || defined(__ARM_ARCH_6T2__) || defined(__e2k__) )
+ #    define MEM_FORCE_MEMORY_ACCESS 2
+ #  elif defined(__INTEL_COMPILER) || defined(__GNUC__) || defined(__ICCARM__)
+ #    define MEM_FORCE_MEMORY_ACCESS 1
+diff --git a/lib/common/xxhash.c b/lib/common/xxhash.c
+index 597de18..e48fb16 100644
+--- a/lib/common/xxhash.c
++++ b/lib/common/xxhash.c
+@@ -30,7 +30,7 @@
+  * Prefer these methods in priority order (0 > 1 > 2)
+  */
+ #ifndef XXH_FORCE_MEMORY_ACCESS   /* can be defined externally, on command line for example */
+-#  if defined(__GNUC__) && ( defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || defined(__ARM_ARCH_6K__) || defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || defined(__ARM_ARCH_6T2__) )
++#  if defined(__GNUC__) && ( defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || defined(__ARM_ARCH_6K__) || defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || defined(__ARM_ARCH_6T2__) || defined(__e2k__))
+ #    define XXH_FORCE_MEMORY_ACCESS 2
+ #  elif (defined(__INTEL_COMPILER) && !defined(WIN32)) || \
+   (defined(__GNUC__) && ( defined(__ARM_ARCH_7__) || defined(__ARM_ARCH_7A__) || defined(__ARM_ARCH_7R__) || defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7S__) )) || \
+@@ -65,7 +65,7 @@
+  * is guaranteed to be aligned.
+  */
+ #ifndef XXH_FORCE_ALIGN_CHECK /* can be defined externally */
+-#  if defined(__i386) || defined(_M_IX86) || defined(__x86_64__) || defined(_M_X64)
++#  if defined(__i386) || defined(_M_IX86) || defined(__x86_64__) || defined(_M_X64) || defined(__e2k__)
+ #    define XXH_FORCE_ALIGN_CHECK 0
+ #  else
+ #    define XXH_FORCE_ALIGN_CHECK 1
+diff --git a/programs/util.c b/programs/util.c
+index ab1abd3..686d7a1 100644
+--- a/programs/util.c
++++ b/programs/util.c
+@@ -23,6 +23,11 @@ extern "C" {
+ #include <errno.h>
+ #include <assert.h>
+ 
++#ifdef __e2k__
++#undef PLATFORM_POSIX_VERSION
++#define PLATFORM_POSIX_VERSION 200808L
++#endif
++
+ #if defined(_WIN32)
+ #  include <sys/utime.h>  /* utime */
+ #  include <io.h>         /* _chmod */
+-- 
+2.17.1
+

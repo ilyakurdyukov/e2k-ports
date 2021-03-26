@@ -1,12 +1,12 @@
-From ce13a013299719680c0677a7004a067d3aa36d10 Mon Sep 17 00:00:00 2001
+From ef3da1cb3a40733c0bf3cffb5792de5b7f0c215a Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Sat, 20 Mar 2021 10:31:00 +0700
+Date: Wed, 24 Mar 2021 18:05:12 +0700
 Subject: [PATCH] vdo-6.2.4 e2k support
 
 ---
  utils/uds/atomicDefs.h | 13 +++++++++++--
- utils/uds/cpu.h        |  2 ++
- 2 files changed, 13 insertions(+), 2 deletions(-)
+ utils/uds/cpu.h        |  2 +-
+ 2 files changed, 12 insertions(+), 3 deletions(-)
 
 diff --git a/utils/uds/atomicDefs.h b/utils/uds/atomicDefs.h
 index 4b7a655..5091f1a 100644
@@ -64,18 +64,18 @@ index 4b7a655..5091f1a 100644
  }
  
 diff --git a/utils/uds/cpu.h b/utils/uds/cpu.h
-index 9314985..b7845ce 100644
+index 9314985..021b0ef 100644
 --- a/utils/uds/cpu.h
 +++ b/utils/uds/cpu.h
-@@ -38,6 +38,8 @@
+@@ -36,7 +36,7 @@
+ #define CACHE_LINE_BYTES 128
+ #elif defined(__s390x__)
  #define CACHE_LINE_BYTES 256
- #elif defined(__x86_64__) || defined(__aarch64__)
+-#elif defined(__x86_64__) || defined(__aarch64__)
++#elif defined(__x86_64__) || defined(__aarch64__) || defined(__e2k__)
  #define CACHE_LINE_BYTES  64
-+#elif defined(__e2k__)
-+#define CACHE_LINE_BYTES  32
  #else
  #error "unknown cache line size"
- #endif
 -- 
 2.17.1
 
