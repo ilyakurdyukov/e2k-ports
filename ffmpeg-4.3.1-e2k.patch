@@ -9605,7 +9605,7 @@ index 0000000..dfecdab
 +static void vector_fmul_scalar_e2k(float *dst, const float *src, float mul,
 +                                   int len)
 +{
-+    int i;
++    int i = 0;
 +    __m128 d0, d1, d2 = _mm_set1_ps(mul);
 +
 +    PRAGMA_E2K("ivdep")
