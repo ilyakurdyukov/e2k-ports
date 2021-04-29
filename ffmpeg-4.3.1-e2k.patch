@@ -1,10 +1,10 @@
-From 2368b59a81003cb87869a8f01615e28bbf8326bf Mon Sep 17 00:00:00 2001
+From e9bec4e805f8bb3f66e2557d1fa2cbc5ba9be025 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Fri, 26 Mar 2021 14:57:57 +0700
+Date: Thu, 29 Apr 2021 16:01:30 +0700
 Subject: [PATCH] ffmpeg-4.3.1 e2k support
 
 ---
- configure                            |   20 +-
+ configure                            |   22 +-
  libavcodec/audiodsp.c                |    2 +
  libavcodec/audiodsp.h                |    1 +
  libavcodec/blockdsp.c                |    2 +
@@ -13,36 +13,36 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavcodec/e2k/audiodsp.c            |   62 +
  libavcodec/e2k/blockdsp.c            |   72 +
  libavcodec/e2k/dctdsp.h              |   27 +
- libavcodec/e2k/fdctdsp.c             |  389 +++++
- libavcodec/e2k/fft.c                 | 1043 +++++++++++++
+ libavcodec/e2k/fdctdsp.c             |  389 ++++
+ libavcodec/e2k/fft.c                 | 1043 ++++++++++
  libavcodec/e2k/fft.h                 |   29 +
  libavcodec/e2k/fft_init.c            |  152 ++
  libavcodec/e2k/fmtconvert.c          |   55 +
  libavcodec/e2k/h264chroma.c          |   63 +
- libavcodec/e2k/h264chroma_template.c |  113 ++
- libavcodec/e2k/h264dsp.c             |  820 +++++++++++
- libavcodec/e2k/h264qpel.c            |  255 ++++
- libavcodec/e2k/h264qpel_template.c   |  354 +++++
- libavcodec/e2k/hevcdsp.c             |   94 ++
- libavcodec/e2k/hpeldsp.c             |  302 ++++
+ libavcodec/e2k/h264chroma_template.c |  113 +
+ libavcodec/e2k/h264dsp.c             |  820 ++++++++
+ libavcodec/e2k/h264qpel.c            |  255 +++
+ libavcodec/e2k/h264qpel_template.c   |  354 ++++
+ libavcodec/e2k/hevcdsp.c             | 2893 ++++++++++++++++++++++++++
+ libavcodec/e2k/hpeldsp.c             |  302 +++
  libavcodec/e2k/hpeldsp.h             |   30 +
  libavcodec/e2k/idctdsp.c             |  237 +++
  libavcodec/e2k/lossless_audiodsp.c   |   75 +
  libavcodec/e2k/lossless_videodsp.c   |   59 +
- libavcodec/e2k/mdct15.c              |  187 +++
- libavcodec/e2k/me_cmp.c              |  461 ++++++
+ libavcodec/e2k/mdct15.c              |  187 ++
+ libavcodec/e2k/me_cmp.c              |  461 ++++
  libavcodec/e2k/mpegaudiodsp.c        |  142 ++
- libavcodec/e2k/mpegvideo.c           |  100 ++
- libavcodec/e2k/mpegvideodsp.c        |   86 ++
+ libavcodec/e2k/mpegvideo.c           |  100 +
+ libavcodec/e2k/mpegvideodsp.c        |   86 +
  libavcodec/e2k/mpegvideoencdsp.c     |   75 +
- libavcodec/e2k/pixblockdsp.c         |   83 ++
+ libavcodec/e2k/pixblockdsp.c         |   83 +
  libavcodec/e2k/svq1enc.c             |   68 +
- libavcodec/e2k/vc1dsp.c              |  303 ++++
+ libavcodec/e2k/vc1dsp.c              |  303 +++
  libavcodec/e2k/videodsp.c            |   36 +
  libavcodec/e2k/vorbisdsp.c           |   62 +
- libavcodec/e2k/vp3dsp.c              |  169 +++
- libavcodec/e2k/vp8dsp.c              |  428 ++++++
- libavcodec/e2k/vp9dsp.c              | 1740 ++++++++++++++++++++++
+ libavcodec/e2k/vp3dsp.c              |  169 ++
+ libavcodec/e2k/vp8dsp.c              |  428 ++++
+ libavcodec/e2k/vp9dsp.c              | 1740 ++++++++++++++++
  libavcodec/fdctdsp.c                 |    2 +
  libavcodec/fdctdsp.h                 |    2 +
  libavcodec/fft.h                     |    1 +
@@ -101,7 +101,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavutil/e2k/Makefile               |    2 +
  libavutil/e2k/cpu.c                  |   41 +
  libavutil/e2k/cpu.h                  |   27 +
- libavutil/e2k/float_dsp.c            |  188 +++
+ libavutil/e2k/float_dsp.c            |  188 ++
  libavutil/e2k/intreadwrite.h         |   54 +
  libavutil/e2k/timer.h                |   35 +
  libavutil/e2k/util_e2k.h             |  146 ++
@@ -112,11 +112,11 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavutil/timer.h                    |    2 +
  libswresample/audioconvert.c         |    1 +
  libswresample/e2k/Makefile           |    1 +
- libswresample/e2k/audio_convert.c    |  110 ++
+ libswresample/e2k/audio_convert.c    |  110 +
  libswresample/swresample_internal.h  |    4 +
  libswscale/e2k/Makefile              |    3 +
- libswscale/e2k/swscale.c             | 2046 ++++++++++++++++++++++++++
- libswscale/e2k/yuv2rgb.c             |  248 ++++
+ libswscale/e2k/swscale.c             | 2046 ++++++++++++++++++
+ libswscale/e2k/yuv2rgb.c             |  248 +++
  libswscale/e2k/yuv2rgb.h             |   52 +
  libswscale/e2k/yuv2yuv.c             |  146 ++
  libswscale/swscale.c                 |    2 +
@@ -126,7 +126,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libswscale/yuv2rgb.c                 |    2 +
  tests/checkasm/checkasm.c            |    2 +
  tests/checkasm/huffyuvdsp.c          |    8 +-
- 122 files changed, 11491 insertions(+), 5 deletions(-)
+ 122 files changed, 14291 insertions(+), 6 deletions(-)
  create mode 100644 libavcodec/e2k/Makefile
  create mode 100644 libavcodec/e2k/audiodsp.c
  create mode 100644 libavcodec/e2k/blockdsp.c
@@ -178,7 +178,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  create mode 100644 libswscale/e2k/yuv2yuv.c
 
 diff --git a/configure b/configure
-index 19c1865..3c2a9ab 100755
+index 19c1865..03ce9d8 100755
 --- a/configure
 +++ b/configure
 @@ -1989,6 +1989,7 @@ ARCH_LIST="
@@ -214,10 +214,11 @@ index 19c1865..3c2a9ab 100755
  aligned_stack_if_any="aarch64 ppc x86"
 -fast_64bit_if_any="aarch64 alpha ia64 mips64 parisc64 ppc64 sparc64 x86_64"
 -fast_clz_if_any="aarch64 alpha avr32 mips ppc x86"
+-fast_unaligned_if_any="aarch64 ppc x86"
+-simd_align_16_if_any="altivec neon sse"
 +fast_64bit_if_any="aarch64 alpha ia64 mips64 parisc64 ppc64 e2k sparc64 x86_64"
 +fast_clz_if_any="aarch64 alpha avr32 mips ppc e2k x86"
- fast_unaligned_if_any="aarch64 ppc x86"
--simd_align_16_if_any="altivec neon sse"
++fast_unaligned_if_any="aarch64 ppc e2k x86"
 +simd_align_16_if_any="altivec e2k neon sse"
  simd_align_32_if_any="avx"
  simd_align_64_if_any="avx512"
@@ -3845,14 +3846,17 @@ index 0000000..bbd6516
 +#endif /* PREFIX_h264_qpel16_hv_lowpass_e2k */
 diff --git a/libavcodec/e2k/hevcdsp.c b/libavcodec/e2k/hevcdsp.c
 new file mode 100644
-index 0000000..74004d7
+index 0000000..ba8bed1
 --- /dev/null
 +++ b/libavcodec/e2k/hevcdsp.c
-@@ -0,0 +1,94 @@
+@@ -0,0 +1,2893 @@
 +/*
-+ * SIMD-optimized IDCT functions for HEVC decoding
++ * SIMD-optimized functions for HEVC decoding
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
-+ * Copyright (c) Alexandra Hajkova
++ *
++ * SSE2-optimized HEVC deblocking code:
++ * Copyright (C) 2013 VTT
++ * Authors: Seppo Tomperi <seppo.tomperi@vtt.fi>
 + *
 + * This file is part of FFmpeg.
 + *
@@ -3880,68 +3884,2864 @@ index 0000000..74004d7
 +
 +#include "libavcodec/hevcdsp.h"
 +
-+#define transform4x4(shift) { \
-+    vec_s16 src_02, src_13; \
-+    vec_s32 e0, o0, e1, o1, add; \
-+    src_02 = _mm_unpacklo_epi16(src_01, src_23); \
-+    src_13 = _mm_unpackhi_epi16(src_01, src_23); \
-+    e0 = _mm_madd_epi16(src_02, trans0); \
-+    o0 = _mm_madd_epi16(src_13, trans1); \
-+    e1 = _mm_madd_epi16(src_02, trans2); \
-+    o1 = _mm_madd_epi16(src_13, trans3); \
-+    add = _mm_set1_epi32(1 << (shift - 1)); \
-+    e0 = _mm_add_epi32(e0, add); \
-+    e1 = _mm_add_epi32(e1, add); \
-+    res0 = _mm_add_epi32(e0, o0); \
-+    res1 = _mm_add_epi32(e1, o1); \
-+    res2 = _mm_sub_epi32(e1, o1); \
-+    res3 = _mm_sub_epi32(e0, o0); \
-+    res0 = _mm_srai_epi32(res0, shift); \
-+    res1 = _mm_srai_epi32(res1, shift); \
-+    res2 = _mm_srai_epi32(res2, shift); \
-+    res3 = _mm_srai_epi32(res3, shift); \
-+    packed0 = _mm_packs_epi32(res0, res1); \
-+    packed1 = _mm_packs_epi32(res2, res3); \
-+    \
-+    res0 = _mm_unpacklo_epi16(packed0, packed1); \
-+    res1 = _mm_unpackhi_epi16(packed0, packed1); \
-+    src_01 = _mm_unpacklo_epi16(res0, res1); \
-+    src_23 = _mm_unpackhi_epi16(res0, res1); \
++#define BIT_DEPTH 8
++
++/* add residual ----------------------------------------------------*/
++
++static void hevc_add_residual4x4_8_e2k(uint8_t *dst, int16_t *res,
++                                       ptrdiff_t stride)
++{
++    __m64 v0, v1, v2, v3, vzero = _mm_setzero_si64();
++    int y;
++
++    PRAGMA_E2K("ivdep")
++    PRAGMA_E2K("unroll(2)")
++    for (y = 0; y < 4; y += 2) {
++        v0 = *(__m64*)res;
++        v1 = *(__m64*)(res + 4);
++        v2 = _mm_cvtsi32_si64(*(uint32_t*)dst);
++        v3 = _mm_cvtsi32_si64(*(uint32_t*)(dst + stride));
++        v2 = _mm_unpacklo_pi8(v2, vzero);
++        v3 = _mm_unpacklo_pi8(v3, vzero);
++        v0 = _mm_adds_pi16(v0, v2);
++        v1 = _mm_adds_pi16(v1, v3);
++        v0 = _mm_packs_pu16(v0, v1);
++        *(uint32_t*)dst = _mm_cvtsi64_si32(v0);
++        *(uint32_t*)(dst + stride) = _mm_extract_pi32(v0, 1);
++        res += 4 * 2;
++        dst += stride << 1;
++    }
 +}
 +
-+#define HEVC_IDCT4X4_E2K(depth) \
-+static void ff_hevc_idct_4x4##_##depth##_e2k(int16_t *coeffs, int col_limit) \
-+{ \
-+    const int shift = 7; \
-+    const int shift2 = 20 - depth; \
-+    vec_s16 src_01, src_23; \
-+    vec_s32 res0, res1, res2, res3; \
-+    vec_s16 packed0, packed1; \
-+    vec_s16 trans0 = _mm_set1_epi32(64 | 64 << 16); \
-+    vec_s16 trans1 = _mm_set1_epi32(83 | 36 << 16); \
-+    vec_s16 trans2 = _mm_set1_epi32(64 | -64 << 16); \
-+    vec_s16 trans3 = _mm_set1_epi32(36 | -83 << 16); \
-+    \
-+    src_01 = VEC_LD(coeffs); \
-+    src_23 = VEC_LD(coeffs + 8); \
-+    transform4x4(shift); \
-+    transform4x4(shift2); \
-+    VEC_ST(coeffs, src_01); \
-+    VEC_ST(coeffs + 8, src_23); \
++static void hevc_add_residual8x8_8_e2k(uint8_t *dst, int16_t *res,
++                                       ptrdiff_t stride)
++{
++    __m128i v0, v1, v2, v3, vzero = _mm_setzero_si128();
++    int y;
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < 8; y += 2) {
++        v0 = _mm_load_si128((const __m128i*)res);
++        v1 = _mm_load_si128((const __m128i*)(res + 8));
++        v2 = VEC_LD8(dst);
++        v3 = VEC_LD8(dst + stride);
++        v2 = _mm_unpacklo_epi8(v2, vzero);
++        v3 = _mm_unpacklo_epi8(v3, vzero);
++        v0 = _mm_adds_epi16(v0, v2);
++        v1 = _mm_adds_epi16(v1, v3);
++        v0 = _mm_packus_epi16(v0, v1);
++        VEC_STL(dst, v0);
++        VEC_STH(dst + stride, v0);
++        res += 8 * 2;
++        dst += stride << 1;
++    }
 +}
 +
-+HEVC_IDCT4X4_E2K(8)
-+HEVC_IDCT4X4_E2K(10)
++static void hevc_add_residual16x16_8_e2k(uint8_t *dst, int16_t *res,
++                                         ptrdiff_t stride)
++{
++    __m128i v0, v1, v2, v3, vzero = _mm_setzero_si128();
++    int y;
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < 16; y++) {
++        v0 = _mm_load_si128((const __m128i*)res);
++        v1 = _mm_load_si128((const __m128i*)(res + 8));
++        v3 = _mm_load_si128((const __m128i*)dst);
++        v2 = _mm_unpacklo_epi8(v3, vzero);
++        v3 = _mm_unpackhi_epi8(v3, vzero);
++        v0 = _mm_adds_epi16(v0, v2);
++        v1 = _mm_adds_epi16(v1, v3);
++        v0 = _mm_packus_epi16(v0, v1);
++        _mm_store_si128((__m128i*)dst, v0);
++        res += 16;
++        dst += stride;
++    }
++}
++
++static void hevc_add_residual32x32_8_e2k(uint8_t *dst, int16_t *res,
++                                         ptrdiff_t stride)
++{
++    __m128i v0, v1, v2, v3, v4, v5, v6, v7, vzero = _mm_setzero_si128();
++    int y;
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < 32; y++) {
++        v0 = _mm_load_si128((const __m128i*)res);
++        v1 = _mm_load_si128((const __m128i*)(res + 8));
++        v2 = _mm_load_si128((const __m128i*)(res + 16));
++        v3 = _mm_load_si128((const __m128i*)(res + 24));
++        v5 = _mm_load_si128((const __m128i*)dst);
++        v7 = _mm_load_si128((const __m128i*)(dst + 16));
++        v4 = _mm_unpacklo_epi8(v5, vzero);
++        v5 = _mm_unpackhi_epi8(v5, vzero);
++        v6 = _mm_unpacklo_epi8(v7, vzero);
++        v7 = _mm_unpackhi_epi8(v7, vzero);
++        v0 = _mm_adds_epi16(v0, v4);
++        v1 = _mm_adds_epi16(v1, v5);
++        v2 = _mm_adds_epi16(v2, v6);
++        v3 = _mm_adds_epi16(v3, v7);
++        v0 = _mm_packus_epi16(v0, v1);
++        v2 = _mm_packus_epi16(v2, v3);
++        _mm_store_si128((__m128i*)dst, v0);
++        _mm_store_si128((__m128i*)(dst + 16), v2);
++        res += 32;
++        dst += stride;
++    }
++}
++
++/* sao band filter -------------------------------------------------*/
++
++static void hevc_sao_band_filter_8_e2k(uint8_t *dst, uint8_t *src,
++                                       ptrdiff_t stride_dst, ptrdiff_t stride_src,
++                                       int16_t *sao_offset_val, int sao_left_class,
++                                       int width, int height)
++{
++    int x, y, shift = BIT_DEPTH - 5;
++    __m64 v0, v1, v2, vadd, vsub, c1, c2, c7 = _mm_set1_pi8(7);
++
++    v0 = *(__m64*)(sao_offset_val + 1);
++    v1 = _mm_sub_pi16(_mm_setzero_si64(), v0);
++    vadd = _mm_packs_pu16(v0, v0);
++    vsub = _mm_packs_pu16(v1, v1);
++
++    c1 = _mm_set1_pi8(((sao_left_class + 4) << shift) + 128);
++    c2 = _mm_set1_pi8(128 - (4 << shift));
++
++    for (y = 0; y < height; y++) {
++        PRAGMA_E2K("ivdep")
++        for (x = 0; x < width; x += 8) {
++            v0 = *(__m64*)(src + x);
++            v1 = _mm_sub_pi8(v0, c1);
++            v2 = _mm_and_si64(_mm_srai_pi16(v1, shift), c7);
++            v1 = _mm_or_si64(v2, _mm_cmpgt_pi8(c2, v1));
++            v0 = _mm_adds_pu8(v0, _mm_shuffle_pi8(vadd, v1));
++            v0 = _mm_subs_pu8(v0, _mm_shuffle_pi8(vsub, v1));
++            *(__m64*)(dst + x) = v0;
++        }
++        dst += stride_dst;
++        src += stride_src;
++    }
++}
++
++/* sao edge filter -------------------------------------------------*/
++
++#define SAO_EDGE_FUNC(w) \
++static void hevc_sao_edge_filter_##w##_8_e2k(uint8_t *dst, uint8_t *src, ptrdiff_t stride_dst, \
++                                             int16_t *sao_offset_val, int eo, int width, int height)
++#define SAO_EDGE_INIT \
++    int y; \
++    __m64 htab; \
++    ptrdiff_t a_stride, stride_src = 2*MAX_PB_SIZE + AV_INPUT_BUFFER_PADDING_SIZE; \
++    a_stride = (eo >> 1 | ((eo & 1) - 1)) - (eo ? stride_src : 0); \
++    htab = *(__m64*)sao_offset_val; \
++    htab = _mm_shuffle_pi16(htab, 0xc9); /* [1, 2, 0, 3], 4 */ \
++    htab = _mm_packs_pi16(htab, _mm_cvtsi32_si64(*(uint16_t*)&sao_offset_val[4]));
++
++SAO_EDGE_FUNC(8) {
++    __m64 v0, v2, v3, v4, v5;
++    __m64 c1 = _mm_set1_pi8(128), c2 = _mm_set1_pi8(2);
++    SAO_EDGE_INIT
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        v0 = *(__m64*)src;
++        v2 = *(__m64*)(src + a_stride);
++        v3 = *(__m64*)(src - a_stride);
++        v0 = _mm_xor_si64(v0, c1);
++        v2 = _mm_xor_si64(v2, c1);
++        v3 = _mm_xor_si64(v3, c1);
++
++        v4 = _mm_cmpgt_pi8(v0, v2);
++        v5 = _mm_cmpgt_pi8(v0, v3);
++        v2 = _mm_cmpgt_pi8(v2, v0);
++        v3 = _mm_cmpgt_pi8(v3, v0);
++        v2 = _mm_sub_pi8(v2, v4);
++        v3 = _mm_sub_pi8(v3, v5);
++        v2 = _mm_add_pi8(v2, c2);
++        v2 = _mm_add_pi8(v2, v3);
++
++        v2 = _mm_shuffle_pi8(htab, v2);
++        v0 = _mm_adds_pi8(v0, v2);
++        v0 = _mm_xor_si64(v0, c1);
++
++        *(__m64*)dst = v0;
++        src += stride_src;
++        dst += stride_dst;
++    }
++}
++
++#define SAO_EDGE_V16_INIT \
++    __m128i v0, v2, v3, v4, v5, vtab; \
++    __m128i c1 = _mm_set1_epi8(128), c2 = _mm_set1_epi8(2); \
++    SAO_EDGE_INIT \
++    vtab = _mm_movpi64_epi64(htab); \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y++) {
++
++#define SAO_EDGE_V16_FILTER(i, out) \
++    v0 = _mm_load_si128((const __m128i*)(src + i)); \
++    v2 = VEC_LD(src + i + a_stride); \
++    v3 = VEC_LD(src + i - a_stride); \
++    v0 = _mm_xor_si128(v0, c1); \
++    v2 = _mm_xor_si128(v2, c1); \
++    v3 = _mm_xor_si128(v3, c1); \
++    \
++    v4 = _mm_cmpgt_epi8(v0, v2); \
++    v5 = _mm_cmpgt_epi8(v0, v3); \
++    v2 = _mm_cmpgt_epi8(v2, v0); \
++    v3 = _mm_cmpgt_epi8(v3, v0); \
++    v2 = _mm_sub_epi8(v2, v4); \
++    v3 = _mm_sub_epi8(v3, v5); \
++    v2 = _mm_add_epi8(v2, c2); \
++    v2 = _mm_add_epi8(v2, v3); \
++    \
++    v2 = _mm_shuffle_epi8(vtab, v2); \
++    v0 = _mm_adds_epi8(v0, v2); \
++    out = _mm_xor_si128(v0, c1);
++
++SAO_EDGE_FUNC(16) {
++    SAO_EDGE_V16_INIT
++        SAO_EDGE_V16_FILTER(0, v3)
++        _mm_store_si128((__m128i*)dst, v3);
++        src += stride_src;
++        dst += stride_dst;
++    }
++}
++
++SAO_EDGE_FUNC(32) {
++    __m128i o0, o1;
++    SAO_EDGE_V16_INIT
++        SAO_EDGE_V16_FILTER(0, o0)
++        SAO_EDGE_V16_FILTER(16, o1)
++        _mm_store_si128((__m128i*)dst, o0);
++        _mm_store_si128((__m128i*)(dst + 16), o1);
++        src += stride_src;
++        dst += stride_dst;
++    }
++}
++
++SAO_EDGE_FUNC(48) {
++    __m128i o0, o1, o2;
++    SAO_EDGE_V16_INIT
++        SAO_EDGE_V16_FILTER(0, o0)
++        SAO_EDGE_V16_FILTER(16, o1)
++        SAO_EDGE_V16_FILTER(32, o2)
++        _mm_store_si128((__m128i*)dst, o0);
++        _mm_store_si128((__m128i*)(dst + 16), o1);
++        _mm_store_si128((__m128i*)(dst + 32), o2);
++        src += stride_src;
++        dst += stride_dst;
++    }
++}
++
++SAO_EDGE_FUNC(64) {
++    __m128i o0, o1, o2, o3;
++    SAO_EDGE_V16_INIT
++        SAO_EDGE_V16_FILTER(0, o0)
++        SAO_EDGE_V16_FILTER(16, o1)
++        SAO_EDGE_V16_FILTER(32, o2)
++        SAO_EDGE_V16_FILTER(48, o3)
++        _mm_store_si128((__m128i*)dst, o0);
++        _mm_store_si128((__m128i*)(dst + 16), o1);
++        _mm_store_si128((__m128i*)(dst + 32), o2);
++        _mm_store_si128((__m128i*)(dst + 48), o3);
++        src += stride_src;
++        dst += stride_dst;
++    }
++}
++
++/* epel/qpel -------------------------------------------------------*/
++
++#define PEL_FIN_UNI8(v6, v7, out) \
++    v6 = _mm_srai_pi16(_mm_add_pi16(v6, vbias), shift); \
++    v7 = _mm_srai_pi16(_mm_add_pi16(v7, vbias), shift); \
++    out = _mm_packs_pu16(v6, v7);
++
++#define PEL_FIN_UNI(v6, v7, out) \
++    v6 = _mm_srai_epi16(_mm_add_epi16(v6, vbias), shift); \
++    v7 = _mm_srai_epi16(_mm_add_epi16(v7, vbias), shift); \
++    out = _mm_packus_epi16(v6, v7);
++
++#define PEL_FIN_BI8(src2, off, v6, v7, v2, v3, out) \
++    v2 = *(__m64*)(src2); \
++    v3 = *(__m64*)(src2 + off); \
++    v6 = _mm_adds_pi16(_mm_adds_pi16(v2, vbias), v6); \
++    v7 = _mm_adds_pi16(_mm_adds_pi16(v3, vbias), v7); \
++    v6 = _mm_srai_pi16(v6, shift); \
++    v7 = _mm_srai_pi16(v7, shift); \
++    out = _mm_packs_pu16(v6, v7);
++
++#define PEL_FIN_BI(src2, off, v6, v7, v2, v3, out) \
++    v2 = VEC_LD(src2); \
++    v3 = VEC_LD(src2 + off); \
++    v6 = _mm_adds_epi16(_mm_adds_epi16(v2, vbias), v6); \
++    v7 = _mm_adds_epi16(_mm_adds_epi16(v3, vbias), v7); \
++    v6 = _mm_srai_epi16(v6, shift); \
++    v7 = _mm_srai_epi16(v7, shift); \
++    out = _mm_packus_epi16(v6, v7);
++
++#define PEL_FIN_UNI_W8(v6, v7, v2, v3, v4, v5, out) \
++    v2 = _mm_mullo_pi16(v6, vwx); \
++    v3 = _mm_mulhi_pi16(v6, vwx); \
++    v4 = _mm_unpacklo_pi16(v2, v3); \
++    v5 = _mm_unpackhi_pi16(v2, v3); \
++    v2 = _mm_mullo_pi16(v7, vwx); \
++    v3 = _mm_mulhi_pi16(v7, vwx); \
++    v6 = _mm_unpacklo_pi16(v2, v3); \
++    v7 = _mm_unpackhi_pi16(v2, v3); \
++    v4 = _mm_srai_pi32(_mm_add_pi32(v4, vbias), shift); \
++    v5 = _mm_srai_pi32(_mm_add_pi32(v5, vbias), shift); \
++    v6 = _mm_srai_pi32(_mm_add_pi32(v6, vbias), shift); \
++    v7 = _mm_srai_pi32(_mm_add_pi32(v7, vbias), shift); \
++    v4 = _mm_adds_pi16(_mm_packs_pi32(v4, v5), vox); \
++    v6 = _mm_adds_pi16(_mm_packs_pi32(v6, v7), vox); \
++    out = _mm_packs_pu16(v4, v6);
++
++#define PEL_FIN_UNI_W(v6, v7, v2, v3, v4, v5, out) \
++    v2 = _mm_mullo_epi16(v6, vwx); \
++    v3 = _mm_mulhi_epi16(v6, vwx); \
++    v4 = _mm_unpacklo_epi16(v2, v3); \
++    v5 = _mm_unpackhi_epi16(v2, v3); \
++    v2 = _mm_mullo_epi16(v7, vwx); \
++    v3 = _mm_mulhi_epi16(v7, vwx); \
++    v6 = _mm_unpacklo_epi16(v2, v3); \
++    v7 = _mm_unpackhi_epi16(v2, v3); \
++    v4 = _mm_srai_epi32(_mm_add_epi32(v4, vbias), shift); \
++    v5 = _mm_srai_epi32(_mm_add_epi32(v5, vbias), shift); \
++    v6 = _mm_srai_epi32(_mm_add_epi32(v6, vbias), shift); \
++    v7 = _mm_srai_epi32(_mm_add_epi32(v7, vbias), shift); \
++    v4 = _mm_adds_epi16(_mm_packs_epi32(v4, v5), vox); \
++    v6 = _mm_adds_epi16(_mm_packs_epi32(v6, v7), vox); \
++    out = _mm_packus_epi16(v4, v6);
++
++#define PEL_FUNC_TMP(name) \
++static void put_hevc_##name##_8_e2k(int16_t *dst, uint8_t *src, ptrdiff_t srcstride, \
++                                          int height, intptr_t mx, intptr_t my, int width)
++#define PEL_FUNC_UNI(name) \
++static void put_hevc_##name##_8_e2k(uint8_t *dst, ptrdiff_t dststride, \
++                                          uint8_t *src, ptrdiff_t srcstride, \
++                                          int height, intptr_t mx, intptr_t my, int width)
++#define PEL_FUNC_BI(name) \
++static void put_hevc_##name##_8_e2k(uint8_t *dst, ptrdiff_t dststride, \
++                                          uint8_t *src, ptrdiff_t srcstride, \
++                                          int16_t *src2, int height, intptr_t mx, intptr_t my, int width)
++#define PEL_FUNC_UNI_W(name) \
++static void put_hevc_##name##_8_e2k(uint8_t *dst, ptrdiff_t dststride, \
++                                          uint8_t *src, ptrdiff_t srcstride, \
++                                          int height, int denom, int wx, int ox, \
++                                          intptr_t mx, intptr_t my, int width)
++
++#define PEL_FUNC(w, vec, n) PEL_FUNC_TMP(pel_pixels##w) { \
++    int y, shift = 14 - BIT_DEPTH; \
++    vec v0, v1, vzero = _mm_setzero_si##n();
++
++#define PEL_LD16(i) \
++    v1 = VEC_LD(src + i * 16); \
++    v0 = _mm_unpacklo_epi8(v1, vzero); \
++    v1 = _mm_unpackhi_epi8(v1, vzero); \
++    l##i = _mm_slli_epi16(v0, shift); \
++    h##i = _mm_slli_epi16(v1, shift);
++
++PEL_FUNC(8, __m64, 64)
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        v1 = *(__m64*)src;
++        v0 = _mm_unpacklo_pi8(v1, vzero);
++        v1 = _mm_unpackhi_pi8(v1, vzero);
++        v0 = _mm_slli_pi16(v0, shift);
++        v1 = _mm_slli_pi16(v1, shift);
++        *(__m64*)dst = v0;
++        *(__m64*)(dst + 4) = v1;
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(16, __m128i, 128)
++    __m128i l0, h0;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        PEL_LD16(0)
++        VEC_ST(dst, l0); VEC_ST(dst + 8, h0);
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(32, __m128i, 128)
++    __m128i l0, h0, l1, h1;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        PEL_LD16(0) PEL_LD16(1)
++        VEC_ST(dst, l0); VEC_ST(dst + 8, h0);
++        VEC_ST(dst + 16, l1); VEC_ST(dst + 24, h1);
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(64, __m128i, 128)
++    __m128i l0, h0, l1, h1, l2, h2, l3, h3;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        PEL_LD16(0) PEL_LD16(1) PEL_LD16(2) PEL_LD16(3)
++        VEC_ST(dst, l0); VEC_ST(dst + 8, h0);
++        VEC_ST(dst + 16, l1); VEC_ST(dst + 24, h1);
++        VEC_ST(dst + 32, l2); VEC_ST(dst + 40, h2);
++        VEC_ST(dst + 48, l3); VEC_ST(dst + 56, h3);
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++#undef PEL_FUNC
++#undef PEL_LD16
++
++#define PEL_FUNC(w) PEL_FUNC_UNI(pel_uni_pixels##w) { \
++    int y;
++
++PEL_FUNC(8)
++    __m64 v0;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        v0 = *(__m64*)src;
++        *(__m64*)dst = v0;
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(16)
++    __m128i v0;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        v0 = VEC_LD(src);
++        VEC_ST(dst, v0);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(32)
++    __m128i v0, v1;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        v0 = VEC_LD(src);
++        v1 = VEC_LD(src + 16);
++        VEC_ST(dst, v0);
++        VEC_ST(dst + 16, v1);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(64)
++    __m128i v0, v1, v2, v3;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        v0 = VEC_LD(src);
++        v1 = VEC_LD(src + 16);
++        v2 = VEC_LD(src + 32);
++        v3 = VEC_LD(src + 48);
++        VEC_ST(dst, v0);
++        VEC_ST(dst + 16, v1);
++        VEC_ST(dst + 32, v2);
++        VEC_ST(dst + 48, v3);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++#undef PEL_FUNC
++
++#define PEL_FUNC(w, vec, pi, n) PEL_FUNC_BI(pel_bi_pixels##w) { \
++    int y, shift = 14 + 1 - BIT_DEPTH; \
++    vec v0, v1, v2, v3, vzero = _mm_setzero_si##n(), vbias = _mm_set1_##pi##16(1 << (shift - 1));
++
++#define PEL_LD16(i) \
++    v1 = VEC_LD(src + i * 16); \
++    v0 = _mm_slli_epi16(_mm_unpacklo_epi8(v1, vzero), shift - 1); \
++    v1 = _mm_slli_epi16(_mm_unpackhi_epi8(v1, vzero), shift - 1); \
++    PEL_FIN_BI(src2 + i * 16, 8, v0, v1, v2, v3, o##i)
++
++PEL_FUNC(8, __m64, pi, 64)
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        v1 = *(__m64*)src;
++        v0 = _mm_slli_pi16(_mm_unpacklo_pi8(v1, vzero), shift - 1);
++        v1 = _mm_slli_pi16(_mm_unpackhi_pi8(v1, vzero), shift - 1);
++        PEL_FIN_BI8(src2, 4, v0, v1, v2, v3, v0)
++        *(__m64*)dst = v0;
++        src += srcstride;
++        dst += dststride;
++        src2 += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(16, __m128i, epi, 128)
++    __m128i o0;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        PEL_LD16(0)
++        VEC_ST(dst, o0);
++        src += srcstride;
++        dst += dststride;
++        src2 += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(32, __m128i, epi, 128)
++    __m128i o0, o1;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        PEL_LD16(0) PEL_LD16(1)
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        src += srcstride;
++        dst += dststride;
++        src2 += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(64, __m128i, epi, 128)
++    __m128i o0, o1, o2, o3;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        PEL_LD16(0) PEL_LD16(1) PEL_LD16(2) PEL_LD16(3)
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        VEC_ST(dst + 32, o2);
++        VEC_ST(dst + 48, o3);
++        src += srcstride;
++        dst += dststride;
++        src2 += MAX_PB_SIZE;
++    }
++}
++
++#undef PEL_FUNC
++#undef PEL_LD16
++
++#define PEL_FUNC(w, vec, pi, n) PEL_FUNC_UNI_W(pel_uni_w_pixels##w) { \
++    int y, shift = denom + 14 - BIT_DEPTH; \
++    vec v0, v1, v2, v3, v4, v5, vzero = _mm_setzero_si##n(); \
++    vec vbias = _mm_set1_##pi##32(1 << (shift - 1)); \
++    vec vwx = _mm_set1_##pi##16(wx), vox = _mm_set1_##pi##16(ox);
++
++#define PEL_LD16(i) \
++    v1 = VEC_LD(src + i * 16); \
++    v0 = _mm_slli_epi16(_mm_unpacklo_epi8(v1, vzero), 14 - BIT_DEPTH); \
++    v1 = _mm_slli_epi16(_mm_unpackhi_epi8(v1, vzero), 14 - BIT_DEPTH); \
++    PEL_FIN_UNI_W(v0, v1, v2, v3, v4, v5, o##i)
++
++PEL_FUNC(8, __m64, pi, 64)
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        v1 = *(__m64*)src;
++        v0 = _mm_slli_pi16(_mm_unpacklo_pi8(v1, vzero), 14 - BIT_DEPTH);
++        v1 = _mm_slli_pi16(_mm_unpackhi_pi8(v1, vzero), 14 - BIT_DEPTH);
++        PEL_FIN_UNI_W8(v0, v1, v2, v3, v4, v5, v0)
++        *(__m64*)dst = v0;
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(16, __m128i, epi, 128)
++    __m128i o0;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        PEL_LD16(0)
++        VEC_ST(dst, o0);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(32, __m128i, epi, 128)
++    __m128i o0, o1;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        PEL_LD16(0) PEL_LD16(1)
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(64, __m128i, epi, 128)
++    __m128i o0, o1, o2, o3;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        PEL_LD16(0) PEL_LD16(1) PEL_LD16(2) PEL_LD16(3)
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        VEC_ST(dst + 32, o2);
++        VEC_ST(dst + 48, o3);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++#undef PEL_FUNC
++#undef PEL_LD16
++
++#define EPEL_INIT_FILTER(m) \
++    filter = ff_hevc_epel_filters[m - 1]; \
++    f0 = _mm_set1_epi16(*(int16_t*)&filter[0]); \
++    f1 = _mm_set1_epi16(*(int16_t*)&filter[2]);
++
++#define QPEL_INIT_FILTER(m) \
++    filter = ff_hevc_qpel_filters[m - 1]; \
++    f0 = _mm_set1_epi16(*(int16_t*)&filter[0]); \
++    f1 = _mm_set1_epi16(*(int16_t*)&filter[2]); \
++    f2 = _mm_set1_epi16(*(int16_t*)&filter[4]); \
++    f3 = _mm_set1_epi16(*(int16_t*)&filter[6]);
++
++#define PEL_A4_0 \
++    v4 = _mm_alignr_pi8(v1, v0, 1); \
++    v6 = _mm_maddubs_pi16(v4, f0);
++
++#define PEL_A4(i, o0) \
++    v4 = _mm_alignr_pi8(v1, v0, (i * 4 + 1) & 7); \
++    o0 = _mm_add_pi16(v6, _mm_maddubs_pi16(v4, f##i));
++
++#define PEL_A8_0 \
++    v4 = _mm_alignr_pi8(v1, v0, 1); \
++    v5 = _mm_alignr_pi8(v2, v1, 1); \
++    v6 = _mm_maddubs_pi16(v4, f0); \
++    v7 = _mm_maddubs_pi16(v5, f0);
++
++#define PEL_A8(i, o0, o1) \
++    v4 = _mm_alignr_pi8(v1, v0, (i * 4 + 1) & 7); \
++    v5 = _mm_alignr_pi8(v2, v1, (i * 4 + 1) & 7); \
++    o0 = _mm_add_pi16(v6, _mm_maddubs_pi16(v4, f##i)); \
++    o1 = _mm_add_pi16(v7, _mm_maddubs_pi16(v5, f##i));
++
++#define PEL_A16_0 \
++    v4 = _mm_alignr_epi8(v3, v2, 1); \
++    v5 = _mm_alignr_epi8(v0, v3, 1); \
++    v6 = _mm_maddubs_epi16(v4, f0); \
++    v7 = _mm_maddubs_epi16(v5, f0);
++
++#define PEL_A16(i, o0, o1) \
++    v4 = _mm_alignr_epi8(v3, v2, i * 4 + 1); \
++    v5 = _mm_alignr_epi8(v0, v3, i * 4 + 1); \
++    o0 = _mm_add_epi16(v6, _mm_maddubs_epi16(v4, f##i)); \
++    o1 = _mm_add_epi16(v7, _mm_maddubs_epi16(v5, f##i));
++
++#define EPEL_LD8 \
++    filter = ff_hevc_epel_filters[mx - 1]; \
++    v0 = _mm_cvtsi32_si64(*(uint32_t*)filter); \
++    f0 = _mm_shuffle_pi16(v0, 0x00); \
++    f1 = _mm_shuffle_pi16(v0, 0x55); \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y++) { \
++        v1 = *(__m64*)(src - 1); \
++        v3 = _mm_cvtsi32_si64(*(uint32_t*)(src + 6)); \
++        v3 = _mm_srli_si64(v3, 8); \
++        v0 = _mm_unpacklo_pi8(v1, v1); \
++        v1 = _mm_unpackhi_pi8(v1, v1); \
++        v2 = _mm_unpacklo_pi8(v3, v3); \
++        PEL_A8_0 \
++        PEL_A8(1, v6, v7)
++
++#define EPEL_LD16 \
++    EPEL_INIT_FILTER(mx) \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y++) { \
++        v3 = VEC_LD(src - 1); \
++        v1 = _mm_cvtsi32_si128(*(uint32_t*)(src - 1 + 1 * 16 - 1)); \
++        v1 = _mm_bsrli_si128(v1, 1); \
++        v2 = _mm_unpacklo_epi8(v3, v3); \
++        v3 = _mm_unpackhi_epi8(v3, v3); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        PEL_X16(0)
++
++#define EPEL_LD32 \
++    EPEL_INIT_FILTER(mx) \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y++) { \
++        v3 = VEC_LD(src - 1); \
++        v1 = VEC_LD(src - 1 + 1 * 16); \
++        v2 = _mm_unpacklo_epi8(v3, v3); \
++        v3 = _mm_unpackhi_epi8(v3, v3); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        v1 = _mm_unpackhi_epi8(v1, v1); \
++        PEL_X16(0) \
++        v2 = v0; v3 = v1; \
++        v1 = _mm_cvtsi32_si128(*(uint32_t*)(src - 1 + 2 * 16 - 1)); \
++        v1 = _mm_bsrli_si128(v1, 1); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        PEL_X16(1)
++
++#define EPEL_LD64 \
++    EPEL_INIT_FILTER(mx) \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y++) { \
++        v3 = VEC_LD(src - 1); \
++        v1 = VEC_LD(src - 1 + 1 * 16); \
++        v2 = _mm_unpacklo_epi8(v3, v3); \
++        v3 = _mm_unpackhi_epi8(v3, v3); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        v1 = _mm_unpackhi_epi8(v1, v1); \
++        PEL_X16(0) \
++        v2 = v0; v3 = v1; \
++        v1 = VEC_LD(src - 1 + 2 * 16); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        v1 = _mm_unpackhi_epi8(v1, v1); \
++        PEL_X16(1) \
++        v2 = v0; v3 = v1; \
++        v1 = VEC_LD(src - 1 + 3 * 16); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        v1 = _mm_unpackhi_epi8(v1, v1); \
++        PEL_X16(2) \
++        v2 = v0; v3 = v1; \
++        v1 = _mm_cvtsi32_si128(*(uint32_t*)(src - 1 + 4 * 16 - 1)); \
++        v1 = _mm_bsrli_si128(v1, 1); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        PEL_X16(3)
++
++#define QPEL_LD8 \
++    filter = ff_hevc_qpel_filters[mx - 1]; \
++    v0 = *(__m64*)filter; \
++    f0 = _mm_shuffle_pi16(v0, 0x00); \
++    f1 = _mm_shuffle_pi16(v0, 0x55); \
++    f2 = _mm_shuffle_pi16(v0, 0xaa); \
++    f3 = _mm_shuffle_pi16(v0, 0xff); \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y++) { \
++        v1 = *(__m64*)(src - 3); \
++        v3 = *(__m64*)(src + 4); \
++        v3 = _mm_srli_si64(v3, 8); \
++        v0 = _mm_unpacklo_pi8(v1, v1); \
++        v1 = _mm_unpackhi_pi8(v1, v1); \
++        v2 = _mm_unpacklo_pi8(v3, v3); \
++        v3 = _mm_unpackhi_pi8(v3, v3); \
++        PEL_A8_0 \
++        PEL_A8(1, v6, v7) \
++        v0 = v1; v1 = v2; v2 = v3; \
++        PEL_A8(2, v6, v7) \
++        PEL_A8(3, v6, v7)
++
++#define QPEL_LD16 \
++    QPEL_INIT_FILTER(mx) \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y++) { \
++        v3 = VEC_LD(src - 3); \
++        v1 = VEC_LD8(src - 3 + 1 * 16 - 1); \
++        v1 = _mm_bsrli_si128(v1, 1); \
++        v2 = _mm_unpacklo_epi8(v3, v3); \
++        v3 = _mm_unpackhi_epi8(v3, v3); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        PEL_X16(0)
++
++#define QPEL_LD32 \
++    QPEL_INIT_FILTER(mx) \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y++) { \
++        v3 = VEC_LD(src - 3); \
++        v1 = VEC_LD(src - 3 + 1 * 16); \
++        v2 = _mm_unpacklo_epi8(v3, v3); \
++        v3 = _mm_unpackhi_epi8(v3, v3); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        v1 = _mm_unpackhi_epi8(v1, v1); \
++        PEL_X16(0) \
++        v2 = v0; v3 = v1; \
++        v1 = VEC_LD8(src - 3 + 2 * 16 - 1); \
++        v1 = _mm_bsrli_si128(v1, 1); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        PEL_X16(1)
++
++#define QPEL_LD64 \
++    QPEL_INIT_FILTER(mx) \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y++) { \
++        v3 = VEC_LD(src - 3); \
++        v1 = VEC_LD(src - 3 + 1 * 16); \
++        v2 = _mm_unpacklo_epi8(v3, v3); \
++        v3 = _mm_unpackhi_epi8(v3, v3); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        v1 = _mm_unpackhi_epi8(v1, v1); \
++        PEL_X16(0) \
++        v2 = v0; v3 = v1; \
++        v1 = VEC_LD(src - 3 + 2 * 16); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        v1 = _mm_unpackhi_epi8(v1, v1); \
++        PEL_X16(1) \
++        v2 = v0; v3 = v1; \
++        v1 = VEC_LD(src - 3 + 3 * 16); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        v1 = _mm_unpackhi_epi8(v1, v1); \
++        PEL_X16(2) \
++        v2 = v0; v3 = v1; \
++        v1 = VEC_LD8(src - 3 + 4 * 16 - 1); \
++        v1 = _mm_bsrli_si128(v1, 1); \
++        v0 = _mm_unpacklo_epi8(v1, v1); \
++        PEL_X16(3)
++
++#define PEL_FUNC(w, vec) PEL_FUNC_TMP(epel_h##w) { \
++    int y; const int8_t *filter; \
++    vec v0, v1, v2, v3, v4, v5, v6, v7; \
++    vec f0, f1;
++
++#define PEL_X16(i) \
++    PEL_A16_0 \
++    PEL_A16(1, l##i, h##i)
++
++PEL_FUNC(4, __m64)
++    filter = ff_hevc_epel_filters[mx - 1];
++    v0 = _mm_cvtsi32_si64(*(uint32_t*)filter);
++    f0 = _mm_shuffle_pi16(v0, 0x00);
++    f1 = _mm_shuffle_pi16(v0, 0x55);
++    (void)v2; (void)v3; (void)v5; (void)v7;
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < height; y++) {
++        v0 = _mm_cvtsi32_si64(*(uint32_t*)(src - 1));
++        v1 = _mm_cvtsi32_si64(*(uint32_t*)(src + 2));
++        v1 = _mm_srli_si64(v1, 8);
++        v0 = _mm_unpacklo_pi8(v0, v0);
++        v1 = _mm_unpacklo_pi8(v1, v1);
++        PEL_A4_0
++        PEL_A4(1, v6)
++        *(__m64*)dst = v6;
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(8, __m64)
++    EPEL_LD8
++        *(__m64*)dst = v6; *(__m64*)(dst + 4) = v7;
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(16, __m128i)
++    __m128i l0, h0;
++    EPEL_LD16
++        VEC_ST(dst, l0); VEC_ST(dst + 8, h0);
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(32, __m128i)
++    __m128i l0, h0, l1, h1;
++    EPEL_LD32
++        VEC_ST(dst, l0); VEC_ST(dst + 8, h0);
++        VEC_ST(dst + 16, l1); VEC_ST(dst + 24, h1);
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(64, __m128i)
++    __m128i l0, h0, l1, h1, l2, h2, l3, h3;
++    EPEL_LD64
++        VEC_ST(dst, l0); VEC_ST(dst + 8, h0);
++        VEC_ST(dst + 16, l1); VEC_ST(dst + 24, h1);
++        VEC_ST(dst + 32, l2); VEC_ST(dst + 40, h2);
++        VEC_ST(dst + 48, l3); VEC_ST(dst + 56, h3);
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++#undef PEL_FUNC
++#undef PEL_X16
++
++#define PEL_FUNC(w, vec) PEL_FUNC_TMP(qpel_h##w) { \
++    int y; const int8_t *filter; \
++    vec v0, v1, v2, v3, v4, v5, v6, v7; \
++    vec f0, f1, f2, f3;
++
++#define PEL_X16(i) \
++    PEL_A16_0 \
++    PEL_A16(1, v6, v7) \
++    PEL_A16(2, v6, v7) \
++    PEL_A16(3, l##i, h##i)
++
++PEL_FUNC(8, __m64)
++    QPEL_LD8
++        *(__m64*)dst = v6; *(__m64*)(dst + 4) = v7;
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(16, __m128i)
++    __m128i l0, h0;
++    QPEL_LD16
++        VEC_ST(dst, l0); VEC_ST(dst + 8, h0);
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(32, __m128i)
++    __m128i l0, h0, l1, h1;
++    QPEL_LD32
++        VEC_ST(dst, l0); VEC_ST(dst + 8, h0);
++        VEC_ST(dst + 16, l1); VEC_ST(dst + 24, h1);
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(64, __m128i)
++    __m128i l0, h0, l1, h1, l2, h2, l3, h3;
++    QPEL_LD64
++        VEC_ST(dst, l0); VEC_ST(dst + 8, h0);
++        VEC_ST(dst + 16, l1); VEC_ST(dst + 24, h1);
++        VEC_ST(dst + 32, l2); VEC_ST(dst + 40, h2);
++        VEC_ST(dst + 48, l3); VEC_ST(dst + 56, h3);
++        src += srcstride;
++        dst += MAX_PB_SIZE;
++    }
++}
++
++#undef PEL_FUNC
++#undef PEL_X16
++
++#define PEL_FUNC(w, vec, pi) PEL_FUNC_UNI(epel_uni_h##w) { \
++    int y, shift = 14 - BIT_DEPTH; \
++    const int8_t *filter; \
++    vec v0, v1, v2, v3, v4, v5, v6, v7; \
++    vec f0, f1, vbias = _mm_set1_##pi##16(1 << (shift - 1));
++
++#define PEL_X16(i) \
++    PEL_A16_0 \
++    PEL_A16(1, v6, v7) \
++    PEL_FIN_UNI(v6, v7, o##i)
++
++PEL_FUNC(8, __m64, pi)
++    EPEL_LD8
++        PEL_FIN_UNI8(v6, v7, v6)
++        *(__m64*)dst = v6;
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(16, __m128i, epi)
++    __m128i o0;
++    EPEL_LD16
++        VEC_ST(dst, o0);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(32, __m128i, epi)
++    __m128i o0, o1;
++    EPEL_LD32
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(64, __m128i, epi)
++    __m128i o0, o1, o2, o3;
++    EPEL_LD64
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        VEC_ST(dst + 32, o2);
++        VEC_ST(dst + 48, o3);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++#undef PEL_FUNC
++#undef PEL_X16
++
++#define PEL_FUNC(w, vec, pi) PEL_FUNC_UNI(qpel_uni_h##w) { \
++    int y, shift = 14 - BIT_DEPTH; \
++    const int8_t *filter; \
++    vec v0, v1, v2, v3, v4, v5, v6, v7; \
++    vec f0, f1, f2, f3, vbias = _mm_set1_##pi##16(1 << (shift - 1));
++
++#define PEL_X16(i) \
++    PEL_A16_0 \
++    PEL_A16(1, v6, v7) \
++    PEL_A16(2, v6, v7) \
++    PEL_A16(3, v6, v7) \
++    PEL_FIN_UNI(v6, v7, o##i)
++
++PEL_FUNC(8, __m64, pi)
++    QPEL_LD8
++        PEL_FIN_UNI8(v6, v7, v6)
++        *(__m64*)dst = v6;
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(16, __m128i, epi)
++    __m128i o0;
++    QPEL_LD16
++        VEC_ST(dst, o0);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(32, __m128i, epi)
++    __m128i o0, o1;
++    QPEL_LD32
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(64, __m128i, epi)
++    __m128i o0, o1, o2, o3;
++    QPEL_LD64
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        VEC_ST(dst + 32, o2);
++        VEC_ST(dst + 48, o3);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++#undef PEL_FUNC
++#undef PEL_X16
++
++#define PEL_FUNC(w) PEL_FUNC_BI(epel_bi_h##w) { \
++    int y, shift = 14 + 1 - BIT_DEPTH; \
++    const int8_t *filter; \
++    __m128i v0, v1, v2, v3, v4, v5, v6, v7; \
++    __m128i f0, f1, vbias = _mm_set1_epi16(1 << (shift - 1));
++
++#define PEL_X16(i) \
++    PEL_A16_0 \
++    PEL_A16(1, v6, v7) \
++    PEL_FIN_BI(src2 + i * 16, 8, v6, v7, v2, v3, o##i)
++
++PEL_FUNC(16)
++    __m128i o0;
++    EPEL_LD16
++        VEC_ST(dst, o0);
++        src += srcstride;
++        dst += dststride;
++        src2 += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(32)
++    __m128i o0, o1;
++    EPEL_LD32
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        src += srcstride;
++        dst += dststride;
++        src2 += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(64)
++    __m128i o0, o1, o2, o3;
++    EPEL_LD64
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        VEC_ST(dst + 32, o2);
++        VEC_ST(dst + 48, o3);
++        src += srcstride;
++        dst += dststride;
++        src2 += MAX_PB_SIZE;
++    }
++}
++
++#undef PEL_FUNC
++#undef PEL_X16
++
++#define PEL_FUNC(w) PEL_FUNC_BI(qpel_bi_h##w) { \
++    int y, shift = 14 + 1 - BIT_DEPTH; \
++    const int8_t *filter; \
++    __m128i v0, v1, v2, v3, v4, v5, v6, v7; \
++    __m128i f0, f1, f2, f3, vbias = _mm_set1_epi16(1 << (shift - 1));
++
++#define PEL_X16(i) \
++    PEL_A16_0 \
++    PEL_A16(1, v6, v7) \
++    PEL_A16(2, v6, v7) \
++    PEL_A16(3, v6, v7) \
++    PEL_FIN_BI(src2 + i * 16, 8, v6, v7, v2, v3, o##i)
++
++PEL_FUNC(16)
++    __m128i o0;
++    QPEL_LD16
++        VEC_ST(dst, o0);
++        src += srcstride;
++        dst += dststride;
++        src2 += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(32)
++    __m128i o0, o1;
++    QPEL_LD32
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        src += srcstride;
++        dst += dststride;
++        src2 += MAX_PB_SIZE;
++    }
++}
++
++PEL_FUNC(64)
++    __m128i o0, o1, o2, o3;
++    QPEL_LD64
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        VEC_ST(dst + 32, o2);
++        VEC_ST(dst + 48, o3);
++        src += srcstride;
++        dst += dststride;
++        src2 += MAX_PB_SIZE;
++    }
++}
++
++#undef PEL_FUNC
++#undef PEL_X16
++
++#define PEL_FUNC(w, vec, pi) PEL_FUNC_UNI_W(epel_uni_w_h##w) { \
++    int y, shift = denom + 14 - BIT_DEPTH; \
++    const int8_t *filter; \
++    vec v0, v1, v2, v3, v4, v5, v6, v7; \
++    vec f0, f1, vbias = _mm_set1_##pi##32(1 << (shift - 1)); \
++    vec vwx = _mm_set1_##pi##16(wx), vox = _mm_set1_##pi##16(ox);
++
++#define PEL_X16(i) \
++    PEL_A16_0 \
++    PEL_A16(1, v6, v7) \
++    PEL_FIN_UNI_W(v6, v7, v2, v3, v4, v5, o##i)
++
++PEL_FUNC(8, __m64, pi)
++    EPEL_LD8
++        PEL_FIN_UNI_W8(v6, v7, v2, v3, v4, v5, v6)
++        *(__m64*)dst = v6;
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(16, __m128i, epi)
++    __m128i o0;
++    EPEL_LD16
++        VEC_ST(dst, o0);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(32, __m128i, epi)
++    __m128i o0, o1;
++    EPEL_LD32
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(64, __m128i, epi)
++    __m128i o0, o1, o2, o3;
++    EPEL_LD64
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        VEC_ST(dst + 32, o2);
++        VEC_ST(dst + 48, o3);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++#undef PEL_FUNC
++#undef PEL_X16
++
++#define PEL_FUNC(w, vec, pi) PEL_FUNC_UNI_W(qpel_uni_w_h##w) { \
++    int y, shift = denom + 14 - BIT_DEPTH; \
++    const int8_t *filter; \
++    vec v0, v1, v2, v3, v4, v5, v6, v7; \
++    vec f0, f1, f2, f3, vbias = _mm_set1_##pi##32(1 << (shift - 1)); \
++    vec vwx = _mm_set1_##pi##16(wx), vox = _mm_set1_##pi##16(ox);
++
++#define PEL_X16(i) \
++    PEL_A16_0 \
++    PEL_A16(1, v6, v7) \
++    PEL_A16(2, v6, v7) \
++    PEL_A16(3, v6, v7) \
++    PEL_FIN_UNI_W(v6, v7, v2, v3, v4, v5, o##i)
++
++PEL_FUNC(8, __m64, pi)
++    QPEL_LD8
++        PEL_FIN_UNI_W8(v6, v7, v2, v3, v4, v5, v6)
++        *(__m64*)dst = v6;
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(16, __m128i, epi)
++    __m128i o0;
++    QPEL_LD16
++        VEC_ST(dst, o0);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(32, __m128i, epi)
++    __m128i o0, o1;
++    QPEL_LD32
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++PEL_FUNC(64, __m128i, epi)
++    __m128i o0, o1, o2, o3;
++    QPEL_LD64
++        VEC_ST(dst, o0);
++        VEC_ST(dst + 16, o1);
++        VEC_ST(dst + 32, o2);
++        VEC_ST(dst + 48, o3);
++        src += srcstride;
++        dst += dststride;
++    }
++}
++
++#undef PEL_FUNC
++#undef PEL_X16
++
++#undef PEL_A4_0
++#undef PEL_A4
++#undef PEL_A8_0
++#undef PEL_A8
++#undef PEL_A16_0
++#undef PEL_A16
++#undef EPEL_LD8
++#undef EPEL_LD16
++#undef EPEL_LD32
++#undef EPEL_LD64
++#undef QPEL_LD8
++#undef QPEL_LD16
++#undef QPEL_LD32
++#undef QPEL_LD64
++
++#define EPEL_V_INIT \
++    int x, y; const int8_t *filter; \
++    __m128i a0, a1, a2, a3; \
++    __m128i b0, b1, b2, b3; \
++    __m128i v0, v1, v2, v3, v4, v5; \
++    __m128i f0, f1; \
++    EPEL_INIT_FILTER(my)
++
++#define EPEL_V \
++    v1 = VEC_LD(src1 - srcstride); \
++    v2 = VEC_LD(src1); \
++    v0 = VEC_LD(src1 + srcstride); \
++    a0 = _mm_unpacklo_epi8(v1, v2); \
++    a1 = _mm_unpackhi_epi8(v1, v2); \
++    b0 = _mm_unpacklo_epi8(v2, v0); \
++    b1 = _mm_unpackhi_epi8(v2, v0); \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y += 2) { \
++        v1 = VEC_LD(src1 + 2 * srcstride); \
++        v2 = VEC_LD(src1 + 3 * srcstride); \
++        src1 += srcstride << 1; \
++        a2 = _mm_unpacklo_epi8(v0, v1); \
++        a3 = _mm_unpackhi_epi8(v0, v1); \
++        b2 = _mm_unpacklo_epi8(v1, v2); \
++        b3 = _mm_unpackhi_epi8(v1, v2); \
++        v0 = v2; \
++        v2 = _mm_maddubs_epi16(a0, f0); \
++        v3 = _mm_maddubs_epi16(a1, f0); \
++        v4 = _mm_maddubs_epi16(b0, f0); \
++        v5 = _mm_maddubs_epi16(b1, f0); \
++        v2 = _mm_add_epi16(v2, _mm_maddubs_epi16(a2, f1)); \
++        v3 = _mm_add_epi16(v3, _mm_maddubs_epi16(a3, f1)); \
++        v4 = _mm_add_epi16(v4, _mm_maddubs_epi16(b2, f1)); \
++        v5 = _mm_add_epi16(v5, _mm_maddubs_epi16(b3, f1)); \
++        a0 = a2; a1 = a3; \
++        b0 = b2; b1 = b3;
++
++#define QPEL_V_INIT \
++    int x, y; const int8_t *filter; \
++    __m128i a0, a1, a2, a3, a4, a5, a6, a7; \
++    __m128i b0, b1, b2, b3, b4, b5, b6, b7; \
++    __m128i v0, v1, v2, v3, v4, v5; \
++    __m128i f0, f1, f2, f3; \
++    QPEL_INIT_FILTER(my)
++
++#define QPEL_V \
++    v0 = VEC_LD(src1 - 3 * srcstride); \
++    v1 = VEC_LD(src1 - 2 * srcstride); \
++    v2 = VEC_LD(src1 - srcstride); \
++    a0 = _mm_unpacklo_epi8(v0, v1); \
++    a1 = _mm_unpackhi_epi8(v0, v1); \
++    v0 = VEC_LD(src1); \
++    b0 = _mm_unpacklo_epi8(v1, v2); \
++    b1 = _mm_unpackhi_epi8(v1, v2); \
++    v1 = VEC_LD(src1 + srcstride); \
++    a2 = _mm_unpacklo_epi8(v2, v0); \
++    a3 = _mm_unpackhi_epi8(v2, v0); \
++    v2 = VEC_LD(src1 + 2 * srcstride); \
++    b2 = _mm_unpacklo_epi8(v0, v1); \
++    b3 = _mm_unpackhi_epi8(v0, v1); \
++    v0 = VEC_LD(src1 + 3 * srcstride); \
++    a4 = _mm_unpacklo_epi8(v1, v2); \
++    a5 = _mm_unpackhi_epi8(v1, v2); \
++    b4 = _mm_unpacklo_epi8(v2, v0); \
++    b5 = _mm_unpackhi_epi8(v2, v0); \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y += 2) { \
++        v1 = VEC_LD(src1 + 4 * srcstride); \
++        v2 = VEC_LD(src1 + 5 * srcstride); \
++        src1 += srcstride << 1; \
++        a6 = _mm_unpacklo_epi8(v0, v1); \
++        a7 = _mm_unpackhi_epi8(v0, v1); \
++        b6 = _mm_unpacklo_epi8(v1, v2); \
++        b7 = _mm_unpackhi_epi8(v1, v2); \
++        v0 = v2; \
++        v2 = _mm_maddubs_epi16(a0, f0); \
++        v3 = _mm_maddubs_epi16(a1, f0); \
++        v4 = _mm_maddubs_epi16(b0, f0); \
++        v5 = _mm_maddubs_epi16(b1, f0); \
++        v2 = _mm_add_epi16(v2, _mm_maddubs_epi16(a2, f1)); \
++        v3 = _mm_add_epi16(v3, _mm_maddubs_epi16(a3, f1)); \
++        v4 = _mm_add_epi16(v4, _mm_maddubs_epi16(b2, f1)); \
++        v5 = _mm_add_epi16(v5, _mm_maddubs_epi16(b3, f1)); \
++        v2 = _mm_add_epi16(v2, _mm_maddubs_epi16(a4, f2)); \
++        v3 = _mm_add_epi16(v3, _mm_maddubs_epi16(a5, f2)); \
++        v4 = _mm_add_epi16(v4, _mm_maddubs_epi16(b4, f2)); \
++        v5 = _mm_add_epi16(v5, _mm_maddubs_epi16(b5, f2)); \
++        v2 = _mm_add_epi16(v2, _mm_maddubs_epi16(a6, f3)); \
++        v3 = _mm_add_epi16(v3, _mm_maddubs_epi16(a7, f3)); \
++        v4 = _mm_add_epi16(v4, _mm_maddubs_epi16(b6, f3)); \
++        v5 = _mm_add_epi16(v5, _mm_maddubs_epi16(b7, f3)); \
++        a0 = a2; a1 = a3; a2 = a4; a3 = a5; a4 = a6; a5 = a7; \
++        b0 = b2; b1 = b3; b2 = b4; b3 = b5; b4 = b6; b5 = b7;
++
++PEL_FUNC_TMP(epel_v) {
++    uint8_t *src1; int16_t *dst1;
++    EPEL_V_INIT
++    for (x = 0; x < (width & -16); x += 16, src += 16, dst += 16) {
++        src1 = src; dst1 = dst;
++        EPEL_V
++            VEC_ST(dst1, v2); VEC_ST(dst1 + 8, v3);
++            VEC_ST(dst1 + MAX_PB_SIZE, v4);
++            VEC_ST(dst1 + MAX_PB_SIZE + 8, v5);
++            dst1 += MAX_PB_SIZE << 1;
++        }
++    }
++}
++
++PEL_FUNC_TMP(qpel_v) {
++    uint8_t *src1; int16_t *dst1;
++    QPEL_V_INIT
++    for (x = 0; x < (width & -16); x += 16, src += 16, dst += 16) {
++        src1 = src; dst1 = dst;
++        QPEL_V
++            VEC_ST(dst1, v2); VEC_ST(dst1 + 8, v3);
++            VEC_ST(dst1 + MAX_PB_SIZE, v4);
++            VEC_ST(dst1 + MAX_PB_SIZE + 8, v5);
++            dst1 += MAX_PB_SIZE << 1;
++        }
++    }
++}
++
++PEL_FUNC_UNI(epel_uni_v) {
++    int shift = 14 - BIT_DEPTH;
++    __m128i vbias = _mm_set1_epi16(1 << (shift - 1));
++    uint8_t *src1, *dst1;
++    EPEL_V_INIT
++    for (x = 0; x < (width & -16); x += 16, src += 16, dst += 16) {
++        src1 = src; dst1 = dst;
++        EPEL_V
++            PEL_FIN_UNI(v2, v3, v2)
++            PEL_FIN_UNI(v4, v5, v4)
++            VEC_ST(dst1, v2);
++            VEC_ST(dst1 + dststride, v4);
++            dst1 += dststride << 1;
++        }
++    }
++}
++
++PEL_FUNC_UNI(qpel_uni_v) {
++    int shift = 14 - BIT_DEPTH;
++    __m128i vbias = _mm_set1_epi16(1 << (shift - 1));
++    uint8_t *src1, *dst1;
++    QPEL_V_INIT
++    for (x = 0; x < (width & -16); x += 16, src += 16, dst += 16) {
++        src1 = src; dst1 = dst;
++        QPEL_V
++            PEL_FIN_UNI(v2, v3, v2)
++            PEL_FIN_UNI(v4, v5, v4)
++            VEC_ST(dst1, v2);
++            VEC_ST(dst1 + dststride, v4);
++            dst1 += dststride << 1;
++        }
++    }
++}
++
++PEL_FUNC_BI(epel_bi_v) {
++    int shift = 14 + 1 - BIT_DEPTH;
++    __m128i vbias = _mm_set1_epi16(1 << (shift - 1));
++    uint8_t *src1, *dst1; int16_t *src3;
++    EPEL_V_INIT
++    for (x = 0; x < (width & -16); x += 16, src += 16, dst += 16, src2 += 16) {
++        src1 = src; dst1 = dst; src3 = src2;
++        EPEL_V
++            PEL_FIN_BI(src3, 8, v2, v3, a2, a3, v2)
++            PEL_FIN_BI(src3 + MAX_PB_SIZE, 8, v4, v5, b2, b3, v4)
++            VEC_ST(dst1, v2);
++            VEC_ST(dst1 + dststride, v4);
++            dst1 += dststride << 1;
++            src3 += MAX_PB_SIZE << 1;
++        }
++    }
++}
++
++PEL_FUNC_BI(qpel_bi_v) {
++    int shift = 14 + 1 - BIT_DEPTH;
++    __m128i vbias = _mm_set1_epi16(1 << (shift - 1));
++    uint8_t *src1, *dst1; int16_t *src3;
++    QPEL_V_INIT
++    for (x = 0; x < (width & -16); x += 16, src += 16, dst += 16, src2 += 16) {
++        src1 = src; dst1 = dst; src3 = src2;
++        QPEL_V
++            PEL_FIN_BI(src3, 8, v2, v3, a6, a7, v2)
++            PEL_FIN_BI(src3 + MAX_PB_SIZE, 8, v4, v5, b6, b7, v4)
++            VEC_ST(dst1, v2);
++            VEC_ST(dst1 + dststride, v4);
++            dst1 += dststride << 1;
++            src3 += MAX_PB_SIZE << 1;
++        }
++    }
++}
++
++PEL_FUNC_UNI_W(epel_uni_w_v) {
++    int shift = denom + 14 - BIT_DEPTH;
++    __m128i vbias = _mm_set1_epi32(1 << (shift - 1));
++    __m128i vwx = _mm_set1_epi16(wx), vox = _mm_set1_epi16(ox);
++    uint8_t *src1, *dst1;
++    EPEL_V_INIT
++    for (x = 0; x < (width & -16); x += 16, src += 16, dst += 16) {
++        src1 = src; dst1 = dst;
++        EPEL_V
++            PEL_FIN_UNI_W(v2, v3, a2, a3, b2, b3, v2)
++            PEL_FIN_UNI_W(v4, v5, a2, a3, b2, b3, v4)
++            VEC_ST(dst1, v2);
++            VEC_ST(dst1 + dststride, v4);
++            dst1 += dststride << 1;
++        }
++    }
++}
++
++PEL_FUNC_UNI_W(qpel_uni_w_v) {
++    int shift = denom + 14 - BIT_DEPTH;
++    __m128i vbias = _mm_set1_epi32(1 << (shift - 1));
++    __m128i vwx = _mm_set1_epi16(wx), vox = _mm_set1_epi16(ox);
++    uint8_t *src1, *dst1;
++    QPEL_V_INIT
++    for (x = 0; x < (width & -16); x += 16, src += 16, dst += 16) {
++        src1 = src; dst1 = dst;
++        QPEL_V
++            PEL_FIN_UNI_W(v2, v3, a6, a7, b6, b7, v2)
++            PEL_FIN_UNI_W(v4, v5, a6, a7, b6, b7, v4)
++            VEC_ST(dst1, v2);
++            VEC_ST(dst1 + dststride, v4);
++            dst1 += dststride << 1;
++        }
++    }
++}
++
++#undef EPEL_V_INIT
++#undef EPEL_V
++#undef QPEL_V_INIT
++#undef QPEL_V
++
++#define EPEL_HV4_INIT \
++    int y; const int8_t *filter; \
++    DECLARE_ALIGNED(16, int16_t, tmp_array)[(MAX_PB_SIZE + 3) * MAX_PB_SIZE]; \
++    int16_t *tmp = tmp_array; \
++    __m64 a0, a1, a2, a3; \
++    __m64 b0, b1, b2, b3; \
++    __m64 v0, v1, v2, v3, v4, v5; \
++    __m64 f0, f1; \
++    \
++    src -= srcstride; \
++    put_hevc_epel_h4_8_e2k(tmp, src, srcstride, height + 3, mx, my, width);\
++    \
++    filter = ff_hevc_epel_filters[my - 1]; \
++    v0 = _mm_cvtsi32_si64(*(uint32_t*)filter); \
++    v0 = _mm_srai_pi16(_mm_unpacklo_pi8(v0, v0), 8); \
++    f0 = _mm_unpacklo_pi32(v0, v0); \
++    f1 = _mm_unpackhi_pi32(v0, v0); \
++    \
++    tmp = tmp_array + MAX_PB_SIZE;
++
++#define EPEL_HV4 \
++    v1 = *(__m64*)(tmp - MAX_PB_SIZE); \
++    v2 = *(__m64*)(tmp); \
++    v0 = *(__m64*)(tmp + MAX_PB_SIZE); \
++    a0 = _mm_unpacklo_pi16(v1, v2); \
++    a1 = _mm_unpackhi_pi16(v1, v2); \
++    b0 = _mm_unpacklo_pi16(v2, v0); \
++    b1 = _mm_unpackhi_pi16(v2, v0); \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y += 2) { \
++        v1 = *(__m64*)(tmp + 2 * MAX_PB_SIZE); \
++        v2 = *(__m64*)(tmp + 3 * MAX_PB_SIZE); \
++        tmp += MAX_PB_SIZE << 1; \
++        a2 = _mm_unpacklo_pi16(v0, v1); \
++        a3 = _mm_unpackhi_pi16(v0, v1); \
++        b2 = _mm_unpacklo_pi16(v1, v2); \
++        b3 = _mm_unpackhi_pi16(v1, v2); \
++        v0 = v2; \
++        v2 = _mm_madd_pi16(a0, f0); \
++        v3 = _mm_madd_pi16(a1, f0); \
++        v4 = _mm_madd_pi16(b0, f0); \
++        v5 = _mm_madd_pi16(b1, f0); \
++        v2 = _mm_add_pi32(v2, _mm_madd_pi16(a2, f1)); \
++        v3 = _mm_add_pi32(v3, _mm_madd_pi16(a3, f1)); \
++        v4 = _mm_add_pi32(v4, _mm_madd_pi16(b2, f1)); \
++        v5 = _mm_add_pi32(v5, _mm_madd_pi16(b3, f1)); \
++        a0 = a2; a1 = a3; \
++        b0 = b2; b1 = b3; \
++        v2 = _mm_packs_pi32(_mm_srai_pi32(v2, 6), _mm_srai_pi32(v3, 6)); \
++        v4 = _mm_packs_pi32(_mm_srai_pi32(v4, 6), _mm_srai_pi32(v5, 6));
++
++#define EPEL_HV_INIT \
++    int x, y; const int8_t *filter; \
++    DECLARE_ALIGNED(16, int16_t, tmp_array)[(MAX_PB_SIZE + 3) * MAX_PB_SIZE]; \
++    int16_t *tmp1, *tmp = tmp_array; \
++    __m128i a0, a1, a2, a3; \
++    __m128i b0, b1, b2, b3; \
++    __m128i v0, v1, v2, v3, v4, v5; \
++    __m128i f0, f1; \
++    \
++    src -= srcstride; \
++    switch (width) { \
++        case 8: put_hevc_epel_h8_8_e2k(tmp, src, srcstride, height + 3, mx, my, width); break; \
++        case 16: put_hevc_epel_h16_8_e2k(tmp, src, srcstride, height + 3, mx, my, width); break; \
++        case 32: put_hevc_epel_h32_8_e2k(tmp, src, srcstride, height + 3, mx, my, width); break; \
++        default: put_hevc_epel_h64_8_e2k(tmp, src, srcstride, height + 3, mx, my, width);    \
++    } \
++    \
++    filter = ff_hevc_epel_filters[my - 1]; \
++    v0 = _mm_cvtsi32_si128(*(uint32_t*)filter); \
++    v0 = _mm_srai_epi16(_mm_unpacklo_epi8(v0, v0), 8); \
++    f0 = _mm_shuffle_epi32(v0, 0x00); \
++    f1 = _mm_shuffle_epi32(v0, 0x55); \
++    \
++    tmp = tmp_array + MAX_PB_SIZE;
++
++#define EPEL_HV \
++    v1 = VEC_LD(tmp1 - MAX_PB_SIZE); \
++    v2 = VEC_LD(tmp1); \
++    v0 = VEC_LD(tmp1 + MAX_PB_SIZE); \
++    a0 = _mm_unpacklo_epi16(v1, v2); \
++    a1 = _mm_unpackhi_epi16(v1, v2); \
++    b0 = _mm_unpacklo_epi16(v2, v0); \
++    b1 = _mm_unpackhi_epi16(v2, v0); \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y += 2) { \
++        v1 = VEC_LD(tmp1 + 2 * MAX_PB_SIZE); \
++        v2 = VEC_LD(tmp1 + 3 * MAX_PB_SIZE); \
++        tmp1 += MAX_PB_SIZE << 1; \
++        a2 = _mm_unpacklo_epi16(v0, v1); \
++        a3 = _mm_unpackhi_epi16(v0, v1); \
++        b2 = _mm_unpacklo_epi16(v1, v2); \
++        b3 = _mm_unpackhi_epi16(v1, v2); \
++        v0 = v2; \
++        v2 = _mm_madd_epi16(a0, f0); \
++        v3 = _mm_madd_epi16(a1, f0); \
++        v4 = _mm_madd_epi16(b0, f0); \
++        v5 = _mm_madd_epi16(b1, f0); \
++        v2 = _mm_add_epi32(v2, _mm_madd_epi16(a2, f1)); \
++        v3 = _mm_add_epi32(v3, _mm_madd_epi16(a3, f1)); \
++        v4 = _mm_add_epi32(v4, _mm_madd_epi16(b2, f1)); \
++        v5 = _mm_add_epi32(v5, _mm_madd_epi16(b3, f1)); \
++        a0 = a2; a1 = a3; \
++        b0 = b2; b1 = b3; \
++        v2 = _mm_packs_epi32(_mm_srai_epi32(v2, 6), _mm_srai_epi32(v3, 6)); \
++        v4 = _mm_packs_epi32(_mm_srai_epi32(v4, 6), _mm_srai_epi32(v5, 6));
++
++#define QPEL_HV_INIT \
++    int x, y; const int8_t *filter; \
++    DECLARE_ALIGNED(16, int16_t, tmp_array)[(MAX_PB_SIZE + 7) * MAX_PB_SIZE]; \
++    int16_t *tmp1, *tmp = tmp_array; \
++    __m128i a0, a1, a2, a3, a4, a5, a6, a7; \
++    __m128i b0, b1, b2, b3, b4, b5, b6, b7; \
++    __m128i v0, v1, v2, v3, v4, v5; \
++    __m128i f0, f1, f2, f3; \
++    \
++    src -= 3 * srcstride; \
++    switch (width) { \
++        case 8: put_hevc_qpel_h8_8_e2k(tmp, src, srcstride, height + 7, mx, my, width); break; \
++        case 16: put_hevc_qpel_h16_8_e2k(tmp, src, srcstride, height + 7, mx, my, width); break; \
++        case 32: put_hevc_qpel_h32_8_e2k(tmp, src, srcstride, height + 7, mx, my, width); break; \
++        default: put_hevc_qpel_h64_8_e2k(tmp, src, srcstride, height + 7, mx, my, width);    \
++    } \
++    \
++    filter = ff_hevc_qpel_filters[my - 1]; \
++    v0 = VEC_LD8(filter); \
++    v0 = _mm_srai_epi16(_mm_unpacklo_epi8(v0, v0), 8); \
++    f0 = _mm_shuffle_epi32(v0, 0x00); \
++    f1 = _mm_shuffle_epi32(v0, 0x55); \
++    f2 = _mm_shuffle_epi32(v0, 0xaa); \
++    f3 = _mm_shuffle_epi32(v0, 0xff); \
++    \
++    tmp = tmp_array + 3 * MAX_PB_SIZE;
++
++#define QPEL_HV \
++    v0 = VEC_LD(tmp1 - 3 * MAX_PB_SIZE); \
++    v1 = VEC_LD(tmp1 - 2 * MAX_PB_SIZE); \
++    v2 = VEC_LD(tmp1 - MAX_PB_SIZE); \
++    a0 = _mm_unpacklo_epi16(v0, v1); \
++    a1 = _mm_unpackhi_epi16(v0, v1); \
++    v0 = VEC_LD(tmp1); \
++    b0 = _mm_unpacklo_epi16(v1, v2); \
++    b1 = _mm_unpackhi_epi16(v1, v2); \
++    v1 = VEC_LD(tmp1 + MAX_PB_SIZE); \
++    a2 = _mm_unpacklo_epi16(v2, v0); \
++    a3 = _mm_unpackhi_epi16(v2, v0); \
++    v2 = VEC_LD(tmp1 + 2 * MAX_PB_SIZE); \
++    b2 = _mm_unpacklo_epi16(v0, v1); \
++    b3 = _mm_unpackhi_epi16(v0, v1); \
++    v0 = VEC_LD(tmp1 + 3 * MAX_PB_SIZE); \
++    a4 = _mm_unpacklo_epi16(v1, v2); \
++    a5 = _mm_unpackhi_epi16(v1, v2); \
++    b4 = _mm_unpacklo_epi16(v2, v0); \
++    b5 = _mm_unpackhi_epi16(v2, v0); \
++    PRAGMA_E2K("ivdep") \
++    for (y = 0; y < height; y += 2) { \
++        v1 = VEC_LD(tmp1 + 4 * MAX_PB_SIZE); \
++        v2 = VEC_LD(tmp1 + 5 * MAX_PB_SIZE); \
++        tmp1 += MAX_PB_SIZE << 1; \
++        a6 = _mm_unpacklo_epi16(v0, v1); \
++        a7 = _mm_unpackhi_epi16(v0, v1); \
++        b6 = _mm_unpacklo_epi16(v1, v2); \
++        b7 = _mm_unpackhi_epi16(v1, v2); \
++        v0 = v2; \
++        v2 = _mm_madd_epi16(a0, f0); \
++        v3 = _mm_madd_epi16(a1, f0); \
++        v4 = _mm_madd_epi16(b0, f0); \
++        v5 = _mm_madd_epi16(b1, f0); \
++        v2 = _mm_add_epi32(v2, _mm_madd_epi16(a2, f1)); \
++        v3 = _mm_add_epi32(v3, _mm_madd_epi16(a3, f1)); \
++        v4 = _mm_add_epi32(v4, _mm_madd_epi16(b2, f1)); \
++        v5 = _mm_add_epi32(v5, _mm_madd_epi16(b3, f1)); \
++        v2 = _mm_add_epi32(v2, _mm_madd_epi16(a4, f2)); \
++        v3 = _mm_add_epi32(v3, _mm_madd_epi16(a5, f2)); \
++        v4 = _mm_add_epi32(v4, _mm_madd_epi16(b4, f2)); \
++        v5 = _mm_add_epi32(v5, _mm_madd_epi16(b5, f2)); \
++        v2 = _mm_add_epi32(v2, _mm_madd_epi16(a6, f3)); \
++        v3 = _mm_add_epi32(v3, _mm_madd_epi16(a7, f3)); \
++        v4 = _mm_add_epi32(v4, _mm_madd_epi16(b6, f3)); \
++        v5 = _mm_add_epi32(v5, _mm_madd_epi16(b7, f3)); \
++        a0 = a2; a1 = a3; a2 = a4; a3 = a5; a4 = a6; a5 = a7; \
++        b0 = b2; b1 = b3; b2 = b4; b3 = b5; b4 = b6; b5 = b7; \
++        v2 = _mm_packs_epi32(_mm_srai_epi32(v2, 6), _mm_srai_epi32(v3, 6)); \
++        v4 = _mm_packs_epi32(_mm_srai_epi32(v4, 6), _mm_srai_epi32(v5, 6));
++
++PEL_FUNC_TMP(epel_hv) {
++    int16_t *dst1;
++    EPEL_HV_INIT
++    for (x = 0; x < (width & -8); x += 8, tmp += 8, dst += 8) {
++        tmp1 = tmp; dst1 = dst;
++        EPEL_HV
++            VEC_ST(dst1, v2);
++            VEC_ST(dst1 + MAX_PB_SIZE, v4);
++            dst1 += MAX_PB_SIZE << 1;
++        }
++    }
++}
++
++PEL_FUNC_TMP(qpel_hv) {
++    int16_t *dst1;
++    QPEL_HV_INIT
++    for (x = 0; x < (width & -8); x += 8, tmp += 8, dst += 8) {
++        tmp1 = tmp; dst1 = dst;
++        QPEL_HV
++            VEC_ST(dst1, v2);
++            VEC_ST(dst1 + MAX_PB_SIZE, v4);
++            dst1 += MAX_PB_SIZE << 1;
++        }
++    }
++}
++
++PEL_FUNC_UNI(epel_uni_hv4) {
++    int shift = 14 - BIT_DEPTH;
++    __m64 vbias = _mm_set1_pi16(1 << (shift - 1));
++    EPEL_HV4_INIT
++    EPEL_HV4
++        PEL_FIN_UNI8(v2, v4, v2)
++        *(uint32_t*)dst = _mm_cvtsi64_si32(v2);
++        *(uint32_t*)(dst + dststride) = _mm_extract_pi32(v2, 1);
++        dst += dststride << 1;
++    }
++}
++
++PEL_FUNC_UNI(epel_uni_hv) {
++    int shift = 14 - BIT_DEPTH; uint8_t *dst1;
++    __m128i vbias = _mm_set1_epi16(1 << (shift - 1));
++    EPEL_HV_INIT
++    for (x = 0; x < (width & -8); x += 8, tmp += 8, dst += 8) {
++        tmp1 = tmp; dst1 = dst;
++        EPEL_HV
++            PEL_FIN_UNI(v2, v4, v2)
++            VEC_STL(dst1, v2);
++            VEC_STH(dst1 + dststride, v2);
++            dst1 += dststride << 1;
++        }
++    }
++}
++
++PEL_FUNC_UNI(qpel_uni_hv) {
++    int shift = 14 - BIT_DEPTH; uint8_t *dst1;
++    __m128i vbias = _mm_set1_epi16(1 << (shift - 1));
++    QPEL_HV_INIT
++    for (x = 0; x < (width & -8); x += 8, tmp += 8, dst += 8) {
++        tmp1 = tmp; dst1 = dst;
++        QPEL_HV
++            PEL_FIN_UNI(v2, v4, v2)
++            VEC_STL(dst1, v2);
++            VEC_STH(dst1 + dststride, v2);
++            dst1 += dststride << 1;
++        }
++    }
++}
++
++PEL_FUNC_BI(epel_bi_hv) {
++    int shift = 14 + 1 - BIT_DEPTH; uint8_t *dst1; int16_t *src3;
++    __m128i vbias = _mm_set1_epi16(1 << (shift - 1));
++    EPEL_HV_INIT
++    for (x = 0; x < (width & -8); x += 8, tmp += 8, dst += 8, src2 += 8) {
++        tmp1 = tmp; dst1 = dst; src3 = src2;
++        EPEL_HV
++            PEL_FIN_BI(src3, MAX_PB_SIZE, v2, v4, a2, a3, v2)
++            VEC_STL(dst1, v2);
++            VEC_STH(dst1 + dststride, v2);
++            dst1 += dststride << 1;
++            src3 += MAX_PB_SIZE << 1;
++        }
++    }
++}
++
++PEL_FUNC_BI(qpel_bi_hv) {
++    int shift = 14 + 1 - BIT_DEPTH; uint8_t *dst1; int16_t *src3;
++    __m128i vbias = _mm_set1_epi16(1 << (shift - 1));
++    QPEL_HV_INIT
++    for (x = 0; x < (width & -8); x += 8, tmp += 8, dst += 8, src2 += 8) {
++        tmp1 = tmp; dst1 = dst; src3 = src2;
++        QPEL_HV
++            PEL_FIN_BI(src3, MAX_PB_SIZE, v2, v4, a6, a7, v2)
++            VEC_STL(dst1, v2);
++            VEC_STH(dst1 + dststride, v2);
++            dst1 += dststride << 1;
++            src3 += MAX_PB_SIZE << 1;
++        }
++    }
++}
++
++PEL_FUNC_UNI_W(epel_uni_w_hv4) {
++    int shift = denom + 14 - BIT_DEPTH;
++    __m64 vbias = _mm_set1_pi32(1 << (shift - 1));
++    __m64 vwx = _mm_set1_pi16(wx), vox = _mm_set1_pi16(ox);
++    EPEL_HV4_INIT
++    EPEL_HV4
++        PEL_FIN_UNI_W8(v2, v4, a2, a3, b2, b3, v2)
++        *(uint32_t*)dst = _mm_cvtsi64_si32(v2);
++        *(uint32_t*)(dst + dststride) = _mm_extract_pi32(v2, 1);
++        dst += dststride << 1;
++    }
++}
++
++PEL_FUNC_UNI_W(epel_uni_w_hv) {
++    int shift = denom + 14 - BIT_DEPTH; uint8_t *dst1;
++    __m128i vbias = _mm_set1_epi32(1 << (shift - 1));
++    __m128i vwx = _mm_set1_epi16(wx), vox = _mm_set1_epi16(ox);
++    EPEL_HV_INIT
++    for (x = 0; x < (width & -8); x += 8, tmp += 8, dst += 8) {
++        tmp1 = tmp; dst1 = dst;
++        EPEL_HV
++            PEL_FIN_UNI_W(v2, v4, a2, a3, b2, b3, v2)
++            VEC_STL(dst1, v2);
++            VEC_STH(dst1 + dststride, v2);
++            dst1 += dststride << 1;
++        }
++    }
++}
++
++PEL_FUNC_UNI_W(qpel_uni_w_hv) {
++    int shift = denom + 14 - BIT_DEPTH; uint8_t *dst1;
++    __m128i vbias = _mm_set1_epi32(1 << (shift - 1));
++    __m128i vwx = _mm_set1_epi16(wx), vox = _mm_set1_epi16(ox);
++    QPEL_HV_INIT
++    for (x = 0; x < (width & -8); x += 8, tmp += 8, dst += 8) {
++        tmp1 = tmp; dst1 = dst;
++        QPEL_HV
++            PEL_FIN_UNI_W(v2, v4, a6, a7, b6, b7, v2)
++            VEC_STL(dst1, v2);
++            VEC_STH(dst1 + dststride, v2);
++            dst1 += dststride << 1;
++        }
++    }
++}
++
++#undef EPEL_HV4_INIT
++#undef EPEL_HV4
++#undef EPEL_HV_INIT
++#undef EPEL_HV
++#undef QPEL_HV_INIT
++#undef QPEL_HV
++
++#undef PEL_FUNC_TMP
++#undef PEL_FUNC_UNI
++#undef PEL_FUNC_BI
++#undef PEL_FUNC_UNI_W
++
++#undef PEL_FIN_UNI8
++#undef PEL_FIN_UNI
++#undef PEL_FIN_BI8
++#undef PEL_FIN_BI
++#undef PEL_FIN_UNI_W8
++#undef PEL_FIN_UNI_W
++
++#undef EPEL_INIT_FILTER
++#undef QPEL_INIT_FILTER
++
++/* idct ------------------------------------------------------------*/
++
++#define SET_BIAS(shr) bias = _mm_set1_epi32(1 << (shr - 1));
++#define LD_CONST2(a, b) _mm_set1_epi32((a & 0xffff) | b << 16)
++#define CONST2(name, a, b) const __m128i name = LD_CONST2(a, b);
++#define IDCT_CONST4 \
++    CONST2(c4_e0, 64,  64) \
++    CONST2(c4_o0, 83,  36) \
++    CONST2(c4_e1, 64, -64) \
++    CONST2(c4_o1, 36, -83)
++
++#define TR_4X4(shr, fin) \
++    m2 = _mm_madd_epi16(m0, c4_e0); /* e0 */ \
++    t0 = _mm_madd_epi16(m1, c4_o0); /* o0 */ \
++    m0 = _mm_madd_epi16(m0, c4_e1); /* e1 */ \
++    t1 = _mm_madd_epi16(m1, c4_o1); /* o1 */ \
++    m2 = _mm_add_epi32(m2, bias); \
++    m0 = _mm_add_epi32(m0, bias); \
++    \
++    m3 = _mm_add_epi32(m2, t0); \
++    m2 = _mm_sub_epi32(m2, t0); \
++    m1 = _mm_add_epi32(m0, t1); \
++    m0 = _mm_sub_epi32(m0, t1); \
++    \
++    /* m3, m1, m0, m2 */ \
++    if (fin) { \
++        m3 = _mm_srai_epi32(m3, shr); /* e0 + o0 */ \
++        m1 = _mm_srai_epi32(m1, shr); /* e1 + o1 */ \
++        m2 = _mm_srai_epi32(m2, shr); /* e0 - o0 */ \
++        m0 = _mm_srai_epi32(m0, shr); /* e1 - o1 */ \
++        m3 = _mm_packs_epi32(m3, m1); \
++        m0 = _mm_packs_epi32(m0, m2); \
++        m1 = _mm_unpacklo_epi16(m3, m0); \
++        m3 = _mm_unpackhi_epi16(m3, m0); \
++        m2 = _mm_unpacklo_epi16(m1, m3); \
++        m1 = _mm_unpackhi_epi16(m1, m3); \
++    }
++
++#define IDCT_4X4(depth) \
++static void hevc_idct_4x4_##depth##_e2k(int16_t *coeffs, int col_limit) { \
++    __m128i m0, m1, m2, m3, t0, t1, bias; \
++    int shift = 20 - depth; \
++    IDCT_CONST4 \
++    \
++    m2 = _mm_load_si128((const __m128i*)coeffs); \
++    m1 = _mm_load_si128((const __m128i*)(coeffs + 8)); \
++    m0 = _mm_unpacklo_epi16(m2, m1); \
++    m1 = _mm_unpackhi_epi16(m2, m1); \
++    SET_BIAS(7) TR_4X4(7, 1); \
++    m0 = _mm_unpacklo_epi16(m2, m1); \
++    m1 = _mm_unpackhi_epi16(m2, m1); \
++    SET_BIAS(shift) TR_4X4(shift, 1); \
++    \
++    _mm_store_si128((__m128i*)coeffs, m2); \
++    _mm_store_si128((__m128i*)(coeffs + 8), m1); \
++}
++
++IDCT_4X4(8)
++IDCT_4X4(10)
++
++#define IDCT_CONST8 IDCT_CONST4 \
++    CONST2(c8_30,  89,  75) \
++    CONST2(c8_31,  50,  18) \
++    CONST2(c8_10,  75, -18) \
++    CONST2(c8_11, -89, -50) \
++    CONST2(c8_00,  50, -89) \
++    CONST2(c8_01,  18,  75) \
++    CONST2(c8_20,  18, -50) \
++    CONST2(c8_21,  75, -89)
++
++#define E8_O8(i, a, b) \
++    b = _mm_add_epi32(_mm_madd_epi16(m4, c8_##i##0), _mm_madd_epi16(m5, c8_##i##1)); \
++    a = _mm_add_epi32(b, m##i); /* o8 + e8 */ \
++    b = _mm_sub_epi32(m##i, b); /* e8 - o8 */
++
++#define TRANSPOSE_8X4(shr, t0, t1, t2, t3, t4, t5, t6, t7, o0, o1, o2, o3) \
++    m0 = _mm_packs_epi32(_mm_srai_epi32(t0, shr), _mm_srai_epi32(t4, shr)); \
++    m1 = _mm_packs_epi32(_mm_srai_epi32(t1, shr), _mm_srai_epi32(t5, shr)); \
++    m2 = _mm_packs_epi32(_mm_srai_epi32(t2, shr), _mm_srai_epi32(t6, shr)); \
++    m3 = _mm_packs_epi32(_mm_srai_epi32(t3, shr), _mm_srai_epi32(t7, shr)); \
++    t0 = _mm_unpacklo_epi16(m0, m2); \
++    t1 = _mm_unpackhi_epi16(m0, m2); \
++    t2 = _mm_unpacklo_epi16(m1, m3); \
++    t3 = _mm_unpackhi_epi16(m1, m3); \
++    o0 = _mm_unpacklo_epi16(t0, t2); \
++    o1 = _mm_unpackhi_epi16(t0, t2); \
++    o2 = _mm_unpacklo_epi16(t1, t3); \
++    o3 = _mm_unpackhi_epi16(t1, t3);
++
++#define TR_8X4(shr, fin, o) \
++    TR_4X4(shr, 0) \
++    E8_O8(3, t0, t7) \
++    E8_O8(1, t1, t6) \
++    E8_O8(0, t2, t5) \
++    E8_O8(2, t3, t4) \
++    if (fin) { \
++        TRANSPOSE_8X4(shr, t0, t1, t2, t3, t4, t5, t6, t7, o##0, o##1, o##2, o##3) \
++    }
++
++#define IDCT_8X8(depth) \
++static void hevc_idct_8x8_##depth##_e2k(int16_t *coeffs, int col_limit) { \
++    __m128i m0, m1, m2, m3, m4, m5, bias; \
++    __m128i t0, t1, t2, t3, t4, t5, t6, t7; \
++    __m128i l0, l1, l2, l3, h0, h1, h2, h3; \
++    int shift = 20 - depth; \
++    IDCT_CONST8 \
++    __m128i i0 = _mm_load_si128((const __m128i*)coeffs); \
++    __m128i i1 = _mm_load_si128((const __m128i*)(coeffs + 8)); \
++    __m128i i2 = _mm_load_si128((const __m128i*)(coeffs + 8 * 2)); \
++    __m128i i3 = _mm_load_si128((const __m128i*)(coeffs + 8 * 3)); \
++    __m128i i4 = _mm_load_si128((const __m128i*)(coeffs + 8 * 4)); \
++    __m128i i5 = _mm_load_si128((const __m128i*)(coeffs + 8 * 5)); \
++    __m128i i6 = _mm_load_si128((const __m128i*)(coeffs + 8 * 6)); \
++    __m128i i7 = _mm_load_si128((const __m128i*)(coeffs + 8 * 7)); \
++    \
++    m0 = _mm_unpacklo_epi16(i0, i4); \
++    m1 = _mm_unpacklo_epi16(i2, i6); \
++    m4 = _mm_unpacklo_epi16(i1, i3); \
++    m5 = _mm_unpacklo_epi16(i5, i7); \
++    SET_BIAS(7) \
++    TR_8X4(7, 1, l) \
++    m0 = _mm_unpackhi_epi16(i0, i4); \
++    m1 = _mm_unpackhi_epi16(i2, i6); \
++    m4 = _mm_unpackhi_epi16(i1, i3); \
++    m5 = _mm_unpackhi_epi16(i5, i7); \
++    TR_8X4(7, 1, h) \
++    m0 = _mm_unpacklo_epi16(l0, h0); \
++    m1 = _mm_unpacklo_epi16(l1, h1); \
++    m4 = _mm_unpackhi_epi16(l0, l1); \
++    m5 = _mm_unpackhi_epi16(h0, h1); \
++    SET_BIAS(shift) \
++    TR_8X4(shift, 1, i) \
++    m0 = _mm_unpacklo_epi16(l2, h2); \
++    m1 = _mm_unpacklo_epi16(l3, h3); \
++    m4 = _mm_unpackhi_epi16(l2, l3); \
++    m5 = _mm_unpackhi_epi16(h2, h3); \
++    TR_8X4(shift, 1, m) \
++    VEC_STL(coeffs + 8 * 0, i0); VEC_STL(coeffs + 8 * 0 + 4, i2); \
++    VEC_STH(coeffs + 8 * 1, i0); VEC_STH(coeffs + 8 * 1 + 4, i2); \
++    VEC_STL(coeffs + 8 * 2, i1); VEC_STL(coeffs + 8 * 2 + 4, i3); \
++    VEC_STH(coeffs + 8 * 3, i1); VEC_STH(coeffs + 8 * 3 + 4, i3); \
++    VEC_STL(coeffs + 8 * 4, m0); VEC_STL(coeffs + 8 * 4 + 4, m2); \
++    VEC_STH(coeffs + 8 * 5, m0); VEC_STH(coeffs + 8 * 5 + 4, m2); \
++    VEC_STL(coeffs + 8 * 6, m1); VEC_STL(coeffs + 8 * 6 + 4, m3); \
++    VEC_STH(coeffs + 8 * 7, m1); VEC_STH(coeffs + 8 * 7 + 4, m3); \
++}
++
++IDCT_8X8(8)
++IDCT_8X8(10)
++
++#define C16_00 LD_CONST2( 90,  87)
++#define C16_01 LD_CONST2( 80,  70)
++#define C16_02 LD_CONST2( 57,  43)
++#define C16_03 LD_CONST2( 25,   9)
++#define C16_10 LD_CONST2( 87,  57)
++#define C16_11 LD_CONST2(  9, -43)
++#define C16_12 LD_CONST2(-80, -90)
++#define C16_13 LD_CONST2(-70, -25)
++#define C16_20 LD_CONST2( 80,   9)
++#define C16_21 LD_CONST2(-70, -87)
++#define C16_22 LD_CONST2(-25,  57)
++#define C16_23 LD_CONST2( 90,  43)
++#define C16_30 LD_CONST2( 70, -43)
++#define C16_31 LD_CONST2(-87,   9)
++#define C16_32 LD_CONST2( 90,  25)
++#define C16_33 LD_CONST2(-80, -57)
++#define C16_40 LD_CONST2( 57, -80)
++#define C16_41 LD_CONST2(-25,  90)
++#define C16_42 LD_CONST2( -9, -87)
++#define C16_43 LD_CONST2( 43,  70)
++#define C16_50 LD_CONST2( 43, -90)
++#define C16_51 LD_CONST2( 57,  25)
++#define C16_52 LD_CONST2(-87,  70)
++#define C16_53 LD_CONST2(  9, -80)
++#define C16_60 LD_CONST2( 25, -70)
++#define C16_61 LD_CONST2( 90, -80)
++#define C16_62 LD_CONST2( 43,   9)
++#define C16_63 LD_CONST2(-57,  87)
++#define C16_70 LD_CONST2( 9,  -25)
++#define C16_71 LD_CONST2( 43, -57)
++#define C16_72 LD_CONST2( 70, -80)
++#define C16_73 LD_CONST2( 87, -90)
++
++#define E16_O16(i, a, b) \
++    a = _mm_add_epi32(_mm_madd_epi16(m0, C16_##i##0), _mm_madd_epi16(m1, C16_##i##1)); \
++    b = _mm_add_epi32(_mm_madd_epi16(m2, C16_##i##2), _mm_madd_epi16(m3, C16_##i##3)); \
++    b = _mm_add_epi32(a, b); \
++    a = _mm_add_epi32(b, t##i); /* o16 + e16 */ \
++    b = _mm_sub_epi32(t##i, b); /* e16 - o16 */
++
++#define LDPAIR_V(j, n, a, b) \
++    m##j = VEC_LD8(coeffs + i + n * (j * 4 + 1)); \
++    m##j = _mm_unpacklo_epi16(m##j, VEC_LD8(coeffs + i + n * (j * 4 + 3)));
++
++#define LDPAIR_H(j, n, a, b) \
++    m##j = VEC_LD8(tmp + i * 4 + n * 4 * j + a); \
++    m##j = _mm_unpacklo_epi16(m##j, VEC_LD8(tmp + i * 4 + n * 4 * j + b));
++
++#define TR_16X4(shift, V) \
++    TR_8X4(shift, 0, m) \
++    LDPAIR_##V(0, 16, 4, 12) \
++    LDPAIR_##V(1, 16, 4, 12) \
++    LDPAIR_##V(2, 16, 4, 12) \
++    LDPAIR_##V(3, 16, 4, 12) \
++    E16_O16(0, x0, x15) \
++    E16_O16(1, x1, x14) \
++    E16_O16(2, x2, x13) \
++    E16_O16(3, x3, x12) \
++    E16_O16(4, x4, x11) \
++    E16_O16(5, x5, x10) \
++    E16_O16(6, x6, x9) \
++    E16_O16(7, x7, x8) \
++    TRANSPOSE_8X4(shift, x0, x1, x2, x3, x12, x13, x14, x15, t0, t1, t6, t7) \
++    TRANSPOSE_8X4(shift, x4, x5, x6, x7, x8, x9, x10, x11, t2, t3, t4, t5)
++
++#define IDCT_16X16(depth) \
++static void hevc_idct_16x16_##depth##_e2k(int16_t *coeffs, int col_limit) { \
++    DECLARE_ALIGNED(16, int16_t, tmp)[16 * 16]; \
++    __m128i m0, m1, m2, m3, m4, m5, bias; \
++    __m128i t0, t1, t2, t3, t4, t5, t6, t7; \
++    __m128i x0, x1, x2, x3, x4, x5, x6, x7; \
++    __m128i x8, x9, x10, x11, x12, x13, x14, x15; \
++    __m128i *ptr = (__m128i*)tmp; \
++    int i, shift = 20 - depth; \
++    IDCT_CONST8 \
++    SET_BIAS(7) \
++    PRAGMA_E2K("ivdep") \
++    for (i = 0; i < 16; i += 4) { \
++        t0 = VEC_LD8(coeffs + i + 32 * 0); \
++        t1 = VEC_LD8(coeffs + i + 32 * 1); \
++        t2 = VEC_LD8(coeffs + i + 32 * 2); \
++        t3 = VEC_LD8(coeffs + i + 32 * 3); \
++        t4 = VEC_LD8(coeffs + i + 32 * 4); \
++        t5 = VEC_LD8(coeffs + i + 32 * 5); \
++        t6 = VEC_LD8(coeffs + i + 32 * 6); \
++        t7 = VEC_LD8(coeffs + i + 32 * 7); \
++        m0 = _mm_unpacklo_epi16(t0, t4); \
++        m1 = _mm_unpacklo_epi16(t2, t6); \
++        m4 = _mm_unpacklo_epi16(t1, t3); \
++        m5 = _mm_unpacklo_epi16(t5, t7); \
++        TR_16X4(7, V) \
++        \
++        ptr[0] = t0; \
++        ptr[1] = t1; \
++        ptr[2] = t2; \
++        ptr[3] = t3; \
++        ptr[4] = t4; \
++        ptr[5] = t5; \
++        ptr[6] = t6; \
++        ptr[7] = t7; \
++        ptr += 8; \
++    } \
++    SET_BIAS(shift) \
++    PRAGMA_E2K("ivdep") \
++    for (i = 0; i < 16; i += 4) { \
++        t0 = VEC_LD8(tmp + i * 4 + 8 * 0); \
++        t1 = VEC_LD8(tmp + i * 4 + 8 * 1); \
++        t2 = VEC_LD8(tmp + i * 4 + 8 * 8); \
++        t3 = VEC_LD8(tmp + i * 4 + 8 * 9); \
++        t4 = VEC_LD8(tmp + i * 4 + 8 * 16); \
++        t5 = VEC_LD8(tmp + i * 4 + 8 * 17); \
++        t6 = VEC_LD8(tmp + i * 4 + 8 * 24); \
++        t7 = VEC_LD8(tmp + i * 4 + 8 * 25); \
++        m0 = _mm_unpacklo_epi16(t0, t4); \
++        m1 = _mm_unpacklo_epi16(t2, t6); \
++        m4 = _mm_unpacklo_epi16(t1, t3); \
++        m5 = _mm_unpacklo_epi16(t5, t7); \
++        TR_16X4(shift, H) \
++        \
++        VEC_STL(coeffs + i * 16 + 0, t0); \
++        VEC_STL(coeffs + i * 16 + 4, t2); \
++        VEC_STL(coeffs + i * 16 + 8, t4); \
++        VEC_STL(coeffs + i * 16 + 12, t6); \
++        VEC_STH(coeffs + i * 16 + 16, t0); \
++        VEC_STH(coeffs + i * 16 + 20, t2); \
++        VEC_STH(coeffs + i * 16 + 24, t4); \
++        VEC_STH(coeffs + i * 16 + 28, t6); \
++        VEC_STL(coeffs + i * 16 + 32, t1); \
++        VEC_STL(coeffs + i * 16 + 36, t3); \
++        VEC_STL(coeffs + i * 16 + 40, t5); \
++        VEC_STL(coeffs + i * 16 + 44, t7); \
++        VEC_STH(coeffs + i * 16 + 48, t1); \
++        VEC_STH(coeffs + i * 16 + 52, t3); \
++        VEC_STH(coeffs + i * 16 + 56, t5); \
++        VEC_STH(coeffs + i * 16 + 60, t7); \
++    } \
++}
++
++IDCT_16X16(8)
++IDCT_16X16(10)
++
++#define C32_00 LD_CONST2( 90,  90)
++#define C32_01 LD_CONST2( 88,  85)
++#define C32_02 LD_CONST2( 82,  78)
++#define C32_03 LD_CONST2( 73,  67)
++#define C32_04 LD_CONST2( 61,  54)
++#define C32_05 LD_CONST2( 46,  38)
++#define C32_06 LD_CONST2( 31,  22)
++#define C32_07 LD_CONST2( 13,   4)
++#define C32_10 LD_CONST2( 90,  82)
++#define C32_11 LD_CONST2( 67,  46)
++#define C32_12 LD_CONST2( 22,  -4)
++#define C32_13 LD_CONST2(-31, -54)
++#define C32_14 LD_CONST2(-73, -85)
++#define C32_15 LD_CONST2(-90, -88)
++#define C32_16 LD_CONST2(-78, -61)
++#define C32_17 LD_CONST2(-38, -13)
++#define C32_20 LD_CONST2( 88,  67)
++#define C32_21 LD_CONST2( 31, -13)
++#define C32_22 LD_CONST2(-54, -82)
++#define C32_23 LD_CONST2(-90, -78)
++#define C32_24 LD_CONST2(-46,  -4)
++#define C32_25 LD_CONST2( 38,  73)
++#define C32_26 LD_CONST2( 90,  85)
++#define C32_27 LD_CONST2( 61,  22)
++#define C32_30 LD_CONST2( 85,  46)
++#define C32_31 LD_CONST2(-13, -67)
++#define C32_32 LD_CONST2(-90, -73)
++#define C32_33 LD_CONST2(-22,  38)
++#define C32_34 LD_CONST2( 82,  88)
++#define C32_35 LD_CONST2( 54,  -4)
++#define C32_36 LD_CONST2(-61, -90)
++#define C32_37 LD_CONST2(-78, -31)
++#define C32_40 LD_CONST2( 82,  22)
++#define C32_41 LD_CONST2(-54, -90)
++#define C32_42 LD_CONST2(-61,  13)
++#define C32_43 LD_CONST2( 78,  85)
++#define C32_44 LD_CONST2( 31, -46)
++#define C32_45 LD_CONST2(-90, -67)
++#define C32_46 LD_CONST2(  4,  73)
++#define C32_47 LD_CONST2( 88,  38)
++#define C32_50 LD_CONST2( 78,  -4)
++#define C32_51 LD_CONST2(-82, -73)
++#define C32_52 LD_CONST2( 13,  85)
++#define C32_53 LD_CONST2( 67, -22)
++#define C32_54 LD_CONST2(-88, -61)
++#define C32_55 LD_CONST2( 31,  90)
++#define C32_56 LD_CONST2( 54, -38)
++#define C32_57 LD_CONST2(-90, -46)
++#define C32_60 LD_CONST2( 73, -31)
++#define C32_61 LD_CONST2(-90, -22)
++#define C32_62 LD_CONST2( 78,  67)
++#define C32_63 LD_CONST2(-38, -90)
++#define C32_64 LD_CONST2(-13,  82)
++#define C32_65 LD_CONST2( 61, -46)
++#define C32_66 LD_CONST2(-88,  -4)
++#define C32_67 LD_CONST2( 85,  54)
++#define C32_70 LD_CONST2( 67, -54)
++#define C32_71 LD_CONST2(-78,  38)
++#define C32_72 LD_CONST2( 85, -22)
++#define C32_73 LD_CONST2(-90,   4)
++#define C32_74 LD_CONST2( 90,  13)
++#define C32_75 LD_CONST2(-88, -31)
++#define C32_76 LD_CONST2( 82,  46)
++#define C32_77 LD_CONST2(-73, -61)
++#define C32_80 LD_CONST2( 61, -73)
++#define C32_81 LD_CONST2(-46,  82)
++#define C32_82 LD_CONST2( 31, -88)
++#define C32_83 LD_CONST2(-13,  90)
++#define C32_84 LD_CONST2( -4, -90)
++#define C32_85 LD_CONST2( 22,  85)
++#define C32_86 LD_CONST2(-38, -78)
++#define C32_87 LD_CONST2( 54,  67)
++#define C32_90 LD_CONST2( 54, -85)
++#define C32_91 LD_CONST2(-4,   88)
++#define C32_92 LD_CONST2(-46, -61)
++#define C32_93 LD_CONST2( 82,  13)
++#define C32_94 LD_CONST2(-90,  38)
++#define C32_95 LD_CONST2( 67, -78)
++#define C32_96 LD_CONST2(-22,  90)
++#define C32_97 LD_CONST2(-31, -73)
++#define C32_100 LD_CONST2( 46, -90)
++#define C32_101 LD_CONST2( 38,  54)
++#define C32_102 LD_CONST2(-90,  31)
++#define C32_103 LD_CONST2( 61, -88)
++#define C32_104 LD_CONST2( 22,  67)
++#define C32_105 LD_CONST2(-85,  13)
++#define C32_106 LD_CONST2( 73, -82)
++#define C32_107 LD_CONST2(  4,  78)
++#define C32_110 LD_CONST2( 38, -88)
++#define C32_111 LD_CONST2( 73,  -4)
++#define C32_112 LD_CONST2(-67,  90)
++#define C32_113 LD_CONST2(-46, -31)
++#define C32_114 LD_CONST2( 85, -78)
++#define C32_115 LD_CONST2( 13,  61)
++#define C32_116 LD_CONST2(-90,  54)
++#define C32_117 LD_CONST2( 22, -82)
++#define C32_120 LD_CONST2( 31, -78)
++#define C32_121 LD_CONST2( 90, -61)
++#define C32_122 LD_CONST2(  4,  54)
++#define C32_123 LD_CONST2(-88,  82)
++#define C32_124 LD_CONST2(-38, -22)
++#define C32_125 LD_CONST2( 73, -90)
++#define C32_126 LD_CONST2( 67, -13)
++#define C32_127 LD_CONST2(-46,  85)
++#define C32_130 LD_CONST2( 22, -61)
++#define C32_131 LD_CONST2( 85, -90)
++#define C32_132 LD_CONST2( 73, -38)
++#define C32_133 LD_CONST2( -4,  46)
++#define C32_134 LD_CONST2(-78,  90)
++#define C32_135 LD_CONST2(-82,  54)
++#define C32_136 LD_CONST2(-13, -31)
++#define C32_137 LD_CONST2( 67, -88)
++#define C32_140 LD_CONST2( 13, -38)
++#define C32_141 LD_CONST2( 61, -78)
++#define C32_142 LD_CONST2( 88, -90)
++#define C32_143 LD_CONST2( 85, -73)
++#define C32_144 LD_CONST2( 54, -31)
++#define C32_145 LD_CONST2(  4,  22)
++#define C32_146 LD_CONST2(-46,  67)
++#define C32_147 LD_CONST2(-82,  90)
++#define C32_150 LD_CONST2(  4, -13)
++#define C32_151 LD_CONST2( 22, -31)
++#define C32_152 LD_CONST2( 38, -46)
++#define C32_153 LD_CONST2( 54, -61)
++#define C32_154 LD_CONST2( 67, -73)
++#define C32_155 LD_CONST2( 78, -82)
++#define C32_156 LD_CONST2( 85, -88)
++#define C32_157 LD_CONST2( 90, -90)
++
++#define E32_O32(i, a, b) \
++    a = _mm_add_epi32(_mm_madd_epi16(m0, C32_##i##0), _mm_madd_epi16(m1, C32_##i##1)); \
++    b = _mm_add_epi32(_mm_madd_epi16(m2, C32_##i##2), _mm_madd_epi16(m3, C32_##i##3)); \
++    m8 = _mm_add_epi32(_mm_madd_epi16(m4, C32_##i##4), _mm_madd_epi16(m5, C32_##i##5)); \
++    m9 = _mm_add_epi32(_mm_madd_epi16(m6, C32_##i##6), _mm_madd_epi16(m7, C32_##i##7)); \
++    b = _mm_add_epi32(a, b); \
++    b = _mm_add_epi32(b, _mm_add_epi32(m8, m9)); \
++    a = _mm_add_epi32(b, x##i); /* o32 + e32 */ \
++    b = _mm_sub_epi32(x##i, b); /* e32 - o32 */
++
++#define TR_32X4(shift, V) \
++    TR_8X4(shift, 0, m) \
++    LDPAIR_##V(0, 64, 8, 136) \
++    LDPAIR_##V(1, 64, 8, 136) \
++    LDPAIR_##V(2, 64, 8, 136) \
++    LDPAIR_##V(3, 64, 8, 136) \
++    E16_O16(0, x0, x15) \
++    E16_O16(1, x1, x14) \
++    E16_O16(2, x2, x13) \
++    E16_O16(3, x3, x12) \
++    E16_O16(4, x4, x11) \
++    E16_O16(5, x5, x10) \
++    E16_O16(6, x6, x9) \
++    E16_O16(7, x7, x8) \
++    LDPAIR_##V(0, 32, 4, 12) \
++    LDPAIR_##V(1, 32, 4, 12) \
++    LDPAIR_##V(2, 32, 4, 12) \
++    LDPAIR_##V(3, 32, 4, 12) \
++    LDPAIR_##V(4, 32, 4, 12) \
++    LDPAIR_##V(5, 32, 4, 12) \
++    LDPAIR_##V(6, 32, 4, 12) \
++    LDPAIR_##V(7, 32, 4, 12) \
++    E32_O32(0, t0, t31) \
++    E32_O32(1, t1, t30) \
++    E32_O32(2, t2, t29) \
++    E32_O32(3, t3, t28) \
++    E32_O32(4, t4, t27) \
++    E32_O32(5, t5, t26) \
++    E32_O32(6, t6, t25) \
++    E32_O32(7, t7, t24) \
++    E32_O32(8, t8, t23) \
++    E32_O32(9, t9, t22) \
++    E32_O32(10, t10, t21) \
++    E32_O32(11, t11, t20) \
++    E32_O32(12, t12, t19) \
++    E32_O32(13, t13, t18) \
++    E32_O32(14, t14, t17) \
++    E32_O32(15, t15, t16) \
++    TRANSPOSE_8X4(shift, t0, t1, t2, t3, t28, t29, t30, t31, x0, x1, x14, x15) \
++    TRANSPOSE_8X4(shift, t4, t5, t6, t7, t24, t25, t26, t27, x2, x3, x12, x13) \
++    TRANSPOSE_8X4(shift, t8, t9, t10, t11, t20, t21, t22, t23, x4, x5, x10, x11) \
++    TRANSPOSE_8X4(shift, t12, t13, t14, t15, t16, t17, t18, t19, x6, x7, x8, x9)
++
++#define IDCT_32X32(depth) \
++static void hevc_idct_32x32_##depth##_e2k(int16_t *coeffs, int col_limit) { \
++    DECLARE_ALIGNED(16, int16_t, tmp)[32 * 32]; \
++    __m128i m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, bias; \
++    __m128i t0, t1, t2, t3, t4, t5, t6, t7; \
++    __m128i t8, t9, t10, t11, t12, t13, t14, t15; \
++    __m128i t16, t17, t18, t19, t20, t21, t22, t23; \
++    __m128i t24, t25, t26, t27, t28, t29, t30, t31; \
++    __m128i x0, x1, x2, x3, x4, x5, x6, x7; \
++    __m128i x8, x9, x10, x11, x12, x13, x14, x15; \
++    __m128i *ptr = (__m128i*)tmp; \
++    int i, shift = 20 - depth; \
++    IDCT_CONST8 \
++    SET_BIAS(7) \
++    PRAGMA_E2K("ivdep") \
++    for (i = 0; i < 32; i += 4) { \
++        t0 = VEC_LD8(coeffs + i + 128 * 0); \
++        t1 = VEC_LD8(coeffs + i + 128 * 1); \
++        t2 = VEC_LD8(coeffs + i + 128 * 2); \
++        t3 = VEC_LD8(coeffs + i + 128 * 3); \
++        t4 = VEC_LD8(coeffs + i + 128 * 4); \
++        t5 = VEC_LD8(coeffs + i + 128 * 5); \
++        t6 = VEC_LD8(coeffs + i + 128 * 6); \
++        t7 = VEC_LD8(coeffs + i + 128 * 7); \
++        m0 = _mm_unpacklo_epi16(t0, t4); \
++        m1 = _mm_unpacklo_epi16(t2, t6); \
++        m4 = _mm_unpacklo_epi16(t1, t3); \
++        m5 = _mm_unpacklo_epi16(t5, t7); \
++        TR_32X4(7, V) \
++        \
++        ptr[0] = x0; \
++        ptr[1] = x1; \
++        ptr[2] = x2; \
++        ptr[3] = x3; \
++        ptr[4] = x4; \
++        ptr[5] = x5; \
++        ptr[6] = x6; \
++        ptr[7] = x7; \
++        ptr[8] = x8; \
++        ptr[9] = x9; \
++        ptr[10] = x10; \
++        ptr[11] = x11; \
++        ptr[12] = x12; \
++        ptr[13] = x13; \
++        ptr[14] = x14; \
++        ptr[15] = x15; \
++        ptr += 16; \
++    } \
++    SET_BIAS(shift) \
++    PRAGMA_E2K("ivdep") \
++    for (i = 0; i < 32; i += 4) { \
++        t0 = VEC_LD8(tmp + i * 4 + 128 * 0); \
++        t1 = VEC_LD8(tmp + i * 4 + 128 * 1); \
++        t2 = VEC_LD8(tmp + i * 4 + 128 * 2); \
++        t3 = VEC_LD8(tmp + i * 4 + 128 * 3); \
++        t4 = VEC_LD8(tmp + i * 4 + 128 * 4); \
++        t5 = VEC_LD8(tmp + i * 4 + 128 * 5); \
++        t6 = VEC_LD8(tmp + i * 4 + 128 * 6); \
++        t7 = VEC_LD8(tmp + i * 4 + 128 * 7); \
++        m0 = _mm_unpacklo_epi16(t0, t4); \
++        m1 = _mm_unpacklo_epi16(t2, t6); \
++        m4 = _mm_unpacklo_epi16(t1, t3); \
++        m5 = _mm_unpacklo_epi16(t5, t7); \
++        TR_32X4(shift, H) \
++        \
++        VEC_STL(coeffs + i * 32 + 0, x0); \
++        VEC_STL(coeffs + i * 32 + 4, x2); \
++        VEC_STL(coeffs + i * 32 + 8, x4); \
++        VEC_STL(coeffs + i * 32 + 12, x6); \
++        VEC_STL(coeffs + i * 32 + 16, x8); \
++        VEC_STL(coeffs + i * 32 + 20, x10); \
++        VEC_STL(coeffs + i * 32 + 24, x12); \
++        VEC_STL(coeffs + i * 32 + 28, x14); \
++        VEC_STH(coeffs + i * 32 + 32, x0); \
++        VEC_STH(coeffs + i * 32 + 36, x2); \
++        VEC_STH(coeffs + i * 32 + 40, x4); \
++        VEC_STH(coeffs + i * 32 + 44, x6); \
++        VEC_STH(coeffs + i * 32 + 48, x8); \
++        VEC_STH(coeffs + i * 32 + 52, x10); \
++        VEC_STH(coeffs + i * 32 + 56, x12); \
++        VEC_STH(coeffs + i * 32 + 60, x14); \
++        VEC_STL(coeffs + i * 32 + 64, x1); \
++        VEC_STL(coeffs + i * 32 + 68, x3); \
++        VEC_STL(coeffs + i * 32 + 72, x5); \
++        VEC_STL(coeffs + i * 32 + 76, x7); \
++        VEC_STL(coeffs + i * 32 + 80, x9); \
++        VEC_STL(coeffs + i * 32 + 84, x11); \
++        VEC_STL(coeffs + i * 32 + 88, x13); \
++        VEC_STL(coeffs + i * 32 + 92, x15); \
++        VEC_STH(coeffs + i * 32 + 96, x1); \
++        VEC_STH(coeffs + i * 32 + 100, x3); \
++        VEC_STH(coeffs + i * 32 + 104, x5); \
++        VEC_STH(coeffs + i * 32 + 108, x7); \
++        VEC_STH(coeffs + i * 32 + 112, x9); \
++        VEC_STH(coeffs + i * 32 + 116, x11); \
++        VEC_STH(coeffs + i * 32 + 120, x13); \
++        VEC_STH(coeffs + i * 32 + 124, x15); \
++    } \
++}
++
++IDCT_32X32(8)
++IDCT_32X32(10)
++
++/* loop_filter -----------------------------------------------------*/
++
++#define _mm_shuffle2_epi32(a, b, c) _mm_castps_si128(_mm_shuffle_ps(_mm_castsi128_ps(a), _mm_castsi128_ps(b), c))
++
++#define LUMA_DEBLOCK_STRONG(q1, p0, p1, p2, p3, m12) \
++    m8 = _mm_add_epi16(m22, p1);   /* p1 + p0 + q0 + 2 */ \
++    m10 = _mm_add_epi16(m8, p2);   /* p2 + p1 + p0 + q0 + 2 */ \
++    m8 = _mm_add_epi16(m8, q1);    /* p1 + p0 + q0 + q1 + 2 */ \
++    m8 = _mm_add_epi16(m8, m10);   /* p2 + 2*p1 + 2*p0 + 2*q0 + q1 + 4 */ \
++    m8 = _mm_srai_epi16(m8, 3);    /* ((p2 + 2*p1 + 2*p0 + 2*q0 + q1 + 4) >> 3) */ \
++    m8 = _mm_sub_epi16(m8, p0);    /* ((p2 + 2*p1 + 2*p0 + 2*q0 + q1 + 4) >> 3) - p0 */ \
++    m8 = _mm_max_epi16(m8, m14); \
++    m8 = _mm_min_epi16(m8, m9);    /* av_clip(X, -2 * tc, 2 * tc) */ \
++    m8 = _mm_add_epi16(m8, p0);    /* p0' */ \
++    p0 = _mm_blendv_epi8(p0, m8, m11); \
++    \
++    m12 = _mm_srai_epi16(m10, 2);  /* (p2 + p1 + p0 + q0 + 2) >> 2 */ \
++    m12 = _mm_sub_epi16(m12, p1);  /* ((p2 + p1 + p0 + q0 + 2) >> 2) - p1 */ \
++    m12 = _mm_max_epi16(m12, m14); \
++    m12 = _mm_min_epi16(m12, m9);  /* av_clip(X, -2 * tc, 2 * tc) */ \
++    m12 = _mm_add_epi16(m12, p1);  /* p1' */ \
++    \
++    m10 = _mm_add_epi16(m10, m13); /* p2 + p1 + p0 + q0 + 4 */ \
++    m8 = _mm_add_epi16(p2, p3);    /* p3 + p2 */ \
++    m8 = _mm_add_epi16(m8, m8);    /* 2*p3 + 2*p2 */ \
++    m8 = _mm_add_epi16(m8, m10);   /* 2*p3 + 3*p2 + p1 + p0 + q0 + 4 */ \
++    m8 = _mm_srai_epi16(m8, 3);    /* (2*p3 + 3*p2 + p1 + p0 + q0 + 4) >> 3 */ \
++    m8 = _mm_sub_epi16(m8, p2);    /* ((2*p3 + 3*p2 + p1 + p0 + q0 + 4) >> 3) - p2 */ \
++    m8 = _mm_max_epi16(m8, m14); \
++    m8 = _mm_min_epi16(m8, m9);    /* av_clip(X, -2 * tc, 2 * tc) */ \
++    m8 = _mm_add_epi16(m8, p2);    /* p2' */ \
++    p2 = _mm_blendv_epi8(p2, m8, m11);
++
++#define LUMA_DEBLOCK_WEAK(p0, p1, p2, add, m20) \
++    m9 = _mm_avg_epu16(p2, p0);  /* (p2 + p0 + 1) >> 1 */ \
++    m9 = _mm_sub_epi16(m9, p1);  /* ((p2 + p0 + 1) >> 1) - p1 */ \
++    m9 = _mm_##add##_epi16(m9, m12); /* ((p2 + p0 + 1) >> 1) - p1 + delta0 */ \
++    m9 = _mm_srai_epi16(m9, 1);  /* (((p2 + p0 + 1) >> 1) - p1 + delta0) >> 1 */ \
++    m9 = _mm_max_epi16(m9, m14); \
++    m9 = _mm_min_epi16(m9, m15); /* av_clip(deltap1, -tc/2, tc/2) */ \
++    m9 = _mm_add_epi16(m9, p1);  /* p1' */ \
++    \
++    m20 = _mm_add_epi16(m20, _mm_srli_epi64(m20, 48)); /* nd_p */ \
++    m13 = _mm_unpacklo_epi16(m20, m20); \
++    m8 = _mm_unpackhi_epi16(m20, m20); \
++    m13 = _mm_shuffle2_epi32(m13, m8, 0); /* dp0 + dp3 */ \
++    m8 = _mm_cmpgt_epi16(m10, m13); \
++    m8 = _mm_and_si128(m8, m11); \
++    p1 = _mm_blendv_epi8(p1, m9, m8); /* write p1' */ \
++    m9 = _mm_##add##_epi16(p0, m12); /* p0 + delta0 */ \
++    p0 = _mm_blendv_epi8(p0, m9, m11);
++
++#define LUMA_DEBLOCK_BODY do { \
++    __m128i m8, m9, m10, m11, m12, m13, m14, m15, m20, m21, m22; \
++    int32_t r3, r6, r11, r13; \
++    __m128i vshufm = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1); \
++    \
++    m20 = _mm_sub_epi16(m1, _mm_slli_epi16(m2, 1)); \
++    m21 = _mm_sub_epi16(m6, _mm_slli_epi16(m5, 1)); \
++    m20 = _mm_abs_epi16(_mm_add_epi16(m20, m3)); /* 0dp0, 0dp3, 1dp0, 1dp3 */ \
++    m21 = _mm_abs_epi16(_mm_add_epi16(m21, m4)); /* 0dq0, 0dq3, 1dq0, 1dq3 */ \
++    \
++    m9 = _mm_add_epi16(m20, m21); /* 0d0, 0d3, 1d0, 1d3 */ \
++    m14 = _mm_add_epi16(m9, _mm_slli_epi64(m9, 48)); /* 0d0+0d3, 1d0+1d3 */ \
++    \
++    /* compare */ \
++    m13 = _mm_set1_epi16(beta); \
++    m15 = _mm_cmpgt_epi16(m13, m14); \
++    r13 = _mm_movemask_epi8(m15); /* filtering mask 0d0 + 0d3 < beta0 (bit 2 or 3), 1d0 + 1d3 < beta1 (bit 0 or 1) */ \
++    if (!(r13 & 0x8080)) return; \
++    \
++    /* weak / strong decision compare to beta_2 */ \
++    m15 = _mm_srai_epi16(m13, 2); /* beta >> 2 */ \
++    m8 = _mm_slli_epi16(m9, 1); \
++    m15 = _mm_cmpgt_epi16(m15, m8); /* (d0 << 1) < beta_2, (d3 << 1) < beta_2 */ \
++    r6 = _mm_movemask_epi8(m15); \
++    \
++    /* filtering mask */ \
++    m11 = _mm_cvtsi32_si128(r13); \
++    m11 = _mm_shuffle_epi8(m11, vshufm); \
++    \
++    /* decide between strong and weak filtering */ \
++    /* tc25 calculations */ \
++    r11 = _tc[0]; r3 = _tc[1]; \
++    if (!(r11 + r3)) return; \
++    \
++    m8 = _mm_cvtsi32_si128(r11); \
++    m9 = _mm_cvtsi32_si128(r3); \
++    m8 = _mm_unpacklo_epi16(m8, m8); \
++    m9 = _mm_unpacklo_epi16(m9, m9); \
++    m9 = _mm_shuffle2_epi32(m8, m9, 0); /* tc0, tc1 */ \
++    m8 = _mm_slli_epi16(m9, 2); /* tc << 2 */ \
++    m8 = _mm_avg_epu16(m8, m9); /* tc25 = ((tc * 5 + 1) >> 1) */ \
++    \
++    /* --- beta_3 comparison --- */ \
++    m12 = _mm_abs_epi16(_mm_sub_epi16(m0, m3)); /* abs(p3 - p0) */ \
++    m15 = _mm_abs_epi16(_mm_sub_epi16(m7, m4)); /* abs(q3 - q0) */ \
++    m12 = _mm_add_epi16(m12, m15); \
++    \
++    m13 = _mm_srai_epi16(m13, 3); /* beta >> 3 */ \
++    m13 = _mm_cmpgt_epi16(m13, m12); \
++    r6 &= _mm_movemask_epi8(m13); /* strong mask, beta_2 and beta_3 comparisons */ \
++    /* --- tc25 comparison --- */ \
++    m12 = _mm_abs_epi16(_mm_sub_epi16(m3, m4)); /* abs(p0 - q0) */ \
++    \
++    m8 = _mm_cmpgt_epi16(m8, m12); /* tc25 comparisons */ \
++    r6 &= _mm_movemask_epi8(m8); /* strong mask, beta_2, beta_3 and tc25 comparisons */ \
++    r6 &= r6 << 6; \
++    \
++    m14 = _mm_mullo_epi16(m9, _mm_set1_epi16(-2)); /* -tc * 2 */ \
++    m9 = _mm_add_epi16(m9, m9); \
++    \
++    r6 &= 0x8080; /* strong mask, bits 15 and 7 */ \
++    if (r6) { \
++        m10 = _mm_cvtsi32_si128(r6); \
++        m10 = _mm_shuffle_epi8(m10, vshufm); /* strong mask */ \
++        m13 = _mm_set1_epi16(2); \
++        m11 = _mm_and_si128(m11, m10); /* combine filtering mask and strong mask */ \
++        \
++        m22 = _mm_add_epi16(_mm_add_epi16(m3, m4), m13); /* p0 + q0 + 2 */ \
++        LUMA_DEBLOCK_STRONG(m5, m3, m2, m1, m0, m12) \
++        LUMA_DEBLOCK_STRONG(m2, m4, m5, m6, m7, m15) \
++        m2 = _mm_blendv_epi8(m2, m12, m11); \
++        m5 = _mm_blendv_epi8(m5, m15, m11); \
++    } \
++    r6 = (~r6 & r13) & 0x8080; /* final weak filtering mask, bits 0 and 1 */ \
++    if (!r6) break; \
++    \
++    /* weak filtering mask */ \
++    m11 = _mm_cvtsi32_si128(r6); \
++    m11 = _mm_shuffle_epi8(m11, vshufm); /* filtering mask */ \
++    \
++    beta = (beta + (beta >> 1)) >> 3; \
++    \
++    m12 = _mm_sub_epi16(m4, m3);   /* q0 - p0 */ \
++    m10 = _mm_slli_epi16(m12, 3);  /* 8 * (q0 - p0) */ \
++    m12 = _mm_add_epi16(m12, m10); /* 9 * (q0 - p0) */ \
++    \
++    m10 = _mm_sub_epi16(m5, m2);   /* q1 - p1 */ \
++    m8 = _mm_slli_epi16(m10, 1);   /* 2 * (q1 - p1) */ \
++    m10 = _mm_add_epi16(m10, m8);  /* 3 * (q1 - p1) */ \
++    m12 = _mm_sub_epi16(m12, m10); /* 9 * (q0 - p0) - 3 * (q1 - p1) */ \
++    m12 = _mm_add_epi16(m12, _mm_set1_epi16(8)); \
++    m12 = _mm_srai_epi16(m12, 4);  /* >> 4, delta0 */ \
++    m13 = _mm_abs_epi16(m12);      /* abs(delta0) */ \
++    \
++    m10 = _mm_slli_epi16(m9, 2);   /* 8 * tc */ \
++    m10 = _mm_add_epi16(m10, m9);  /* 10 * tc */ \
++    m10 = _mm_cmpgt_epi16(m10, m13); \
++    m11 = _mm_and_si128(m11, m10); \
++    \
++    m9 = _mm_srai_epi16(m9, 1);    /* tc * 2 -> tc */ \
++    m14 = _mm_srai_epi16(m14, 1);  /*-tc * 2 -> -tc */ \
++    \
++    m12 = _mm_max_epi16(m12, m14); \
++    m12 = _mm_min_epi16(m12, m9);  /* av_clip(delta0, -tc, tc) */ \
++    \
++    m15 = _mm_srai_epi16(m9, 1);     /* tc -> tc / 2 */ \
++    m14 = _mm_sub_epi16(vzero, m15); /* -tc / 2 */ \
++    \
++    m10 = _mm_set1_epi16(beta); \
++    LUMA_DEBLOCK_WEAK(m3, m2, m1, add, m20) /* p1' */ \
++    LUMA_DEBLOCK_WEAK(m4, m5, m6, sub, m21) /* q1' */ \
++} while (0);
++
++static void hevc_h_loop_filter_luma_8_e2k(uint8_t *pix, ptrdiff_t stride, int beta,
++                                          int32_t *_tc, uint8_t *_no_p, uint8_t *_no_q)
++{
++    __m128i m0, m1, m2, m3, m4, m5, m6, m7, vzero = _mm_setzero_si128();
++    m0 = VEC_LD8(pix - 4 * stride);
++    m1 = VEC_LD8(pix - 3 * stride);
++    m2 = VEC_LD8(pix - 2 * stride);
++    m3 = VEC_LD8(pix - stride);
++    m4 = VEC_LD8(pix);
++    m5 = VEC_LD8(pix + stride);
++    m6 = VEC_LD8(pix + 2 * stride);
++    m7 = VEC_LD8(pix + 3 * stride);
++    m0 = _mm_unpacklo_epi8(m0, vzero);
++    m1 = _mm_unpacklo_epi8(m1, vzero);
++    m2 = _mm_unpacklo_epi8(m2, vzero);
++    m3 = _mm_unpacklo_epi8(m3, vzero);
++    m4 = _mm_unpacklo_epi8(m4, vzero);
++    m5 = _mm_unpacklo_epi8(m5, vzero);
++    m6 = _mm_unpacklo_epi8(m6, vzero);
++    m7 = _mm_unpacklo_epi8(m7, vzero);
++    LUMA_DEBLOCK_BODY
++    m1 = _mm_packus_epi16(m1, m2);
++    m3 = _mm_packus_epi16(m3, m4);
++    m5 = _mm_packus_epi16(m5, m6);
++    VEC_STL(pix - 3 * stride, m1);
++    VEC_STH(pix - 2 * stride, m1);
++    VEC_STL(pix - stride,     m3);
++    VEC_STH(pix,              m3);
++    VEC_STL(pix + stride,     m5);
++    VEC_STH(pix + 2 * stride, m5);
++}
++
++#define TR_STEP(a, b) \
++    a##0 = _mm_unpacklo_epi8(b##0, b##2); \
++    a##1 = _mm_unpackhi_epi8(b##0, b##2); \
++    a##2 = _mm_unpacklo_epi8(b##1, b##3); \
++    a##3 = _mm_unpackhi_epi8(b##1, b##3);
++
++static void hevc_v_loop_filter_luma_8_e2k(uint8_t *pix, ptrdiff_t stride, int beta,
++                                          int32_t *_tc, uint8_t *_no_p, uint8_t *_no_q)
++{
++    __m128i m0, m1, m2, m3, m4, m5, m6, m7, vzero = _mm_setzero_si128();
++    __m128i t0, t1, t2, t3;
++    pix -= 4;
++    m0 = VEC_LD8(pix);
++    m1 = VEC_LD8(pix + stride);
++    m2 = VEC_LD8(pix + stride * 2);
++    m3 = VEC_LD8(pix + stride * 3);
++    m4 = VEC_LD8(pix + stride * 4);
++    m5 = VEC_LD8(pix + stride * 5);
++    m6 = VEC_LD8(pix + stride * 6);
++    m7 = VEC_LD8(pix + stride * 7);
++
++    t0 = _mm_unpacklo_epi8(m0, m4);
++    t1 = _mm_unpacklo_epi8(m1, m5);
++    t2 = _mm_unpacklo_epi8(m2, m6);
++    t3 = _mm_unpacklo_epi8(m3, m7);
++    TR_STEP(m, t) TR_STEP(t, m)
++
++    m0 = _mm_unpacklo_epi8(t0, vzero);
++    m1 = _mm_unpackhi_epi8(t0, vzero);
++    m2 = _mm_unpacklo_epi8(t1, vzero);
++    m3 = _mm_unpackhi_epi8(t1, vzero);
++    m4 = _mm_unpacklo_epi8(t2, vzero);
++    m5 = _mm_unpackhi_epi8(t2, vzero);
++    m6 = _mm_unpacklo_epi8(t3, vzero);
++    m7 = _mm_unpackhi_epi8(t3, vzero);
++
++    LUMA_DEBLOCK_BODY
++    t0 = _mm_packus_epi16(m0, m1);
++    t1 = _mm_packus_epi16(m2, m3);
++    t2 = _mm_packus_epi16(m4, m5);
++    t3 = _mm_packus_epi16(m6, m7);
++    TR_STEP(m, t) TR_STEP(t, m) TR_STEP(m, t)
++
++    VEC_STL(pix,              m0);
++    VEC_STH(pix +     stride, m0);
++    VEC_STL(pix + 2 * stride, m1);
++    VEC_STH(pix + 3 * stride, m1);
++    VEC_STL(pix + 4 * stride, m2);
++    VEC_STH(pix + 5 * stride, m2);
++    VEC_STL(pix + 6 * stride, m3);
++    VEC_STH(pix + 7 * stride, m3);
++}
++
++#define CHROMA_DEBLOCK_BODY \
++    v0 = VEC_LD8(_tc); \
++    v0 = _mm_unpacklo_epi16(v0, v0); \
++    v0 = _mm_shuffle_epi32(v0, 0xa0); \
++    \
++    v1 = _mm_slli_epi16(_mm_sub_epi16(q0, p0), 2); \
++    v2 = _mm_add_epi16(_mm_sub_epi16(p1, q1), _mm_set1_epi16(4)); \
++    v1 = _mm_srai_epi16(_mm_add_epi16(v2, v1), 3); \
++    \
++    v1 = _mm_min_epi16(v1, v0); \
++    v1 = _mm_max_epi16(v1, _mm_sub_epi16(vzero, v0)); \
++    p0 = _mm_add_epi16(p0, v1); \
++    q0 = _mm_sub_epi16(q0, v1);
++
++static void hevc_h_loop_filter_chroma_8_e2k(uint8_t *pix, ptrdiff_t stride,
++                                            int32_t *_tc, uint8_t *_no_p, uint8_t *_no_q)
++{
++    __m128i p1, p0, q0, q1, vzero = _mm_setzero_si128();
++    __m128i v0, v1, v2;
++    p1 = VEC_LD8(pix - 2 * stride);
++    p0 = VEC_LD8(pix - stride);
++    q0 = VEC_LD8(pix);
++    q1 = VEC_LD8(pix + stride);
++    p1 = _mm_unpacklo_epi8(p1, vzero);
++    p0 = _mm_unpacklo_epi8(p0, vzero);
++    q0 = _mm_unpacklo_epi8(q0, vzero);
++    q1 = _mm_unpacklo_epi8(q1, vzero);
++    CHROMA_DEBLOCK_BODY
++    p0 = _mm_packus_epi16(p0, q0);
++    VEC_STL(pix - stride, p0);
++    VEC_STH(pix, p0);
++}
++
++#define READ_TR8X4(src, st, r8, r9, r10, r11) {            \
++    __m64 r0, r1, r2, r3, r4, r5, r6, r7;                  \
++    r0 = _mm_cvtsi32_si64(*(uint32_t*)(src));              \
++    r1 = _mm_cvtsi32_si64(*(uint32_t*)(src + st));         \
++    r2 = _mm_cvtsi32_si64(*(uint32_t*)(src + st * 2));     \
++    r3 = _mm_cvtsi32_si64(*(uint32_t*)(src + st * 3));     \
++    r4 = _mm_cvtsi32_si64(*(uint32_t*)(src + st * 4));     \
++    r5 = _mm_cvtsi32_si64(*(uint32_t*)(src + st * 5));     \
++    r6 = _mm_cvtsi32_si64(*(uint32_t*)(src + st * 6));     \
++    r7 = _mm_cvtsi32_si64(*(uint32_t*)(src + st * 7));     \
++                                                           \
++    r0 = _mm_unpacklo_pi8(r0, r4);                         \
++    r1 = _mm_unpacklo_pi8(r1, r5);                         \
++    r2 = _mm_unpacklo_pi8(r2, r6);                         \
++    r3 = _mm_unpacklo_pi8(r3, r7);                         \
++                                                           \
++    r4 = _mm_unpacklo_pi8(r0, r2);                         \
++    r5 = _mm_unpackhi_pi8(r0, r2);                         \
++    r6 = _mm_unpacklo_pi8(r1, r3);                         \
++    r7 = _mm_unpackhi_pi8(r1, r3);                         \
++                                                           \
++    r8 = _mm_unpacklo_pi8(r4, r6);                         \
++    r9 = _mm_unpackhi_pi8(r4, r6);                         \
++    r10 = _mm_unpacklo_pi8(r5, r7);                        \
++    r11 = _mm_unpackhi_pi8(r5, r7);                        \
++}
++
++static void hevc_v_loop_filter_chroma_8_e2k(uint8_t *pix, ptrdiff_t stride,
++                                            int32_t *_tc, uint8_t *_no_p, uint8_t *_no_q)
++{
++    __m128i p1, p0, q0, q1, vzero = _mm_setzero_si128();
++    __m128i v0, v1, v2;
++    __m64 h0, h1, h2, h3;
++    READ_TR8X4(pix - 2, stride, h0, h1, h2, h3);
++    p1 = _mm_unpacklo_epi8(_mm_movpi64_epi64(h0), vzero);
++    p0 = _mm_unpacklo_epi8(_mm_movpi64_epi64(h1), vzero);
++    q0 = _mm_unpacklo_epi8(_mm_movpi64_epi64(h2), vzero);
++    q1 = _mm_unpacklo_epi8(_mm_movpi64_epi64(h3), vzero);
++    CHROMA_DEBLOCK_BODY
++    p0 = _mm_packus_epi16(p0, p0);
++    q0 = _mm_packus_epi16(q0, q0);
++    p0 = _mm_unpacklo_epi8(p0, q0);
++#define WRITE2(v, i) *(uint16_t*)(pix - 1 + i * stride) = _mm_extract_epi16(v, i);
++    WRITE2(p0, 0) WRITE2(p0, 1) WRITE2(p0, 2) WRITE2(p0, 3)
++    WRITE2(p0, 4) WRITE2(p0, 5) WRITE2(p0, 6) WRITE2(p0, 7)
++#undef WRITE2
++}
++
++/* init ------------------------------------------------------------*/
 +
 +av_cold void ff_hevc_dsp_init_e2k(HEVCDSPContext *c, const int bit_depth)
 +{
 +    if (!E2K_BASE(av_get_cpu_flags()))
 +        return;
 +
-+    if (bit_depth == 8)
-+        c->idct[0] = ff_hevc_idct_4x4_8_e2k;
-+    if (bit_depth == 10)
-+        c->idct[0] = ff_hevc_idct_4x4_10_e2k;
++    if (bit_depth == 8) {
++        c->idct[0] = hevc_idct_4x4_8_e2k;
++        c->idct[1] = hevc_idct_8x8_8_e2k;
++        c->idct[2] = hevc_idct_16x16_8_e2k;
++        c->idct[3] = hevc_idct_32x32_8_e2k;
++
++        c->add_residual[0] = hevc_add_residual4x4_8_e2k;
++        c->add_residual[1] = hevc_add_residual8x8_8_e2k;
++        c->add_residual[2] = hevc_add_residual16x16_8_e2k;
++        c->add_residual[3] = hevc_add_residual32x32_8_e2k;
++
++        c->sao_band_filter[0] =
++        c->sao_band_filter[1] =
++        c->sao_band_filter[2] =
++        c->sao_band_filter[3] =
++        c->sao_band_filter[4] = hevc_sao_band_filter_8_e2k;
++
++        c->sao_edge_filter[0] = hevc_sao_edge_filter_8_8_e2k;
++        c->sao_edge_filter[1] = hevc_sao_edge_filter_16_8_e2k;
++        c->sao_edge_filter[2] = hevc_sao_edge_filter_32_8_e2k;
++        c->sao_edge_filter[3] = hevc_sao_edge_filter_48_8_e2k;
++        c->sao_edge_filter[4] = hevc_sao_edge_filter_64_8_e2k;
++
++        c->hevc_h_loop_filter_luma = hevc_h_loop_filter_luma_8_e2k;
++        c->hevc_v_loop_filter_luma = hevc_v_loop_filter_luma_8_e2k;
++        c->hevc_h_loop_filter_chroma = hevc_h_loop_filter_chroma_8_e2k;
++        c->hevc_v_loop_filter_chroma = hevc_v_loop_filter_chroma_8_e2k;
++
++#define PEL_LINK(d, v, h, s) \
++    c->d[5][v][h] = s##16_8_e2k; \
++    c->d[7][v][h] = s##32_8_e2k; \
++    c->d[9][v][h] = s##64_8_e2k;
++
++#define PEL_LINK1(d, v, h, s) \
++    c->d[5][v][h] = \
++    c->d[7][v][h] = \
++    c->d[9][v][h] = s##_8_e2k;
++
++#define PEL_LINK2(d, v, h, s) \
++    c->d[3][v][h] = PEL_LINK1(d, v, h, s)
++
++        // !checkasm {
++        c->put_hevc_epel[3][0][0] = put_hevc_pel_pixels8_8_e2k;
++        c->put_hevc_qpel[3][0][0] = put_hevc_pel_pixels8_8_e2k;
++        PEL_LINK(put_hevc_epel, 0, 0, put_hevc_pel_pixels)
++        PEL_LINK(put_hevc_qpel, 0, 0, put_hevc_pel_pixels)
++        c->put_hevc_epel[1][0][1] = put_hevc_epel_h4_8_e2k;
++        c->put_hevc_epel[3][0][1] = put_hevc_epel_h8_8_e2k;
++        c->put_hevc_qpel[3][0][1] = put_hevc_qpel_h8_8_e2k;
++        PEL_LINK(put_hevc_epel, 0, 1, put_hevc_epel_h)
++        PEL_LINK(put_hevc_qpel, 0, 1, put_hevc_qpel_h)
++
++        c->put_hevc_epel_uni[3][0][0] = put_hevc_pel_uni_pixels8_8_e2k;
++        c->put_hevc_qpel_uni[3][0][0] = put_hevc_pel_uni_pixels8_8_e2k;
++        PEL_LINK(put_hevc_epel_uni, 0, 0, put_hevc_pel_uni_pixels)
++        PEL_LINK(put_hevc_qpel_uni, 0, 0, put_hevc_pel_uni_pixels)
++        c->put_hevc_epel_uni[3][0][1] = put_hevc_epel_uni_h8_8_e2k;
++        c->put_hevc_qpel_uni[3][0][1] = put_hevc_qpel_uni_h8_8_e2k;
++        PEL_LINK(put_hevc_epel_uni, 0, 1, put_hevc_epel_uni_h)
++        PEL_LINK(put_hevc_qpel_uni, 0, 1, put_hevc_qpel_uni_h)
++
++        c->put_hevc_epel_bi[3][0][0] = put_hevc_pel_bi_pixels8_8_e2k;
++        c->put_hevc_qpel_bi[3][0][0] = put_hevc_pel_bi_pixels8_8_e2k;
++        PEL_LINK(put_hevc_epel_bi, 0, 0, put_hevc_pel_bi_pixels)
++        PEL_LINK(put_hevc_qpel_bi, 0, 0, put_hevc_pel_bi_pixels)
++        PEL_LINK(put_hevc_epel_bi, 0, 1, put_hevc_epel_bi_h)
++        PEL_LINK(put_hevc_qpel_bi, 0, 1, put_hevc_qpel_bi_h)
++
++        c->put_hevc_epel_uni_w[3][0][0] = put_hevc_pel_uni_w_pixels8_8_e2k;
++        c->put_hevc_qpel_uni_w[3][0][0] = put_hevc_pel_uni_w_pixels8_8_e2k;
++        PEL_LINK(put_hevc_epel_uni_w, 0, 0, put_hevc_pel_uni_w_pixels)
++        PEL_LINK(put_hevc_qpel_uni_w, 0, 0, put_hevc_pel_uni_w_pixels)
++        c->put_hevc_epel_uni_w[3][0][1] = put_hevc_epel_uni_w_h8_8_e2k;
++        c->put_hevc_qpel_uni_w[3][0][1] = put_hevc_qpel_uni_w_h8_8_e2k;
++        PEL_LINK(put_hevc_epel_uni_w, 0, 1, put_hevc_epel_uni_w_h)
++        PEL_LINK(put_hevc_qpel_uni_w, 0, 1, put_hevc_qpel_uni_w_h)
++
++        PEL_LINK1(put_hevc_epel, 1, 0, put_hevc_epel_v)
++        PEL_LINK1(put_hevc_qpel, 1, 0, put_hevc_qpel_v)
++        PEL_LINK2(put_hevc_epel, 1, 1, put_hevc_epel_hv)
++        PEL_LINK2(put_hevc_qpel, 1, 1, put_hevc_qpel_hv)
++        PEL_LINK1(put_hevc_epel_uni, 1, 0, put_hevc_epel_uni_v)
++        PEL_LINK1(put_hevc_qpel_uni, 1, 0, put_hevc_qpel_uni_v)
++        c->put_hevc_epel_uni[1][1][1] = put_hevc_epel_uni_hv4_8_e2k;
++        PEL_LINK2(put_hevc_epel_uni, 1, 1, put_hevc_epel_uni_hv)
++        PEL_LINK2(put_hevc_qpel_uni, 1, 1, put_hevc_qpel_uni_hv)
++        PEL_LINK1(put_hevc_epel_bi, 1, 0, put_hevc_epel_bi_v)
++        PEL_LINK1(put_hevc_qpel_bi, 1, 0, put_hevc_qpel_bi_v)
++        PEL_LINK2(put_hevc_epel_bi, 1, 1, put_hevc_epel_bi_hv)
++        PEL_LINK2(put_hevc_qpel_bi, 1, 1, put_hevc_qpel_bi_hv)
++        PEL_LINK1(put_hevc_epel_uni_w, 1, 0, put_hevc_epel_uni_w_v)
++        PEL_LINK1(put_hevc_qpel_uni_w, 1, 0, put_hevc_qpel_uni_w_v)
++        c->put_hevc_epel_uni_w[1][1][1] = put_hevc_epel_uni_w_hv4_8_e2k;
++        PEL_LINK2(put_hevc_epel_uni_w, 1, 1, put_hevc_epel_uni_w_hv)
++        PEL_LINK2(put_hevc_qpel_uni_w, 1, 1, put_hevc_qpel_uni_w_hv)
++        // }
++    } else if (bit_depth == 10) {
++        c->idct[0] = hevc_idct_4x4_10_e2k;
++        c->idct[1] = hevc_idct_8x8_10_e2k;
++        c->idct[2] = hevc_idct_16x16_10_e2k;
++        c->idct[3] = hevc_idct_32x32_10_e2k;
++    }
 +}
 diff --git a/libavcodec/e2k/hpeldsp.c b/libavcodec/e2k/hpeldsp.c
 new file mode 100644
@@ -9533,7 +12333,7 @@ index 0000000..e9a3d66
 +#endif /* AVUTIL_E2K_CPU_H */
 diff --git a/libavutil/e2k/float_dsp.c b/libavutil/e2k/float_dsp.c
 new file mode 100644
-index 0000000..dfecdab
+index 0000000..0cdf9e1
 --- /dev/null
 +++ b/libavutil/e2k/float_dsp.c
 @@ -0,0 +1,188 @@
