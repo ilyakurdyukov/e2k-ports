@@ -1,6 +1,6 @@
-From e9bec4e805f8bb3f66e2557d1fa2cbc5ba9be025 Mon Sep 17 00:00:00 2001
+From 2396b17a3c0c405928d990536ddabfe0f9636d9e Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Thu, 29 Apr 2021 16:01:30 +0700
+Date: Mon, 3 May 2021 20:02:10 +0700
 Subject: [PATCH] ffmpeg-4.3.1 e2k support
 
 ---
@@ -9,10 +9,10 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavcodec/audiodsp.h                |    1 +
  libavcodec/blockdsp.c                |    2 +
  libavcodec/blockdsp.h                |    1 +
- libavcodec/e2k/Makefile              |   31 +
+ libavcodec/e2k/Makefile              |   32 +
  libavcodec/e2k/audiodsp.c            |   62 +
  libavcodec/e2k/blockdsp.c            |   72 +
- libavcodec/e2k/dctdsp.h              |   27 +
+ libavcodec/e2k/dctdsp.h              |   29 +
  libavcodec/e2k/fdctdsp.c             |  389 ++++
  libavcodec/e2k/fft.c                 | 1043 ++++++++++
  libavcodec/e2k/fft.h                 |   29 +
@@ -24,9 +24,9 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavcodec/e2k/h264qpel.c            |  255 +++
  libavcodec/e2k/h264qpel_template.c   |  354 ++++
  libavcodec/e2k/hevcdsp.c             | 2893 ++++++++++++++++++++++++++
- libavcodec/e2k/hpeldsp.c             |  302 +++
+ libavcodec/e2k/hpeldsp.c             |  490 +++++
  libavcodec/e2k/hpeldsp.h             |   30 +
- libavcodec/e2k/idctdsp.c             |  237 +++
+ libavcodec/e2k/idctdsp.c             |  322 +++
  libavcodec/e2k/lossless_audiodsp.c   |   75 +
  libavcodec/e2k/lossless_videodsp.c   |   59 +
  libavcodec/e2k/mdct15.c              |  187 ++
@@ -43,6 +43,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavcodec/e2k/vp3dsp.c              |  169 ++
  libavcodec/e2k/vp8dsp.c              |  428 ++++
  libavcodec/e2k/vp9dsp.c              | 1740 ++++++++++++++++
+ libavcodec/e2k/xvididct.c            |  198 ++
  libavcodec/fdctdsp.c                 |    2 +
  libavcodec/fdctdsp.h                 |    2 +
  libavcodec/fft.h                     |    1 +
@@ -82,7 +83,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavcodec/svq1enc.c                 |    2 +
  libavcodec/svq1enc.h                 |    1 +
  libavcodec/tests/dct.c               |    2 +
- libavcodec/tests/e2k/dct.c           |   31 +
+ libavcodec/tests/e2k/dct.c           |   33 +
  libavcodec/vc1dsp.c                  |    2 +
  libavcodec/vc1dsp.h                  |    1 +
  libavcodec/videodsp.c                |    2 +
@@ -95,6 +96,8 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavcodec/vp8dsp.h                  |    1 +
  libavcodec/vp9dsp.c                  |    1 +
  libavcodec/vp9dsp.h                  |    1 +
+ libavcodec/xvididct.c                |    2 +
+ libavcodec/xvididct.h                |    2 +
  libavutil/cpu.c                      |    8 +
  libavutil/cpu.h                      |    2 +
  libavutil/cpu_internal.h             |    2 +
@@ -126,7 +129,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libswscale/yuv2rgb.c                 |    2 +
  tests/checkasm/checkasm.c            |    2 +
  tests/checkasm/huffyuvdsp.c          |    8 +-
- 122 files changed, 14291 insertions(+), 6 deletions(-)
+ 125 files changed, 14771 insertions(+), 6 deletions(-)
  create mode 100644 libavcodec/e2k/Makefile
  create mode 100644 libavcodec/e2k/audiodsp.c
  create mode 100644 libavcodec/e2k/blockdsp.c
@@ -161,6 +164,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  create mode 100644 libavcodec/e2k/vp3dsp.c
  create mode 100644 libavcodec/e2k/vp8dsp.c
  create mode 100644 libavcodec/e2k/vp9dsp.c
+ create mode 100644 libavcodec/e2k/xvididct.c
  create mode 100644 libavcodec/tests/e2k/dct.c
  create mode 100644 libavutil/e2k/Makefile
  create mode 100644 libavutil/e2k/cpu.c
@@ -297,10 +301,10 @@ index 26fc2ea..8eccb47 100644
  
 diff --git a/libavcodec/e2k/Makefile b/libavcodec/e2k/Makefile
 new file mode 100644
-index 0000000..3564b97
+index 0000000..59f3237
 --- /dev/null
 +++ b/libavcodec/e2k/Makefile
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,32 @@
 +# subsystems
 +OBJS-$(CONFIG_AUDIODSP)                += e2k/audiodsp.o
 +OBJS-$(CONFIG_BLOCKDSP)                += e2k/blockdsp.o
@@ -331,6 +335,7 @@ index 0000000..3564b97
 +OBJS-$(CONFIG_VORBIS_DECODER)          += e2k/vorbisdsp.o
 +OBJS-$(CONFIG_VP7_DECODER)             += e2k/vp8dsp.o
 +OBJS-$(CONFIG_VP9_DECODER)             += e2k/vp9dsp.o
++OBJS-$(CONFIG_MPEG4_DECODER)           += e2k/xvididct.o
 +
 diff --git a/libavcodec/e2k/audiodsp.c b/libavcodec/e2k/audiodsp.c
 new file mode 100644
@@ -480,10 +485,10 @@ index 0000000..f85dce1
 +}
 diff --git a/libavcodec/e2k/dctdsp.h b/libavcodec/e2k/dctdsp.h
 new file mode 100644
-index 0000000..1281dc7
+index 0000000..d1ba599
 --- /dev/null
 +++ b/libavcodec/e2k/dctdsp.h
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,29 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -508,7 +513,9 @@ index 0000000..1281dc7
 +#include <stdint.h>
 +
 +void ff_fdct_e2k(int16_t *block);
-+void ff_idct_e2k(int16_t *block);
++void ff_simple_idct_e2k(int16_t *block);
++void ff_fast_idct_e2k(int16_t *block);
++void ff_xvid_idct_e2k(int16_t *block);
 +
 +#endif /* AVCODEC_E2K_DCTDSP_H */
 diff --git a/libavcodec/e2k/fdctdsp.c b/libavcodec/e2k/fdctdsp.c
@@ -6745,15 +6752,12 @@ index 0000000..ba8bed1
 +}
 diff --git a/libavcodec/e2k/hpeldsp.c b/libavcodec/e2k/hpeldsp.c
 new file mode 100644
-index 0000000..9ff59bb
+index 0000000..cc2af2f
 --- /dev/null
 +++ b/libavcodec/e2k/hpeldsp.c
-@@ -0,0 +1,302 @@
+@@ -0,0 +1,490 @@
 +/*
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
-+ * Copyright (c) 2002 Brian Foley
-+ * Copyright (c) 2002 Dieter Shirley
-+ * Copyright (c) 2003-2004 Romain Dolbeau <romain@dolbeau.org>
 + *
 + * This file is part of FFmpeg.
 + *
@@ -6783,14 +6787,34 @@ index 0000000..9ff59bb
 +
 +#include "hpeldsp.h"
 +
-+/* next one assumes that ((line_size % 16) == 0) */
-+void ff_put_pixels16_e2k(uint8_t *block, const uint8_t *pixels, ptrdiff_t line_size, int h)
++#define FUNC(name) void name##_e2k(uint8_t *block, const uint8_t *pixels, \
++                                   ptrdiff_t line_size, int h)
++
++static FUNC(put_pixels8)
 +{
-+    vec_u8 v0, v1, v2, v3;
-+    int i;
++    int y; __m64 v0, v1, v2, v3;
 +
 +    PRAGMA_E2K("ivdep")
-+    for (i = 0; i < h; i += 4) {
++    for (y = 0; y < h; y += 4) {
++        v0 = *(__m64*)(pixels);
++        v1 = *(__m64*)(pixels + line_size);
++        v2 = *(__m64*)(pixels + line_size * 2);
++        v3 = *(__m64*)(pixels + line_size * 3);
++        *(__m64*)block = v0;
++        *(__m64*)(block + line_size) = v1;
++        *(__m64*)(block + line_size * 2) = v2;
++        *(__m64*)(block + line_size * 3) = v3;
++        pixels += line_size * 4;
++        block += line_size * 4;
++    }
++}
++
++FUNC(ff_put_pixels16)
++{
++    int y; __m128i v0, v1, v2, v3;
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y += 4) {
 +        v0 = VEC_LD(pixels);
 +        v1 = VEC_LD(pixels + line_size);
 +        v2 = VEC_LD(pixels + line_size * 2);
@@ -6804,233 +6828,389 @@ index 0000000..9ff59bb
 +    }
 +}
 +
-+/* next one assumes that ((line_size % 16) == 0) */
-+#define op_avg(a,b)  a = ( ((a)|(b)) - ((((a)^(b))&0xFEFEFEFEUL)>>1) )
-+void ff_avg_pixels16_e2k(uint8_t *block, const uint8_t *pixels, ptrdiff_t line_size, int h)
++static FUNC(avg_pixels8)
 +{
-+    vec_u8 pixelsv, blockv;
-+    int i;
++    int y; __m64 v0, v1;
 +
 +    PRAGMA_E2K("ivdep")
-+    for (i = 0; i < h; i++) {
-+        blockv = VEC_LD(block);
-+        pixelsv = VEC_LD(pixels);
-+        blockv = _mm_avg_epu8(blockv, pixelsv);
-+        VEC_ST(block, blockv);
++    for (y = 0; y < h; y++) {
++        v0 = *(__m64*)pixels;
++        v1 = *(__m64*)block;
++        v0 = _mm_avg_pu8(v0, v1);
++        *(__m64*)block = v0;
 +        pixels += line_size;
 +        block += line_size;
 +    }
 +}
 +
-+/* next one assumes that ((line_size % 8) == 0) */
-+static void avg_pixels8_e2k(uint8_t * block, const uint8_t * pixels, ptrdiff_t line_size, int h)
++FUNC(ff_avg_pixels16)
 +{
-+    __m64 pixelsv, blockv;
-+    int i;
++    int y; __m128i v0, v1;
 +
 +    PRAGMA_E2K("ivdep")
-+    for (i = 0; i < h; i++) {
-+        blockv = *(__m64*)block;
-+        pixelsv = *(__m64*)pixels;
-+        blockv = _mm_avg_pu8(blockv, pixelsv);
-+        *(__m64*)block = blockv;
++    for (y = 0; y < h; y++) {
++        v0 = VEC_LD(pixels);
++        v1 = VEC_LD(block);
++        v0 = _mm_avg_epu8(v0, v1);
++        VEC_ST(block, v0);
 +        pixels += line_size;
 +        block += line_size;
 +    }
 +}
 +
-+/* next one assumes that ((line_size % 8) == 0) */
-+static void put_pixels8_xy2_e2k(uint8_t *block, const uint8_t *pixels, ptrdiff_t line_size, int h)
++static FUNC(put_pixels8_x2)
 +{
-+    int i;
-+    vec_u8 pixelsv1, pixelsv2, blockv;
-+    vec_u16 pixelssum1, pixelssum2, temp3;
-+    LOAD_ZERO;
-+    const vec_u16 vctwo = _mm_set1_epi16(2);
-+
-+    pixelsv1 = VEC_LD8(pixels);
-+    pixelsv2 = VEC_LD8(pixels + 1);
-+    pixelsv1 = _mm_unpacklo_epi8(pixelsv1, zerov);
-+    pixelsv2 = _mm_unpacklo_epi8(pixelsv2, zerov);
-+    pixelssum1 = _mm_add_epi16(pixelsv1, pixelsv2);
-+    pixelssum1 = _mm_add_epi16(pixelssum1, vctwo);
++    int y; __m64 v0, v1;
 +
 +    PRAGMA_E2K("ivdep")
-+    for (i = 0; i < h; i++) {
++    for (y = 0; y < h; y++) {
++        v0 = *(__m64*)pixels;
++        v1 = *(__m64*)(pixels + 1);
++        v0 = _mm_avg_pu8(v0, v1);
++        *(__m64*)block = v0;
 +        pixels += line_size;
-+        blockv = VEC_LD8(block);
-+        pixelsv1 = VEC_LD8(pixels);
-+        pixelsv2 = VEC_LD8(pixels + 1);
-+        pixelsv1 = _mm_unpacklo_epi8(pixelsv1, zerov);
-+        pixelsv2 = _mm_unpacklo_epi8(pixelsv2, zerov);
-+        pixelssum2 = _mm_add_epi16(pixelsv1, pixelsv2);
-+        temp3 = _mm_add_epi16(pixelssum1, pixelssum2);
-+        temp3 = _mm_srai_epi16(temp3, 2);
-+        pixelssum1 = _mm_add_epi16(pixelssum2, vctwo);
-+
-+        blockv = _mm_packus_epi16(temp3, temp3);
-+        VEC_STL(block, blockv);
 +        block += line_size;
 +    }
 +}
 +
-+/* next one assumes that ((line_size % 8) == 0) */
-+static void put_no_rnd_pixels8_xy2_e2k(uint8_t *block, const uint8_t *pixels, ptrdiff_t line_size, int h)
++static FUNC(avg_pixels8_x2)
 +{
-+    int i;
-+    vec_u8 pixelsv1, pixelsv2, blockv;
-+    vec_u16 pixelssum1, pixelssum2, temp3;
-+    LOAD_ZERO;
-+    const vec_u16 vcone = _mm_set1_epi16(1);
-+
-+    pixelsv1 = VEC_LD8(pixels);
-+    pixelsv2 = VEC_LD8(pixels + 1);
-+    pixelsv1 = _mm_unpacklo_epi8(pixelsv1, zerov);
-+    pixelsv2 = _mm_unpacklo_epi8(pixelsv2, zerov);
-+    pixelssum1 = _mm_add_epi16(pixelsv1, pixelsv2);
-+    pixelssum1 = _mm_add_epi16(pixelssum1, vcone);
++    int y; __m64 v0, v1;
 +
 +    PRAGMA_E2K("ivdep")
-+    for (i = 0; i < h; i++) {
++    for (y = 0; y < h; y++) {
++        v0 = *(__m64*)pixels;
++        v1 = *(__m64*)(pixels + 1);
++        v0 = _mm_avg_pu8(v0, v1);
++        v1 = *(__m64*)block;
++        v0 = _mm_avg_pu8(v0, v1);
++        *(__m64*)block = v0;
 +        pixels += line_size;
-+        blockv = VEC_LD8(block);
-+        pixelsv1 = VEC_LD8(pixels);
-+        pixelsv2 = VEC_LD8(pixels + 1);
-+        pixelsv1 = _mm_unpacklo_epi8(pixelsv1, zerov);
-+        pixelsv2 = _mm_unpacklo_epi8(pixelsv2, zerov);
-+        pixelssum2 = _mm_add_epi16(pixelsv1, pixelsv2);
-+        temp3 = _mm_add_epi16(pixelssum1, pixelssum2);
-+        temp3 = _mm_srai_epi16(temp3, 2);
-+        pixelssum1 = _mm_add_epi16(pixelssum2, vcone);
-+
-+        blockv = _mm_packus_epi16(temp3, temp3);
-+        VEC_STL(block, blockv);
 +        block += line_size;
 +    }
 +}
 +
-+/* next one assumes that ((line_size % 16) == 0) */
-+static void put_pixels16_xy2_e2k(uint8_t * block, const uint8_t * pixels, ptrdiff_t line_size, int h)
++static FUNC(put_no_rnd_pixels8_x2)
 +{
-+    int i;
-+    vec_u8 pixelsv1, pixelsv2, pixelsv3, pixelsv4, blockv;
-+    vec_u16 temp3, temp4, pixelssum1, pixelssum2, pixelssum3, pixelssum4;
-+    LOAD_ZERO;
-+    const vec_u16 vctwo = _mm_set1_epi16(2);
-+
-+    pixelsv1 = VEC_LD(pixels);
-+    pixelsv2 = VEC_LD(pixels + 1);
-+    pixelsv3 = _mm_unpackhi_epi8(pixelsv1, zerov);
-+    pixelsv4 = _mm_unpackhi_epi8(pixelsv2, zerov);
-+    pixelsv1 = _mm_unpacklo_epi8(pixelsv1, zerov);
-+    pixelsv2 = _mm_unpacklo_epi8(pixelsv2, zerov);
-+    pixelssum3 = _mm_add_epi16(pixelsv3, pixelsv4);
-+    pixelssum3 = _mm_add_epi16(pixelssum3, vctwo);
-+    pixelssum1 = _mm_add_epi16(pixelsv1, pixelsv2);
-+    pixelssum1 = _mm_add_epi16(pixelssum1, vctwo);
++    int y; __m64 v0, v1, c1 = _mm_set1_pi8(-1);
 +
 +    PRAGMA_E2K("ivdep")
-+    for (i = 0; i < h; i++) {
++    for (y = 0; y < h; y++) {
++        v0 = *(__m64*)pixels;
++        v1 = *(__m64*)(pixels + 1);
++        v0 = _mm_xor_si64(v0, c1);
++        v1 = _mm_xor_si64(v1, c1);
++        v0 = _mm_avg_pu8(v0, v1);
++        v0 = _mm_xor_si64(v0, c1);
++        *(__m64*)block = v0;
 +        pixels += line_size;
-+        blockv = VEC_LD(block);
-+        pixelsv1 = VEC_LD(pixels);
-+        pixelsv2 = VEC_LD(pixels + 1);
-+        pixelsv3 = _mm_unpackhi_epi8(pixelsv1, zerov);
-+        pixelsv4 = _mm_unpackhi_epi8(pixelsv2, zerov);
-+        pixelsv1 = _mm_unpacklo_epi8(pixelsv1, zerov);
-+        pixelsv2 = _mm_unpacklo_epi8(pixelsv2, zerov);
-+        pixelssum4 = _mm_add_epi16(pixelsv3, pixelsv4);
-+        pixelssum2 = _mm_add_epi16(pixelsv1, pixelsv2);
-+        temp4 = _mm_add_epi16(pixelssum3, pixelssum4);
-+        temp4 = _mm_srai_epi16(temp4, 2);
-+        temp3 = _mm_add_epi16(pixelssum1, pixelssum2);
-+        temp3 = _mm_srai_epi16(temp3, 2);
-+        pixelssum3 = _mm_add_epi16(pixelssum4, vctwo);
-+        pixelssum1 = _mm_add_epi16(pixelssum2, vctwo);
-+        blockv = _mm_packus_epi16(temp3, temp4);
-+        VEC_ST(block, blockv);
 +        block += line_size;
 +    }
 +}
 +
-+/* next one assumes that ((line_size % 16) == 0) */
-+static void put_no_rnd_pixels16_xy2_e2k(uint8_t * block, const uint8_t * pixels, ptrdiff_t line_size, int h)
++static FUNC(put_pixels8_y2)
 +{
-+    int i;
-+    vec_u8 pixelsv1, pixelsv2, pixelsv3, pixelsv4, blockv;
-+    vec_u16 temp3, temp4, pixelssum1, pixelssum2, pixelssum3, pixelssum4;
-+    LOAD_ZERO;
-+    const vec_u16 vcone = _mm_set1_epi16(1);
++    int y; __m64 v0, v1, v2;
 +
-+    pixelsv1 = VEC_LD(pixels);
-+    pixelsv2 = VEC_LD(pixels + 1);
-+    pixelsv3 = _mm_unpackhi_epi8(pixelsv1, zerov);
-+    pixelsv4 = _mm_unpackhi_epi8(pixelsv2, zerov);
-+    pixelsv1 = _mm_unpacklo_epi8(pixelsv1, zerov);
-+    pixelsv2 = _mm_unpacklo_epi8(pixelsv2, zerov);
-+    pixelssum3 = _mm_add_epi16(pixelsv3, pixelsv4);
-+    pixelssum3 = _mm_add_epi16(pixelssum3, vcone);
-+    pixelssum1 = _mm_add_epi16(pixelsv1, pixelsv2);
-+    pixelssum1 = _mm_add_epi16(pixelssum1, vcone);
-+
++    v1 = *(__m64*)pixels;
 +    PRAGMA_E2K("ivdep")
-+    for (i = 0; i < h; i++) {
++    for (y = 0; y < h; y++) {
 +        pixels += line_size;
-+        blockv = VEC_LD(block);
-+        pixelsv1 = VEC_LD(pixels);
-+        pixelsv2 = VEC_LD(pixels + 1);
-+        pixelsv3 = _mm_unpackhi_epi8(pixelsv1, zerov);
-+        pixelsv4 = _mm_unpackhi_epi8(pixelsv2, zerov);
-+        pixelsv1 = _mm_unpacklo_epi8(pixelsv1, zerov);
-+        pixelsv2 = _mm_unpacklo_epi8(pixelsv2, zerov);
-+        pixelssum4 = _mm_add_epi16(pixelsv3, pixelsv4);
-+        pixelssum2 = _mm_add_epi16(pixelsv1, pixelsv2);
-+        temp4 = _mm_add_epi16(pixelssum3, pixelssum4);
-+        temp4 = _mm_srai_epi16(temp4, 2);
-+        temp3 = _mm_add_epi16(pixelssum1, pixelssum2);
-+        temp3 = _mm_srai_epi16(temp3, 2);
-+        pixelssum3 = _mm_add_epi16(pixelssum4, vcone);
-+        pixelssum1 = _mm_add_epi16(pixelssum2, vcone);
-+        blockv = _mm_packus_epi16(temp3, temp4);
-+        VEC_ST(block, blockv);
++        v0 = *(__m64*)pixels;
++        v2 = _mm_avg_pu8(v0, v1);
++        v1 = v0;
++        *(__m64*)block = v2;
 +        block += line_size;
 +    }
 +}
 +
-+/* next one assumes that ((line_size % 8) == 0) */
-+static void avg_pixels8_xy2_e2k(uint8_t *block, const uint8_t *pixels, ptrdiff_t line_size, int h)
++static FUNC(avg_pixels8_y2)
 +{
-+    int i;
-+    vec_u8 pixelsv1, pixelsv2, blockv, blocktemp;
-+    vec_u16 pixelssum1, pixelssum2, temp3;
-+    LOAD_ZERO;
-+    const vec_u16 vctwo = _mm_set1_epi16(2);
++    int y; __m64 v0, v1, v2;
 +
-+    pixelsv1 = VEC_LD8(pixels);
-+    pixelsv2 = VEC_LD8(pixels + 1);
-+    pixelsv1 = _mm_unpacklo_epi8(pixelsv1, zerov);
-+    pixelsv2 = _mm_unpacklo_epi8(pixelsv2, zerov);
-+    pixelssum1 = _mm_add_epi16(pixelsv1, pixelsv2);
-+    pixelssum1 = _mm_add_epi16(pixelssum1, vctwo);
-+
++    v1 = *(__m64*)pixels;
 +    PRAGMA_E2K("ivdep")
-+    for (i = 0; i < h; i++) {
++    for (y = 0; y < h; y++) {
 +        pixels += line_size;
-+        blockv = VEC_LD8(block);
-+        pixelsv1 = VEC_LD8(pixels);
-+        pixelsv2 = VEC_LD8(pixels + 1);
-+        pixelsv1 = _mm_unpacklo_epi8(pixelsv1, zerov);
-+        pixelsv2 = _mm_unpacklo_epi8(pixelsv2, zerov);
-+        pixelssum2 = _mm_add_epi16(pixelsv1, pixelsv2);
-+        temp3 = _mm_add_epi16(pixelssum1, pixelssum2);
-+        temp3 = _mm_srai_epi16(temp3, 2);
-+        pixelssum1 = _mm_add_epi16(pixelssum2, vctwo);
-+        blocktemp = _mm_packus_epi16(temp3, temp3);
-+        blockv = _mm_avg_epu8(blocktemp, blockv);
-+        VEC_STL(block, blockv);
++        v0 = *(__m64*)pixels;
++        v2 = _mm_avg_pu8(v0, v1);
++        v1 = v0;
++        v0 = *(__m64*)block;
++        v2 = _mm_avg_pu8(v2, v0);
++        *(__m64*)block = v2;
 +        block += line_size;
 +    }
 +}
++
++static FUNC(put_no_rnd_pixels8_y2)
++{
++    int y; __m64 v0, v1, v2, c1 = _mm_set1_pi8(-1);
++
++    v1 = *(__m64*)pixels;
++    v1 = _mm_xor_si64(v1, c1);
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        pixels += line_size;
++        v0 = *(__m64*)pixels;
++        v0 = _mm_xor_si64(v0, c1);
++        v2 = _mm_avg_pu8(v0, v1);
++        v2 = _mm_xor_si64(v2, c1);
++        v1 = v0;
++        *(__m64*)block = v2;
++        block += line_size;
++    }
++}
++
++static FUNC(put_pixels16_x2)
++{
++    int y; __m128i v0, v1;
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        v0 = VEC_LD(pixels);
++        v1 = VEC_LD(pixels + 1);
++        v0 = _mm_avg_epu8(v0, v1);
++        VEC_ST(block, v0);
++        pixels += line_size;
++        block += line_size;
++    }
++}
++
++static FUNC(avg_pixels16_x2)
++{
++    int y; __m128i v0, v1;
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        v0 = VEC_LD(pixels);
++        v1 = VEC_LD(pixels + 1);
++        v0 = _mm_avg_epu8(v0, v1);
++        v1 = VEC_LD(block);
++        v0 = _mm_avg_epu8(v0, v1);
++        VEC_ST(block, v0);
++        pixels += line_size;
++        block += line_size;
++    }
++}
++
++static FUNC(put_no_rnd_pixels16_x2)
++{
++    int y; __m128i v0, v1, c1 = _mm_set1_epi8(-1);
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        v0 = VEC_LD(pixels);
++        v1 = VEC_LD(pixels + 1);
++        v0 = _mm_xor_si128(v0, c1);
++        v1 = _mm_xor_si128(v1, c1);
++        v0 = _mm_avg_epu8(v0, v1);
++        v0 = _mm_xor_si128(v0, c1);
++        VEC_ST(block, v0);
++        pixels += line_size;
++        block += line_size;
++    }
++}
++
++static FUNC(put_pixels16_y2)
++{
++    int y; __m128i v0, v1, v2;
++
++    v1 = VEC_LD(pixels);
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        pixels += line_size;
++        v0 = VEC_LD(pixels);
++        v2 = _mm_avg_epu8(v0, v1);
++        v1 = v0;
++        VEC_ST(block, v2);
++        block += line_size;
++    }
++}
++
++static FUNC(avg_pixels16_y2)
++{
++    int y; __m128i v0, v1, v2;
++
++    v1 = VEC_LD(pixels);
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        pixels += line_size;
++        v0 = VEC_LD(pixels);
++        v2 = _mm_avg_epu8(v0, v1);
++        v1 = v0;
++        v0 = VEC_LD(block);
++        v2 = _mm_avg_epu8(v2, v0);
++        VEC_ST(block, v2);
++        block += line_size;
++    }
++}
++
++static FUNC(put_no_rnd_pixels16_y2)
++{
++    int y; __m128i v0, v1, v2, c1 = _mm_set1_epi8(-1);
++
++    v1 = VEC_LD(pixels);
++    v1 = _mm_xor_si128(v1, c1);
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        pixels += line_size;
++        v0 = VEC_LD(pixels);
++        v0 = _mm_xor_si128(v0, c1);
++        v2 = _mm_avg_epu8(v0, v1);
++        v2 = _mm_xor_si128(v2, c1);
++        v1 = v0;
++        VEC_ST(block, v2);
++        block += line_size;
++    }
++}
++
++#define PIXELS_X2(v2, v3) \
++    v1 = *(__m64*)pixels; \
++    v5 = *(__m64*)(pixels + 1); \
++    v0 = _mm_unpacklo_pi8(v1, vzero); \
++    v1 = _mm_unpackhi_pi8(v1, vzero); \
++    v4 = _mm_unpacklo_pi8(v5, vzero); \
++    v5 = _mm_unpackhi_pi8(v5, vzero); \
++    v2 = _mm_add_pi16(v0, v4); \
++    v3 = _mm_add_pi16(v1, v5);
++
++static FUNC(put_pixels8_xy2)
++{
++    int y; __m64 v0, v1, v2, v3, v4, v5, vzero = _mm_setzero_si64();
++    __m64 vbias = _mm_set1_pi16(2);
++    PIXELS_X2(v2, v3)
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        pixels += line_size;
++        PIXELS_X2(v0, v1)
++        v2 = _mm_add_pi16(v2, vbias);
++        v3 = _mm_add_pi16(v3, vbias);
++        v4 = _mm_srai_pi16(_mm_add_pi16(v0, v2), 2);
++        v5 = _mm_srai_pi16(_mm_add_pi16(v1, v3), 2);
++        v2 = v0; v3 = v1;
++        v4 = _mm_packs_pu16(v4, v5);
++        *(__m64*)block = v4;
++        block += line_size;
++    }
++}
++
++static FUNC(avg_pixels8_xy2)
++{
++    int y; __m64 v0, v1, v2, v3, v4, v5, vzero = _mm_setzero_si64();
++    __m64 vbias = _mm_set1_pi16(2);
++    PIXELS_X2(v2, v3)
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        pixels += line_size;
++        PIXELS_X2(v0, v1)
++        v2 = _mm_add_pi16(v2, vbias);
++        v3 = _mm_add_pi16(v3, vbias);
++        v4 = _mm_srai_pi16(_mm_add_pi16(v0, v2), 2);
++        v5 = _mm_srai_pi16(_mm_add_pi16(v1, v3), 2);
++        v2 = v0; v3 = v1;
++        v4 = _mm_packs_pu16(v4, v5);
++        v5 = *(__m64*)block;
++        v4 = _mm_avg_pu8(v4, v5);
++        *(__m64*)block = v4;
++        block += line_size;
++    }
++}
++
++static FUNC(put_no_rnd_pixels8_xy2)
++{
++    int y; __m64 v0, v1, v2, v3, v4, v5, vzero = _mm_setzero_si64();
++    PIXELS_X2(v2, v3)
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        pixels += line_size;
++        PIXELS_X2(v0, v1)
++        v4 = _mm_srai_pi16(_mm_avg_pu16(v0, v2), 1);
++        v5 = _mm_srai_pi16(_mm_avg_pu16(v1, v3), 1);
++        v2 = v0; v3 = v1;
++        v4 = _mm_packs_pu16(v4, v5);
++        *(__m64*)block = v4;
++        block += line_size;
++    }
++}
++
++#undef PIXELS_X2
++
++#define PIXELS_X2(v2, v3) \
++    v1 = VEC_LD(pixels); \
++    v5 = VEC_LD(pixels + 1); \
++    v0 = _mm_unpacklo_epi8(v1, vzero); \
++    v1 = _mm_unpackhi_epi8(v1, vzero); \
++    v4 = _mm_unpacklo_epi8(v5, vzero); \
++    v5 = _mm_unpackhi_epi8(v5, vzero); \
++    v2 = _mm_add_epi16(v0, v4); \
++    v3 = _mm_add_epi16(v1, v5);
++
++static FUNC(put_pixels16_xy2)
++{
++    int y; __m128i v0, v1, v2, v3, v4, v5, vzero = _mm_setzero_si128();
++    __m128i vbias = _mm_set1_epi16(2);
++    PIXELS_X2(v2, v3)
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        pixels += line_size;
++        PIXELS_X2(v0, v1)
++        v2 = _mm_add_epi16(v2, vbias);
++        v3 = _mm_add_epi16(v3, vbias);
++        v4 = _mm_srai_epi16(_mm_add_epi16(v0, v2), 2);
++        v5 = _mm_srai_epi16(_mm_add_epi16(v1, v3), 2);
++        v2 = v0; v3 = v1;
++        v4 = _mm_packus_epi16(v4, v5);
++        VEC_ST(block, v4);
++        block += line_size;
++    }
++}
++
++static FUNC(avg_pixels16_xy2)
++{
++    int y; __m128i v0, v1, v2, v3, v4, v5, vzero = _mm_setzero_si128();
++    __m128i vbias = _mm_set1_epi16(2);
++    PIXELS_X2(v2, v3)
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        pixels += line_size;
++        PIXELS_X2(v0, v1)
++        v2 = _mm_add_epi16(v2, vbias);
++        v3 = _mm_add_epi16(v3, vbias);
++        v4 = _mm_srai_epi16(_mm_add_epi16(v0, v2), 2);
++        v5 = _mm_srai_epi16(_mm_add_epi16(v1, v3), 2);
++        v2 = v0; v3 = v1;
++        v4 = _mm_packus_epi16(v4, v5);
++        v5 = VEC_LD(block);
++        v4 = _mm_avg_epu8(v4, v5);
++        VEC_ST(block, v4);
++        block += line_size;
++    }
++}
++
++static FUNC(put_no_rnd_pixels16_xy2)
++{
++    int y; __m128i v0, v1, v2, v3, v4, v5, vzero = _mm_setzero_si128();
++    PIXELS_X2(v2, v3)
++
++    PRAGMA_E2K("ivdep")
++    for (y = 0; y < h; y++) {
++        pixels += line_size;
++        PIXELS_X2(v0, v1)
++        v4 = _mm_srai_epi16(_mm_avg_epu16(v0, v2), 1);
++        v5 = _mm_srai_epi16(_mm_avg_epu16(v1, v3), 1);
++        v2 = v0; v3 = v1;
++        v4 = _mm_packus_epi16(v4, v5);
++        VEC_ST(block, v4);
++        block += line_size;
++    }
++}
++
++#undef PIXELS_X2
 +
 +av_cold void ff_hpeldsp_init_e2k(HpelDSPContext *c, int flags)
 +{
@@ -7039,17 +7219,32 @@ index 0000000..9ff59bb
 +
 +    // !checkasm
 +
-+    c->avg_pixels_tab[0][0]        = ff_avg_pixels16_e2k;
-+    c->avg_pixels_tab[1][0]        = avg_pixels8_e2k;
-+    c->avg_pixels_tab[1][3]        = avg_pixels8_xy2_e2k; // fate vsynth1-mpeg2-422
++    c->avg_pixels_tab[0][0] = ff_avg_pixels16_e2k;
++    c->avg_pixels_tab[0][1] = avg_pixels16_x2_e2k; 
++    c->avg_pixels_tab[0][2] = avg_pixels16_y2_e2k; 
++    c->avg_pixels_tab[0][3] = avg_pixels16_xy2_e2k; 
++    c->avg_pixels_tab[1][0] = avg_pixels8_e2k;
++    c->avg_pixels_tab[1][1] = avg_pixels8_x2_e2k;
++    c->avg_pixels_tab[1][2] = avg_pixels8_y2_e2k;
++    c->avg_pixels_tab[1][3] = avg_pixels8_xy2_e2k; // fate vsynth1-mpeg2-422
 +
-+    c->put_pixels_tab[0][0]        = ff_put_pixels16_e2k;
-+    c->put_pixels_tab[1][3]        = put_pixels8_xy2_e2k;
-+    c->put_pixels_tab[0][3]        = put_pixels16_xy2_e2k;
++    c->put_pixels_tab[0][0] = ff_put_pixels16_e2k;
++    c->put_pixels_tab[0][1] = put_pixels16_x2_e2k;
++    c->put_pixels_tab[0][2] = put_pixels16_y2_e2k;
++    c->put_pixels_tab[0][3] = put_pixels16_xy2_e2k;
++    c->put_pixels_tab[1][0] = put_pixels8_e2k;
++    c->put_pixels_tab[1][1] = put_pixels8_x2_e2k;
++    c->put_pixels_tab[1][2] = put_pixels8_y2_e2k;
++    c->put_pixels_tab[1][3] = put_pixels8_xy2_e2k;
 +
 +    c->put_no_rnd_pixels_tab[0][0] = ff_put_pixels16_e2k;
-+    c->put_no_rnd_pixels_tab[1][3] = put_no_rnd_pixels8_xy2_e2k;
++    c->put_no_rnd_pixels_tab[0][1] = put_no_rnd_pixels16_x2_e2k;
++    c->put_no_rnd_pixels_tab[0][2] = put_no_rnd_pixels16_y2_e2k;
 +    c->put_no_rnd_pixels_tab[0][3] = put_no_rnd_pixels16_xy2_e2k;
++    c->put_no_rnd_pixels_tab[1][0] = put_pixels8_e2k;
++    c->put_no_rnd_pixels_tab[1][1] = put_no_rnd_pixels8_x2_e2k;
++    c->put_no_rnd_pixels_tab[1][2] = put_no_rnd_pixels8_y2_e2k;
++    c->put_no_rnd_pixels_tab[1][3] = put_no_rnd_pixels8_xy2_e2k;
 +}
 diff --git a/libavcodec/e2k/hpeldsp.h b/libavcodec/e2k/hpeldsp.h
 new file mode 100644
@@ -7089,10 +7284,10 @@ index 0000000..0ade264
 +#endif /* AVCODEC_E2K_HPELDSP_H */
 diff --git a/libavcodec/e2k/idctdsp.c b/libavcodec/e2k/idctdsp.c
 new file mode 100644
-index 0000000..db9d2ca
+index 0000000..90f94b1
 --- /dev/null
 +++ b/libavcodec/e2k/idctdsp.c
-@@ -0,0 +1,237 @@
+@@ -0,0 +1,322 @@
 +/*
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
 + * Copyright (c) 2001 Michel Lespinasse
@@ -7114,6 +7309,145 @@ index 0000000..db9d2ca
 + * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 + */
 +
++#include "config.h"
++
++#include <stdlib.h>
++#include <string.h>
++
++#include "libavutil/attributes.h"
++#include "libavutil/cpu.h"
++#include "libavutil/e2k/cpu.h"
++#include "libavutil/e2k/util_e2k.h"
++
++#include "libavcodec/idctdsp.h"
++#include "dctdsp.h"
++
++#define W1  22725  // cos(i*M_PI/16)*sqrt(2)*(1<<14) + 0.5
++#define W2  21407  // cos(i*M_PI/16)*sqrt(2)*(1<<14) + 0.5
++#define W3  19266  // cos(i*M_PI/16)*sqrt(2)*(1<<14) + 0.5
++#define W4  16383  // cos(i*M_PI/16)*sqrt(2)*(1<<14) + 0.5
++#define W5  12873  // cos(i*M_PI/16)*sqrt(2)*(1<<14) + 0.5
++#define W6  8867   // cos(i*M_PI/16)*sqrt(2)*(1<<14) + 0.5
++#define W7  4520   // cos(i*M_PI/16)*sqrt(2)*(1<<14) + 0.5
++
++#define ROW_SHIFT  11
++#define COL_SHIFT  20
++
++#define IDCT_ROW(i) \
++    v3 = _mm_load_si128((__m128i*)(block + i * 8)); \
++    v4 = v6; \
++    if ((_mm_movemask_epi8(_mm_cmpeq_epi16(v3, v5)) & 0xfffc) == 0xfffc) \
++        v4 = _mm_set1_epi32((int16_t)_mm_extract_epi16(v3, 0) + (1 << (ROW_SHIFT - 1))); \
++    v0 = _mm_unpacklo_epi64(v3, v3);  /* 0246 */ \
++    v1 = _mm_shuffle_epi32(v3, 0x11); /* 4602 */ \
++    v2 = _mm_shuffle_epi32(v3, 0xbb); /* 5713 */ \
++    v3 = _mm_unpackhi_epi64(v3, v3);  /* 1357 */ \
++    v0 = _mm_madd_epi16(v0, a0); \
++    v1 = _mm_madd_epi16(v1, a1); \
++    v2 = _mm_madd_epi16(v2, a2); \
++    v3 = _mm_madd_epi16(v3, a3); \
++    v0 = _mm_add_epi32(v0, v1); \
++    v1 = _mm_add_epi32(v2, v3); \
++    v0 = _mm_add_epi32(v0, v4); \
++    v2 = _mm_srai_epi32(_mm_add_epi32(v0, v1), ROW_SHIFT); \
++    v3 = _mm_srai_epi32(_mm_sub_epi32(v0, v1), ROW_SHIFT); \
++    x##i = _mm_packs_epi32(v2, _mm_shuffle_epi32(v3, 0x1b));
++
++#define CONST_PAIR(a, b) _mm_set1_epi32(b << 16 | (a & 0xffff))
++#define IDCT_COL_FIN(x0, x1, a0, b0, a4, b4) \
++    x0 = _mm_srai_epi32(_mm_add_epi32(a0, b0), COL_SHIFT); \
++    t0 = _mm_srai_epi32(_mm_add_epi32(a4, b4), COL_SHIFT); \
++    x1 = _mm_srai_epi32(_mm_sub_epi32(a0, b0), COL_SHIFT); \
++    t1 = _mm_srai_epi32(_mm_sub_epi32(a4, b4), COL_SHIFT); \
++    x0 = _mm_packs_epi32(x0, t0); \
++    x1 = _mm_packs_epi32(x1, t1);
++
++#define SIMPLE_IDCT \
++    __m128i x0, x1, x2, x3, x4, x5, x6, x7, t0, t1, t2, t3; \
++    __m128i a0, a1, a2, a3, a4, a5, a6, a7; \
++    __m128i b0, b1, b2, b3, b4, b5, b6, b7; \
++    __m128i v0, v1, v2, v3, v4, v5, v6, v7; \
++    \
++    a0 = _mm_setr_epi16(W4, W2, -W4, -W2,  W4, -W6, W4, -W6); \
++    a1 = _mm_setr_epi16(W4, W6,  W4,  W6, -W4,  W2, W4, -W2); \
++    a2 = _mm_setr_epi16(W5, W7,  W3, -W7,  W7,  W3, W7, -W5); \
++    a3 = _mm_setr_epi16(W1, W3, -W1, -W5,  W5, -W1, W3, -W1); \
++    v5 = _mm_setzero_si128(); \
++    v6 = _mm_set1_epi32(1 << (ROW_SHIFT - 1)); \
++    IDCT_ROW(0) IDCT_ROW(1) IDCT_ROW(2) IDCT_ROW(3) \
++    IDCT_ROW(4) IDCT_ROW(5) IDCT_ROW(6) IDCT_ROW(7) \
++    \
++    t0 = _mm_set1_epi16((1 << (COL_SHIFT - 1)) / W4); \
++    x0 = _mm_add_epi16(x0, t0); \
++    t0 = CONST_PAIR(W4,  W4); v4 = _mm_unpacklo_epi16(x0, x4); \
++    t1 = CONST_PAIR(W4, -W4); x4 = _mm_unpackhi_epi16(x0, x4); \
++    t2 = CONST_PAIR(W2,  W6); v6 = _mm_unpacklo_epi16(x2, x6); \
++    t3 = CONST_PAIR(W6, -W2); x6 = _mm_unpackhi_epi16(x2, x6); \
++    v0 = _mm_madd_epi16(v4, t0); x0 = _mm_madd_epi16(x4, t0); /* a0, a3 */ \
++    v4 = _mm_madd_epi16(v4, t1); x4 = _mm_madd_epi16(x4, t1); /* a1, a2 */ \
++    v2 = _mm_madd_epi16(v6, t2); x2 = _mm_madd_epi16(x6, t2); /* a0, -a3 */ \
++    v6 = _mm_madd_epi16(v6, t3); x6 = _mm_madd_epi16(x6, t3); /* a1, -a2 */ \
++    a0 = _mm_add_epi32(v0, v2); a4 = _mm_add_epi32(x0, x2); \
++    a1 = _mm_add_epi32(v4, v6); a5 = _mm_add_epi32(x4, x6); \
++    a2 = _mm_sub_epi32(v4, v6); a6 = _mm_sub_epi32(x4, x6); \
++    a3 = _mm_sub_epi32(v0, v2); a7 = _mm_sub_epi32(x0, x2); \
++    \
++    t0 = CONST_PAIR(W1,  W7); v7 = _mm_unpacklo_epi16(x1, x7); \
++    t1 = CONST_PAIR(W7, -W1); x7 = _mm_unpackhi_epi16(x1, x7); \
++    t2 = CONST_PAIR(W5,  W3); v3 = _mm_unpacklo_epi16(x5, x3); \
++    t3 = CONST_PAIR(W3, -W5); x3 = _mm_unpackhi_epi16(x5, x3); \
++    b0 = _mm_add_epi32(_mm_madd_epi16(v7, t0), _mm_madd_epi16(v3, t2)); \
++    b1 = _mm_sub_epi32(_mm_madd_epi16(v7, t3), _mm_madd_epi16(v3, t0)); \
++    b2 = _mm_add_epi32(_mm_madd_epi16(v7, t2), _mm_madd_epi16(v3, t1)); \
++    b3 = _mm_add_epi32(_mm_madd_epi16(v7, t1), _mm_madd_epi16(v3, t3)); \
++    b4 = _mm_add_epi32(_mm_madd_epi16(x7, t0), _mm_madd_epi16(x3, t2)); \
++    b5 = _mm_sub_epi32(_mm_madd_epi16(x7, t3), _mm_madd_epi16(x3, t0)); \
++    b6 = _mm_add_epi32(_mm_madd_epi16(x7, t2), _mm_madd_epi16(x3, t1)); \
++    b7 = _mm_add_epi32(_mm_madd_epi16(x7, t1), _mm_madd_epi16(x3, t3)); \
++    \
++    IDCT_COL_FIN(x0, x7, a0, b0, a4, b4) \
++    IDCT_COL_FIN(x1, x6, a1, b1, a5, b5) \
++    IDCT_COL_FIN(x2, x5, a2, b2, a6, b6) \
++    IDCT_COL_FIN(x3, x4, a3, b3, a7, b7)
++
++#define SAVE_ROW(i) \
++    _mm_store_si128((__m128i*)(block + 8 * i), x##i);
++
++#define PUT(a, b)                             \
++    t0 = _mm_packus_epi16(x##a, x##b);        \
++    VEC_STL(pixels, t0); pixels += line_size; \
++    VEC_STH(pixels, t0); pixels += line_size;
++
++#define ADD(a, b)                             \
++    t0 = VEC_LD8(pixels);                     \
++    t1 = VEC_LD8(pixels + line_size);         \
++    t0 = _mm_unpacklo_epi8(t0, t2);           \
++    t1 = _mm_unpacklo_epi8(t1, t2);           \
++    t0 = _mm_adds_epi16(t0, x##a);            \
++    t1 = _mm_adds_epi16(t1, x##b);            \
++    t0 = _mm_packus_epi16(t0, t1);            \
++    VEC_STL(pixels, t0); pixels += line_size; \
++    VEC_STH(pixels, t0); pixels += line_size;
++
++void ff_simple_idct_e2k(int16_t *block) {
++    SIMPLE_IDCT
++    SAVE_ROW(0) SAVE_ROW(1) SAVE_ROW(2) SAVE_ROW(3)
++    SAVE_ROW(4) SAVE_ROW(5) SAVE_ROW(6) SAVE_ROW(7)
++}
++
++static void simple_idct_put_e2k(uint8_t *pixels, ptrdiff_t line_size, int16_t *block)
++{
++    SIMPLE_IDCT
++    PUT(0, 1) PUT(2, 3) PUT(4, 5) PUT(6, 7)
++}
++
++static void simple_idct_add_e2k(uint8_t *pixels, ptrdiff_t line_size, int16_t *block)
++{
++    SIMPLE_IDCT
++    t2 = _mm_setzero_si128();
++    ADD(0, 1) ADD(2, 3) ADD(4, 5) ADD(6, 7)
++}
++
 +/* NOTE: This code is based on GPL code from the libmpeg2 project.  The
 + * author, Michel Lespinasses, has given explicit permission to release
 + * under LGPL as part of FFmpeg.
@@ -7126,195 +7460,131 @@ index 0000000..db9d2ca
 + * IDCT function itself was to factor out the partial transposition, and to
 + * perform a full transpose at the end of the function. */
 +
-+#include "config.h"
++#define FAST_IDCT_HALF                                     \
++    /* 1st stage */                                        \
++    t1 = _mm_adds_epi16(_mm_mulhrs_epi16(a1, x7), x1);     \
++    t6 = _mm_subs_epi16(_mm_mulhrs_epi16(a1, x1), x7);     \
++    t7 = _mm_adds_epi16(_mm_mulhrs_epi16(a2, x5), x3);     \
++    t3 = _mm_adds_epi16(_mm_mulhrs_epi16(ma2, x3), x5);    \
++                                                           \
++    /* 2nd stage */                                        \
++    t5 = _mm_adds_epi16(x0, x4);                           \
++    t0 = _mm_subs_epi16(x0, x4);                           \
++    t2 = _mm_adds_epi16(_mm_mulhrs_epi16(a0, x6), x2);     \
++    t4 = _mm_subs_epi16(_mm_mulhrs_epi16(a0, x2), x6);     \
++    x6 = _mm_adds_epi16(t6, t3);                           \
++    t3 = _mm_subs_epi16(t6, t3);                           \
++    t6 = _mm_subs_epi16(t1, t7);                           \
++    x1 = _mm_adds_epi16(t1, t7);                           \
++                                                           \
++    /* 3rd stage */                                        \
++    x7 = _mm_adds_epi16(t5, t2);                           \
++    x2 = _mm_subs_epi16(t5, t2);                           \
++    x5 = _mm_adds_epi16(t0, t4);                           \
++    x0 = _mm_subs_epi16(t0, t4);                           \
++    x4 = _mm_subs_epi16(t6, t3);                           \
++    x3 = _mm_adds_epi16(t6, t3);                           \
++                                                           \
++    /* 4th stage */                                        \
++    t0 = _mm_adds_epi16(x7, x1);                           \
++    t7 = _mm_subs_epi16(x7, x1);                           \
++    t1 = _mm_adds_epi16(_mm_mulhrs_epi16(c4, x3), x5);     \
++    t6 = _mm_adds_epi16(_mm_mulhrs_epi16(mc4, x3), x5);    \
++    t2 = _mm_adds_epi16(_mm_mulhrs_epi16(c4, x4), x0);     \
++    t5 = _mm_adds_epi16(_mm_mulhrs_epi16(mc4, x4), x0);    \
++    t3 = _mm_adds_epi16(x2, x6);                           \
++    t4 = _mm_subs_epi16(x2, x6);
 +
-+#include <stdlib.h>
-+#include <string.h>
++#define FAST_IDCT                                                    \
++    __m128i x0, x1, x2, x3, x4, x5, x6, x7, *p = (__m128i*)block;    \
++    __m128i t0, t1, t2, t3, t4, t5, t6, t7;                          \
++                                                                     \
++    __m128i c4  = _mm_set1_epi16(23170);                             \
++    __m128i a0  = _mm_set1_epi16(13573);                             \
++    __m128i a1  = _mm_set1_epi16(6518);                              \
++    __m128i a2  = _mm_set1_epi16(21895);                             \
++    __m128i mc4 = _mm_set1_epi16(-23170);                            \
++    __m128i ma2 = _mm_set1_epi16(-21895);                            \
++                                                                     \
++    t0 = _mm_setr_epi16(16384, 22725, 21407, 19266, 16384, 19266, 21407, 22725); \
++    t1 = _mm_setr_epi16(22725, 31521, 29692, 26722, 22725, 26722, 29692, 31521); \
++    t2 = _mm_setr_epi16(21407, 29692, 27969, 25172, 21407, 25172, 27969, 29692); \
++    t3 = _mm_setr_epi16(19266, 26722, 25172, 22654, 19266, 22654, 25172, 26722); \
++                                                                     \
++    x0 = _mm_mulhrs_epi16(_mm_slli_epi16(p[0], 4), t0);              \
++    x1 = _mm_mulhrs_epi16(_mm_slli_epi16(p[1], 4), t1);              \
++    x2 = _mm_mulhrs_epi16(_mm_slli_epi16(p[2], 4), t2);              \
++    x3 = _mm_mulhrs_epi16(_mm_slli_epi16(p[3], 4), t3);              \
++    x4 = _mm_mulhrs_epi16(_mm_slli_epi16(p[4], 4), t0);              \
++    x5 = _mm_mulhrs_epi16(_mm_slli_epi16(p[5], 4), t3);              \
++    x6 = _mm_mulhrs_epi16(_mm_slli_epi16(p[6], 4), t2);              \
++    x7 = _mm_mulhrs_epi16(_mm_slli_epi16(p[7], 4), t1);              \
++                                                                     \
++    FAST_IDCT_HALF                                                   \
++                                                                     \
++    x0 = _mm_unpacklo_epi16(t0, t2);                                 \
++    x1 = _mm_unpackhi_epi16(t0, t2);                                 \
++    x2 = _mm_unpacklo_epi16(t1, t3);                                 \
++    x3 = _mm_unpackhi_epi16(t1, t3);                                 \
++    x4 = _mm_unpacklo_epi16(t4, t6);                                 \
++    x5 = _mm_unpackhi_epi16(t4, t6);                                 \
++    x6 = _mm_unpacklo_epi16(t5, t7);                                 \
++    x7 = _mm_unpackhi_epi16(t5, t7);                                 \
++                                                                     \
++    t0 = _mm_unpacklo_epi16(x0, x2);                                 \
++    t1 = _mm_unpackhi_epi16(x0, x2);                                 \
++    t2 = _mm_unpacklo_epi16(x1, x3);                                 \
++    t3 = _mm_unpackhi_epi16(x1, x3);                                 \
++    t4 = _mm_unpacklo_epi16(x4, x6);                                 \
++    t5 = _mm_unpackhi_epi16(x4, x6);                                 \
++    t6 = _mm_unpacklo_epi16(x5, x7);                                 \
++    t7 = _mm_unpackhi_epi16(x5, x7);                                 \
++                                                                     \
++    x0 = _mm_unpacklo_epi64(t0, t4);                                 \
++    x1 = _mm_unpackhi_epi64(t0, t4);                                 \
++    x2 = _mm_unpacklo_epi64(t1, t5);                                 \
++    x3 = _mm_unpackhi_epi64(t1, t5);                                 \
++    x4 = _mm_unpacklo_epi64(t2, t6);                                 \
++    x5 = _mm_unpackhi_epi64(t2, t6);                                 \
++    x6 = _mm_unpacklo_epi64(t3, t7);                                 \
++    x7 = _mm_unpackhi_epi64(t3, t7);                                 \
++                                                                     \
++    x0 = _mm_adds_epi16(x0, _mm_set1_epi32(32 | 31 << 16));          \
++    FAST_IDCT_HALF                                                   \
++                                                                     \
++    x0 = _mm_srai_epi16(t0, 6);                                      \
++    x1 = _mm_srai_epi16(t1, 6);                                      \
++    x2 = _mm_srai_epi16(t2, 6);                                      \
++    x3 = _mm_srai_epi16(t3, 6);                                      \
++    x4 = _mm_srai_epi16(t4, 6);                                      \
++    x5 = _mm_srai_epi16(t5, 6);                                      \
++    x6 = _mm_srai_epi16(t6, 6);                                      \
++    x7 = _mm_srai_epi16(t7, 6);
 +
-+#include "libavutil/attributes.h"
-+#include "libavutil/cpu.h"
-+#include "libavutil/e2k/cpu.h"
-+#include "libavutil/e2k/util_e2k.h"
-+
-+#include "libavcodec/idctdsp.h"
-+
-+#include "dctdsp.h"
-+
-+#define IDCT_HALF                                         \
-+    /* 1st stage */                                       \
-+    t1 = _mm_adds_epi16(_mm_mulhrs_epi16(a1, vx7), vx1);  \
-+    t8 = _mm_adds_epi16(_mm_mulhrs_epi16(a1, vx1),        \
-+                        _mm_subs_epi16(zero, vx7));       \
-+    t7 = _mm_adds_epi16(_mm_mulhrs_epi16(a2, vx5), vx3);  \
-+    t3 = _mm_adds_epi16(_mm_mulhrs_epi16(ma2, vx3), vx5); \
-+                                                          \
-+    /* 2nd stage */                                       \
-+    t5 = _mm_adds_epi16(vx0, vx4);                        \
-+    t0 = _mm_subs_epi16(vx0, vx4);                        \
-+    t2 = _mm_adds_epi16(_mm_mulhrs_epi16(a0, vx6), vx2);  \
-+    t4 = _mm_adds_epi16(_mm_mulhrs_epi16(a0, vx2),        \
-+                        _mm_subs_epi16(zero, vx6));       \
-+    t6 = _mm_adds_epi16(t8, t3);                          \
-+    t3 = _mm_subs_epi16(t8, t3);                          \
-+    t8 = _mm_subs_epi16(t1, t7);                          \
-+    t1 = _mm_adds_epi16(t1, t7);                          \
-+                                                          \
-+    /* 3rd stage */                                       \
-+    t7 = _mm_adds_epi16(t5, t2);                          \
-+    t2 = _mm_subs_epi16(t5, t2);                          \
-+    t5 = _mm_adds_epi16(t0, t4);                          \
-+    t0 = _mm_subs_epi16(t0, t4);                          \
-+    t4 = _mm_subs_epi16(t8, t3);                          \
-+    t3 = _mm_adds_epi16(t8, t3);                          \
-+                                                          \
-+    /* 4th stage */                                       \
-+    vy0 = _mm_adds_epi16(t7, t1);                         \
-+    vy7 = _mm_subs_epi16(t7, t1);                         \
-+    vy1 = _mm_adds_epi16(_mm_mulhrs_epi16(c4, t3), t5);   \
-+    vy6 = _mm_adds_epi16(_mm_mulhrs_epi16(mc4, t3), t5);  \
-+    vy2 = _mm_adds_epi16(_mm_mulhrs_epi16(c4, t4), t0);   \
-+    vy5 = _mm_adds_epi16(_mm_mulhrs_epi16(mc4, t4), t0);  \
-+    vy3 = _mm_adds_epi16(t2, t6);                         \
-+    vy4 = _mm_subs_epi16(t2, t6)
-+
-+#define IDCT                                                                \
-+    vec_s16 vx0, vx1, vx2, vx3, vx4, vx5, vx6, vx7;                         \
-+    vec_s16 vy0, vy1, vy2, vy3, vy4, vy5, vy6, vy7;                         \
-+    vec_s16 t0, t1, t2, t3, t4, t5, t6, t7, t8;                             \
-+                                                                            \
-+    vec_s16 c4   = _mm_set1_epi16(23170);                                   \
-+    vec_s16 a0   = _mm_set1_epi16(13573);                                   \
-+    vec_s16 a1   = _mm_set1_epi16(6518);                                    \
-+    vec_s16 a2   = _mm_set1_epi16(21895);                                   \
-+    vec_s16 mc4  = _mm_set1_epi16(-23170);                                  \
-+    vec_s16 ma2  = _mm_set1_epi16(-21895);                                  \
-+    vec_s16 bias = _mm_set1_epi32(32 | 31 << 16);                           \
-+                                                                            \
-+    vec_s16 zero  = _mm_setzero_si128();                                    \
-+                                                                            \
-+    t0 = VEC_LD(constants[0]);                                              \
-+    t1 = VEC_LD(constants[1]);                                              \
-+    t2 = VEC_LD(constants[2]);                                              \
-+    t3 = VEC_LD(constants[3]);                                              \
-+                                                                            \
-+    vx0 = _mm_mulhrs_epi16(_mm_slli_epi16(block[0], 4), t0);                \
-+    vx1 = _mm_mulhrs_epi16(_mm_slli_epi16(block[1], 4), t1);                \
-+    vx2 = _mm_mulhrs_epi16(_mm_slli_epi16(block[2], 4), t2);                \
-+    vx3 = _mm_mulhrs_epi16(_mm_slli_epi16(block[3], 4), t3);                \
-+    vx4 = _mm_mulhrs_epi16(_mm_slli_epi16(block[4], 4), t0);                \
-+    vx5 = _mm_mulhrs_epi16(_mm_slli_epi16(block[5], 4), t3);                \
-+    vx6 = _mm_mulhrs_epi16(_mm_slli_epi16(block[6], 4), t2);                \
-+    vx7 = _mm_mulhrs_epi16(_mm_slli_epi16(block[7], 4), t1);                \
-+                                                                            \
-+    IDCT_HALF;                                                              \
-+                                                                            \
-+    vx0 = _mm_unpacklo_epi16(vy0, vy4);                                     \
-+    vx1 = _mm_unpackhi_epi16(vy0, vy4);                                     \
-+    vx2 = _mm_unpacklo_epi16(vy1, vy5);                                     \
-+    vx3 = _mm_unpackhi_epi16(vy1, vy5);                                     \
-+    vx4 = _mm_unpacklo_epi16(vy2, vy6);                                     \
-+    vx5 = _mm_unpackhi_epi16(vy2, vy6);                                     \
-+    vx6 = _mm_unpacklo_epi16(vy3, vy7);                                     \
-+    vx7 = _mm_unpackhi_epi16(vy3, vy7);                                     \
-+                                                                            \
-+    vy0 = _mm_unpacklo_epi16(vx0, vx4);                                     \
-+    vy1 = _mm_unpackhi_epi16(vx0, vx4);                                     \
-+    vy2 = _mm_unpacklo_epi16(vx1, vx5);                                     \
-+    vy3 = _mm_unpackhi_epi16(vx1, vx5);                                     \
-+    vy4 = _mm_unpacklo_epi16(vx2, vx6);                                     \
-+    vy5 = _mm_unpackhi_epi16(vx2, vx6);                                     \
-+    vy6 = _mm_unpacklo_epi16(vx3, vx7);                                     \
-+    vy7 = _mm_unpackhi_epi16(vx3, vx7);                                     \
-+                                                                            \
-+    vx0 = _mm_adds_epi16(_mm_unpacklo_epi16(vy0, vy4), bias);               \
-+    vx1 = _mm_unpackhi_epi16(vy0, vy4);                                     \
-+    vx2 = _mm_unpacklo_epi16(vy1, vy5);                                     \
-+    vx3 = _mm_unpackhi_epi16(vy1, vy5);                                     \
-+    vx4 = _mm_unpacklo_epi16(vy2, vy6);                                     \
-+    vx5 = _mm_unpackhi_epi16(vy2, vy6);                                     \
-+    vx6 = _mm_unpacklo_epi16(vy3, vy7);                                     \
-+    vx7 = _mm_unpackhi_epi16(vy3, vy7);                                     \
-+                                                                            \
-+    IDCT_HALF;                                                              \
-+                                                                            \
-+    vx0 = _mm_srai_epi16(vy0, 6);                                           \
-+    vx1 = _mm_srai_epi16(vy1, 6);                                           \
-+    vx2 = _mm_srai_epi16(vy2, 6);                                           \
-+    vx3 = _mm_srai_epi16(vy3, 6);                                           \
-+    vx4 = _mm_srai_epi16(vy4, 6);                                           \
-+    vx5 = _mm_srai_epi16(vy5, 6);                                           \
-+    vx6 = _mm_srai_epi16(vy6, 6);                                           \
-+    vx7 = _mm_srai_epi16(vy7, 6)
-+
-+static const int16_t ALIGNED(16) constants[4][8] = {
-+    { 16384, 22725, 21407, 19266, 16384, 19266, 21407, 22725 },
-+    { 22725, 31521, 29692, 26722, 22725, 26722, 29692, 31521 },
-+    { 21407, 29692, 27969, 25172, 21407, 25172, 27969, 29692 },
-+    { 19266, 26722, 25172, 22654, 19266, 22654, 25172, 26722 }
-+};
-+
-+void ff_idct_e2k(int16_t *blk)
-+{
-+    vec_s16 *block = (vec_s16*)blk;
-+
-+    IDCT;
-+
-+    block[0] = vx0;
-+    block[1] = vx1;
-+    block[2] = vx2;
-+    block[3] = vx3;
-+    block[4] = vx4;
-+    block[5] = vx5;
-+    block[6] = vx6;
-+    block[7] = vx7;
++void ff_fast_idct_e2k(int16_t *block) {
++    FAST_IDCT
++    SAVE_ROW(0) SAVE_ROW(1) SAVE_ROW(2) SAVE_ROW(3)
++    SAVE_ROW(4) SAVE_ROW(5) SAVE_ROW(6) SAVE_ROW(7)
 +}
 +
-+#define COPY(vx0, vx1, i)                 \
-+    tmp = _mm_packus_epi16(vx0, vx1);     \
-+    VEC_STL(dest, tmp); dest += stride;   \
-+    VEC_STH(dest, tmp); dest += stride
-+
-+static void idct_put_e2k(uint8_t *dest, ptrdiff_t stride, int16_t *blk)
++static void fast_idct_put_e2k(uint8_t *pixels, ptrdiff_t line_size, int16_t *block)
 +{
-+    vec_s16 *block = (vec_s16*)blk;
-+    vec_u8 tmp;
-+
-+    IDCT;
-+
-+    COPY(vx0, vx1, 0);
-+    COPY(vx2, vx3, 2);
-+    COPY(vx4, vx5, 4);
-+    COPY(vx6, vx7, 6);
++    FAST_IDCT
++    PUT(0, 1) PUT(2, 3) PUT(4, 5) PUT(6, 7)
 +}
 +
-+#define ADD(vx0, vx1, i)                  \
-+    tmp = VEC_LD8(dest);                  \
-+    t0 = _mm_unpacklo_epi8(tmp, zero);    \
-+    tmp = VEC_LD8(dest + stride);         \
-+    t1 = _mm_unpacklo_epi8(tmp, zero);    \
-+    t0 = _mm_adds_epi16(t0, vx0);         \
-+    t1 = _mm_adds_epi16(t1, vx1);         \
-+    tmp = _mm_packus_epi16(t0, t1);       \
-+    VEC_STL(dest, tmp); dest += stride;   \
-+    VEC_STH(dest, tmp); dest += stride
-+
-+static void idct_add_e2k(uint8_t *dest, ptrdiff_t stride, int16_t *blk)
++static void fast_idct_add_e2k(uint8_t *pixels, ptrdiff_t line_size, int16_t *block)
 +{
-+    vec_s16 *block = (vec_s16*)blk;
-+    vec_u8 tmp;
-+
-+    IDCT;
-+
-+    ADD(vx0, vx1, 0);
-+    ADD(vx2, vx3, 2);
-+    ADD(vx4, vx5, 4);
-+    ADD(vx6, vx7, 6);
++    FAST_IDCT
++    t2 = _mm_setzero_si128();
++    ADD(0, 1) ADD(2, 3) ADD(4, 5) ADD(6, 7)
 +}
 +
 +av_cold void ff_idctdsp_init_e2k(IDCTDSPContext *c, AVCodecContext *avctx,
 +                                 unsigned high_bit_depth)
 +{
-+    if (!E2K_BASE(av_get_cpu_flags()))
++    int cpu_flags = av_get_cpu_flags();
++    if (!E2K_BASE(cpu_flags))
 +        return;
 +
 +    // !checkasm
@@ -7322,11 +7592,21 @@ index 0000000..db9d2ca
 +
 +    if (!high_bit_depth && avctx->lowres == 0) {
 +        if ((avctx->idct_algo == FF_IDCT_AUTO && !(avctx->flags & AV_CODEC_FLAG_BITEXACT)) ||
-+            (avctx->idct_algo == FF_IDCT_ALTIVEC)) {
-+            c->idct      = ff_idct_e2k;
-+            c->idct_add  = idct_add_e2k; // untested
-+            c->idct_put  = idct_put_e2k; // untested
++            avctx->idct_algo == FF_IDCT_ALTIVEC) {
++
++            c->idct      = ff_fast_idct_e2k;
++            c->idct_put  = fast_idct_put_e2k;
++            c->idct_add  = fast_idct_add_e2k;
 +            c->perm_type = FF_IDCT_PERM_TRANSPOSE;
++        } else if (avctx->idct_algo == FF_IDCT_AUTO ||
++            avctx->idct_algo == FF_IDCT_SIMPLEAUTO ||
++            avctx->idct_algo == FF_IDCT_SIMPLE) {
++
++            c->idct      = ff_simple_idct_e2k;
++            c->idct_put  = simple_idct_put_e2k;
++            c->idct_add  = simple_idct_add_e2k;
++            // same as FF_IDCT_PERM_SSE2, but already initialized
++            c->perm_type = FF_IDCT_PERM_LIBMPEG2;
 +        }
 +    }
 +}
@@ -11500,6 +11780,210 @@ index 0000000..5b80070
 +        ff_vp9dsp_mc_init_8_e2k(dsp);
 +    }
 +}
+diff --git a/libavcodec/e2k/xvididct.c b/libavcodec/e2k/xvididct.c
+new file mode 100644
+index 0000000..6128b71
+--- /dev/null
++++ b/libavcodec/e2k/xvididct.c
+@@ -0,0 +1,198 @@
++/*
++ * SIMD-optimized XVID IDCT for Elbrus
++ * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#include "config.h"
++
++#include "libavutil/attributes.h"
++#include "libavutil/cpu.h"
++#include "libavutil/e2k/cpu.h"
++#include "libavutil/e2k/util_e2k.h"
++
++#include "libavcodec/idctdsp.h"
++#include "libavcodec/xvididct.h"
++
++#include "dctdsp.h"
++
++DECLARE_ALIGNED(16, static const int16_t, tab_e2k)[32 * 4] = {
++    0x4000, 0x539f, 0xc000, 0xac61, 0x4000, 0xdd5d, 0x4000, 0xdd5d,
++    0x4000, 0x22a3, 0x4000, 0x22a3, 0xc000, 0x539f, 0x4000, 0xac61,
++    0x3249, 0x11a8, 0x4b42, 0xee58, 0x11a8, 0x4b42, 0x11a8, 0xcdb7,
++    0x58c5, 0x4b42, 0xa73b, 0xcdb7, 0x3249, 0xa73b, 0x4b42, 0xa73b,
++    0x58c5, 0x73fc, 0xa73b, 0x8c04, 0x58c5, 0xcff5, 0x58c5, 0xcff5,
++    0x58c5, 0x300b, 0x58c5, 0x300b, 0xa73b, 0x73fc, 0x58c5, 0x8c04,
++    0x45bf, 0x187e, 0x6862, 0xe782, 0x187e, 0x6862, 0x187e, 0xba41,
++    0x7b21, 0x6862, 0x84df, 0xba41, 0x45bf, 0x84df, 0x6862, 0x84df,
++    0x539f, 0x6d41, 0xac61, 0x92bf, 0x539f, 0xd2bf, 0x539f, 0xd2bf,
++    0x539f, 0x2d41, 0x539f, 0x2d41, 0xac61, 0x6d41, 0x539f, 0x92bf,
++    0x41b3, 0x1712, 0x6254, 0xe8ee, 0x1712, 0x6254, 0x1712, 0xbe4d,
++    0x73fc, 0x6254, 0x8c04, 0xbe4d, 0x41b3, 0x8c04, 0x6254, 0x8c04,
++    0x4b42, 0x6254, 0xb4be, 0x9dac, 0x4b42, 0xd746, 0x4b42, 0xd746,
++    0x4b42, 0x28ba, 0x4b42, 0x28ba, 0xb4be, 0x6254, 0x4b42, 0x9dac,
++    0x3b21, 0x14c3, 0x587e, 0xeb3d, 0x14c3, 0x587e, 0x14c3, 0xc4df,
++    0x6862, 0x587e, 0x979e, 0xc4df, 0x3b21, 0x979e, 0x587e, 0x979e
++};
++
++#define XVID_IDCT_ROW(i, t, r) \
++    v3 = _mm_load_si128((__m128i*)(block + i * 8)); \
++    v0 = _mm_unpacklo_epi64(v3, v3);  /* 0246 */ \
++    v1 = _mm_shuffle_epi32(v3, 0x11); /* 4602 */ \
++    v2 = _mm_shuffle_epi32(v3, 0xbb); /* 5713 */ \
++    v3 = _mm_unpackhi_epi64(v3, v3);  /* 1357 */ \
++    v0 = _mm_madd_epi16(v0, _mm_load_si128((__m128i*)(tab_e2k + 32 * t))); \
++    v1 = _mm_madd_epi16(v1, _mm_load_si128((__m128i*)(tab_e2k + 32 * t + 8))); \
++    v2 = _mm_madd_epi16(v2, _mm_load_si128((__m128i*)(tab_e2k + 32 * t + 16))); \
++    v3 = _mm_madd_epi16(v3, _mm_load_si128((__m128i*)(tab_e2k + 32 * t + 24))); \
++    v0 = _mm_add_epi32(v0, v1); \
++    v1 = _mm_add_epi32(v2, v3); \
++    if (r) v0 = _mm_add_epi32(v0, _mm_set1_epi32(r)); \
++    v2 = _mm_srai_epi32(_mm_add_epi32(v0, v1), 11); \
++    v3 = _mm_srai_epi32(_mm_sub_epi32(v0, v1), 11); \
++    x##i = _mm_packs_epi32(v2, _mm_shuffle_epi32(v3, 0x1b));
++
++#define XVID_IDCT \
++    __m128i x0, x1, x2, x3, x4, x5, x6, x7; \
++    __m128i v0, v1, v2, v3, v4, v5, v6, v7; \
++    __m128i t0, t1, t2, t3; \
++    \
++    XVID_IDCT_ROW(0, 0, 65536) \
++    XVID_IDCT_ROW(1, 1, 3597) \
++    XVID_IDCT_ROW(2, 2, 2260) \
++    XVID_IDCT_ROW(3, 3, 1203) \
++    XVID_IDCT_ROW(4, 0, 0) \
++    XVID_IDCT_ROW(5, 3, 120) \
++    XVID_IDCT_ROW(6, 2, 512) \
++    XVID_IDCT_ROW(7, 1, 512) \
++    \
++    t1 = _mm_set1_epi16(13036);   /* tan1 */ \
++    t2 = _mm_set1_epi16(27146);   /* tan2 */ \
++    t3 = _mm_set1_epi16(-21746);  /* tan3 */ \
++    t0 = _mm_set1_epi16(23170);   /* sqrt2 */ \
++    \
++    v0 = _mm_mulhi_epi16(t3, x3); /* x3*(tg_3_16-1) */ \
++    v1 = _mm_mulhi_epi16(t3, x5); /* x5*(tg_3_16-1) */ \
++    v4 = _mm_mulhi_epi16(t1, x7); /* x7*tg_1_16 */ \
++    v2 = _mm_mulhi_epi16(t1, x1); /* x1*tg_1_16 */ \
++    v0 = _mm_adds_epi16(v0, x3);  /* x3*tg_3_16 */ \
++    v1 = _mm_adds_epi16(v1, x3);  /* x3+x5*(tg_3_16-1) */ \
++    v0 = _mm_subs_epi16(v0, x5);  /* x3*tg_3_16-x5 = tm35 */ \
++    v1 = _mm_adds_epi16(v1, x5);  /* x3+x5*tg_3_16 = tp35 */ \
++    v4 = _mm_adds_epi16(v4, x1);  /* x1+tg_1_16*x7 = tp17 */ \
++    v2 = _mm_subs_epi16(v2, x7);  /* x1*tg_1_16-x7 = tm17 */ \
++    t1 = _mm_adds_epi16(v4, v1);  /* tp17+tp35 = b0 */ \
++    t3 = _mm_subs_epi16(v2, v0);  /* tm17-tm35 = b3 */ \
++    v4 = _mm_subs_epi16(v4, v1);  /* tp17-tp35 = t1 */ \
++    v2 = _mm_adds_epi16(v2, v0);  /* tm17+tm35 = t2 */ \
++    v1 = _mm_adds_epi16(v4, v2);  /* t1+t2 */ \
++    v4 = _mm_subs_epi16(v4, v2);  /* t1-t2 */ \
++    v0 = _mm_mulhi_epi16(t2, x2); /* x2*tg_2_16 */ \
++    v7 = _mm_mulhi_epi16(t2, x6); /* x6*tg_2_16 */ \
++    v1 = _mm_mulhi_epi16(v1, t0); /* ocos_4_16*(t1+t2) = b1/2 */ \
++    v4 = _mm_mulhi_epi16(v4, t0); /* ocos_4_16*(t1-t2) = b2/2 */ \
++    v0 = _mm_subs_epi16(v0, x6);  /* t2*tg_2_16-x6 = tm26 */ \
++    v7 = _mm_adds_epi16(v7, x2);  /* x2+x6*tg_2_16 = tp26 */ \
++    v5 = _mm_adds_epi16(x0, x4);  /* x0+x4 = tp04 */ \
++    v6 = _mm_subs_epi16(x0, x4);  /* x0-x4 = tm04 */ \
++    v2 = _mm_subs_epi16(v5, v7);  /* tp04-tp26 = a3 */ \
++    v3 = _mm_adds_epi16(v6, v0);  /* tm04+tm26 = a1 */ \
++    v1 = _mm_adds_epi16(v1, v1);  /* b1 */ \
++    v4 = _mm_adds_epi16(v4, v4);  /* b2 */ \
++    v5 = _mm_adds_epi16(v5, v7);  /* tp04+tp26 = a0 */ \
++    v6 = _mm_subs_epi16(v6, v0);  /* tm04-tm26 = a2 */ \
++    x0 = _mm_adds_epi16(v5, t1);  /* a0+b0 */ \
++    x7 = _mm_subs_epi16(v5, t1);  /* a0-b0 */ \
++    x1 = _mm_adds_epi16(v3, v1);  /* a1+b1 */ \
++    x6 = _mm_subs_epi16(v3, v1);  /* a1-b1 */ \
++    x2 = _mm_adds_epi16(v6, v4);  /* a2+b2 */ \
++    x5 = _mm_subs_epi16(v6, v4);  /* a2-b2 */ \
++    x3 = _mm_adds_epi16(v2, t3);  /* a3+b3 */ \
++    x4 = _mm_subs_epi16(v2, t3);  /* a3-b3 */ \
++    x0 = _mm_srai_epi16(x0, 6);   /* dst0 */ \
++    x1 = _mm_srai_epi16(x1, 6);   /* dst1 */ \
++    x2 = _mm_srai_epi16(x2, 6);   /* dst2 */ \
++    x3 = _mm_srai_epi16(x3, 6);   /* dst3 */ \
++    x4 = _mm_srai_epi16(x4, 6);   /* dst4 */ \
++    x5 = _mm_srai_epi16(x5, 6);   /* dst5 */ \
++    x6 = _mm_srai_epi16(x6, 6);   /* dst6 */ \
++    x7 = _mm_srai_epi16(x7, 6);   /* dst7 */
++
++void ff_xvid_idct_e2k(int16_t *block) {
++    XVID_IDCT
++    VEC_ST(block + 8 * 0, x0);
++    VEC_ST(block + 8 * 1, x1);
++    VEC_ST(block + 8 * 2, x2);
++    VEC_ST(block + 8 * 3, x3);
++    VEC_ST(block + 8 * 4, x4);
++    VEC_ST(block + 8 * 5, x5);
++    VEC_ST(block + 8 * 6, x6);
++    VEC_ST(block + 8 * 7, x7);
++}
++
++#define PUT(a, b)                             \
++    t0 = _mm_packus_epi16(x##a, x##b);        \
++    VEC_STL(pixels, t0); pixels += line_size; \
++    VEC_STH(pixels, t0); pixels += line_size;
++
++#define ADD(a, b)                             \
++    t0 = VEC_LD8(pixels);                     \
++    t1 = VEC_LD8(pixels + line_size);         \
++    t0 = _mm_unpacklo_epi8(t0, t2);           \
++    t1 = _mm_unpacklo_epi8(t1, t2);           \
++    t0 = _mm_adds_epi16(t0, x##a);            \
++    t1 = _mm_adds_epi16(t1, x##b);            \
++    t0 = _mm_packus_epi16(t0, t1);            \
++    VEC_STL(pixels, t0); pixels += line_size; \
++    VEC_STH(pixels, t0); pixels += line_size;
++
++static void xvid_idct_put_e2k(uint8_t *pixels, ptrdiff_t line_size, int16_t *block)
++{
++    XVID_IDCT
++    PUT(0, 1) PUT(2, 3) PUT(4, 5) PUT(6, 7)
++}
++
++static void xvid_idct_add_e2k(uint8_t *pixels, ptrdiff_t line_size, int16_t *block)
++{
++    XVID_IDCT
++    t2 = _mm_setzero_si128();
++    ADD(0, 1) ADD(2, 3) ADD(4, 5) ADD(6, 7)
++}
++
++av_cold void ff_xvid_idct_init_e2k(IDCTDSPContext *c, AVCodecContext *avctx,
++                                   unsigned high_bit_depth)
++{
++    int cpu_flags = av_get_cpu_flags();
++    if (!E2K_BASE(cpu_flags))
++        return;
++
++    // !checkasm
++    // libavcodec/tests/dct -i
++
++    if (!high_bit_depth) {
++        if (avctx->idct_algo == FF_IDCT_AUTO ||
++            avctx->idct_algo == FF_IDCT_XVID) {
++
++						c->idct      = ff_xvid_idct_e2k;
++						c->idct_put  = xvid_idct_put_e2k;
++						c->idct_add  = xvid_idct_add_e2k;
++    				// same as FF_IDCT_PERM_SSE2, but already initialized
++            c->perm_type = FF_IDCT_PERM_LIBMPEG2;
++        }
++    }
++}
 diff --git a/libavcodec/fdctdsp.c b/libavcodec/fdctdsp.c
 index b9c2c86..69e6302 100644
 --- a/libavcodec/fdctdsp.c
@@ -11990,10 +12474,10 @@ index 2ca8039..755734c 100644
  #else
 diff --git a/libavcodec/tests/e2k/dct.c b/libavcodec/tests/e2k/dct.c
 new file mode 100644
-index 0000000..7c15b25
+index 0000000..b50cdc6
 --- /dev/null
 +++ b/libavcodec/tests/e2k/dct.c
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,33 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -12022,7 +12506,9 @@ index 0000000..7c15b25
 +};
 +
 +static const struct algo idct_tab_arch[] = {
-+    { "IDCT-E2K", ff_idct_e2k, FF_IDCT_PERM_TRANSPOSE, AV_CPU_FLAG_E2K },
++    { "FAST-E2K", ff_fast_idct_e2k, FF_IDCT_PERM_TRANSPOSE, AV_CPU_FLAG_E2K },
++    { "SIMPLE-E2K", ff_simple_idct_e2k, FF_IDCT_PERM_LIBMPEG2, AV_CPU_FLAG_E2K },
++    { "XVID-E2K", ff_xvid_idct_e2k, FF_IDCT_PERM_LIBMPEG2, AV_CPU_FLAG_E2K, 1 },
 +    { 0 }
 +};
 diff --git a/libavcodec/vc1dsp.c b/libavcodec/vc1dsp.c
@@ -12172,6 +12658,32 @@ index e225631..f6dfe01 100644
  void ff_vp9dsp_init_mips(VP9DSPContext *dsp, int bpp);
  
  #endif /* AVCODEC_VP9DSP_H */
+diff --git a/libavcodec/xvididct.c b/libavcodec/xvididct.c
+index 360deb3..5ab81ab 100644
+--- a/libavcodec/xvididct.c
++++ b/libavcodec/xvididct.c
+@@ -348,6 +348,8 @@ av_cold void ff_xvid_idct_init(IDCTDSPContext *c, AVCodecContext *avctx)
+ 
+     if (ARCH_X86)
+         ff_xvid_idct_init_x86(c, avctx, high_bit_depth);
++    if (ARCH_E2K)
++        ff_xvid_idct_init_e2k(c, avctx, high_bit_depth);
+     if (ARCH_MIPS)
+         ff_xvid_idct_init_mips(c, avctx, high_bit_depth);
+ 
+diff --git a/libavcodec/xvididct.h b/libavcodec/xvididct.h
+index e0bc1a2..6e5ff91 100644
+--- a/libavcodec/xvididct.h
++++ b/libavcodec/xvididct.h
+@@ -30,6 +30,8 @@ void ff_xvid_idct_init(IDCTDSPContext *c, AVCodecContext *avctx);
+ 
+ void ff_xvid_idct_init_x86(IDCTDSPContext *c, AVCodecContext *avctx,
+                            unsigned high_bit_depth);
++void ff_xvid_idct_init_e2k(IDCTDSPContext *c, AVCodecContext *avctx,
++                           unsigned high_bit_depth);
+ void ff_xvid_idct_init_mips(IDCTDSPContext *c, AVCodecContext *avctx,
+                             unsigned high_bit_depth);
+ 
 diff --git a/libavutil/cpu.c b/libavutil/cpu.c
 index 6548cc3..78e3f79 100644
 --- a/libavutil/cpu.c
