@@ -1,0 +1,182 @@
+From 45edb1023db231ab770f5ae393c0edded5927f5c Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Mon, 3 May 2021 18:49:55 +0700
+Subject: [PATCH] opencv-4.5.1 e2k support
+
+---
+ 3rdparty/openexr/IlmImf/ImfSystemSpecific.cpp |  7 ++++-
+ cmake/OpenCVCompilerOptimizations.cmake       | 28 +++++++++++++++++++
+ cmake/OpenCVCompilerOptions.cmake             |  9 ++++--
+ cmake/OpenCVDetectCXXCompiler.cmake           |  3 ++
+ modules/core/src/system.cpp                   | 12 ++++++++
+ modules/ts/include/opencv2/ts/ts_gtest.h      | 10 +++++++
+ 6 files changed, 66 insertions(+), 3 deletions(-)
+
+diff --git a/3rdparty/openexr/IlmImf/ImfSystemSpecific.cpp b/3rdparty/openexr/IlmImf/ImfSystemSpecific.cpp
+index fe1d8a2..809bf90 100644
+--- a/3rdparty/openexr/IlmImf/ImfSystemSpecific.cpp
++++ b/3rdparty/openexr/IlmImf/ImfSystemSpecific.cpp
+@@ -39,7 +39,7 @@
+ OPENEXR_IMF_INTERNAL_NAMESPACE_SOURCE_ENTER
+ 
+ namespace {
+-#if defined(IMF_HAVE_SSE2) && defined(__GNUC__) && !defined(__ANDROID__)
++#if defined(IMF_HAVE_SSE2) && defined(__GNUC__) && !defined(__ANDROID__) && !defined(__e2k__)
+ 
+     // Helper functions for gcc + SSE enabled
+     void cpuid(int n, int &eax, int &ebx, int &ecx, int &edx)
+@@ -132,6 +132,11 @@ CpuId::CpuId():
+     ssse3 = true;
+     sse4_1 = true;
+ #endif
++#elif defined(__e2k__)
++    sse2 = true;
++    sse3 = true;
++    ssse3 = true;
++    sse4_1 = true;
+ #endif
+ }
+ 
+diff --git a/cmake/OpenCVCompilerOptimizations.cmake b/cmake/OpenCVCompilerOptimizations.cmake
+index 6fda0c8..a049afe 100644
+--- a/cmake/OpenCVCompilerOptimizations.cmake
++++ b/cmake/OpenCVCompilerOptimizations.cmake
+@@ -326,6 +326,34 @@ if(X86 OR X86_64)
+     endif()
+   endif()
+ 
++elseif(E2K)
++  ocv_update(CPU_KNOWN_OPTIMIZATIONS "SSE;SSE2;SSE3;SSSE3;SSE4_1;POPCNT")
++
++  ocv_update(CPU_SSE_TEST_FILE "${OpenCV_SOURCE_DIR}/cmake/checks/cpu_sse.cpp")
++  ocv_update(CPU_SSE2_TEST_FILE "${OpenCV_SOURCE_DIR}/cmake/checks/cpu_sse2.cpp")
++  ocv_update(CPU_SSE3_TEST_FILE "${OpenCV_SOURCE_DIR}/cmake/checks/cpu_sse3.cpp")
++  ocv_update(CPU_SSSE3_TEST_FILE "${OpenCV_SOURCE_DIR}/cmake/checks/cpu_ssse3.cpp")
++  ocv_update(CPU_SSE4_1_TEST_FILE "${OpenCV_SOURCE_DIR}/cmake/checks/cpu_sse41.cpp")
++  ocv_update(CPU_POPCNT_TEST_FILE "${OpenCV_SOURCE_DIR}/cmake/checks/cpu_popcnt.cpp")
++
++  if(NOT OPENCV_CPU_OPT_IMPLIES_IGNORE)
++    ocv_update(CPU_POPCNT_IMPLIES "SSE4_1")
++    ocv_update(CPU_POPCNT_FORCE "") # Don't force other optimizations
++    ocv_update(CPU_SSE4_1_IMPLIES "SSE3;SSSE3")
++    ocv_update(CPU_SSSE3_IMPLIES "SSE3")
++    ocv_update(CPU_SSE3_IMPLIES "SSE2")
++    ocv_update(CPU_SSE2_IMPLIES "SSE")
++  endif()
++
++  ocv_update(CPU_POPCNT_FLAGS_ON "-mpopcnt")
++  ocv_update(CPU_SSE4_1_FLAGS_ON "-msse4.1 -mno-avx")
++  ocv_update(CPU_SSE3_FLAGS_ON "-msse3")
++  ocv_update(CPU_SSSE3_FLAGS_ON "-mssse3")
++  ocv_update(CPU_SSE2_FLAGS_ON "-msse2")
++  ocv_update(CPU_SSE_FLAGS_ON "-msse")
++
++  set(CPU_BASELINE "SSE;SSE2;SSE3;SSSE3;SSE4_1;POPCNT" CACHE STRING "${HELP_CPU_BASELINE}")
++
+ elseif(ARM OR AARCH64)
+   ocv_update(CPU_NEON_TEST_FILE "${OpenCV_SOURCE_DIR}/cmake/checks/cpu_neon.cpp")
+   ocv_update(CPU_FP16_TEST_FILE "${OpenCV_SOURCE_DIR}/cmake/checks/cpu_fp16.cpp")
+diff --git a/cmake/OpenCVCompilerOptions.cmake b/cmake/OpenCVCompilerOptions.cmake
+index 5e3c056..9fd3430 100644
+--- a/cmake/OpenCVCompilerOptions.cmake
++++ b/cmake/OpenCVCompilerOptions.cmake
+@@ -105,7 +105,12 @@ if(CV_GCC OR CV_CLANG)
+     # we want.
+     add_extra_compiler_option(-Wall)
+   endif()
+-  add_extra_compiler_option(-Werror=return-type)
++  if (E2K)
++    add_extra_compiler_option(-Wno-unused-parameter)
++    add_extra_compiler_option(-Wno-unused-function)
++  else()
++    add_extra_compiler_option(-Werror=return-type)
++  endif()
+   add_extra_compiler_option(-Werror=non-virtual-dtor)
+   add_extra_compiler_option(-Werror=address)
+   add_extra_compiler_option(-Werror=sequence-point)
+@@ -117,7 +122,7 @@ if(CV_GCC OR CV_CLANG)
+   add_extra_compiler_option(-Wundef)
+   add_extra_compiler_option(-Winit-self)
+   add_extra_compiler_option(-Wpointer-arith)
+-  if(NOT (CV_GCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.0"))
++  if(NOT (CV_GCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.0") AND NOT E2K)
+     add_extra_compiler_option(-Wshadow)  # old GCC emits warnings for variables + methods combination
+   endif()
+   add_extra_compiler_option(-Wsign-promo)
+diff --git a/cmake/OpenCVDetectCXXCompiler.cmake b/cmake/OpenCVDetectCXXCompiler.cmake
+index 1c30ccc..2aba770 100644
+--- a/cmake/OpenCVDetectCXXCompiler.cmake
++++ b/cmake/OpenCVDetectCXXCompiler.cmake
+@@ -11,6 +11,7 @@
+ # - AARCH64 - ARMv8+ (64-bit)
+ # - PPC64 / PPC64LE - PowerPC
+ # - MIPS
++# - E2K - Elbrus 2000
+ #
+ # OS:
+ # - WIN32 - Windows | MINGW
+@@ -100,6 +101,8 @@ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(mips.*|MIPS.*)")
+   set(MIPS 1)
+ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(riscv.*|RISCV.*)")
+   set(RISCV 1)
++elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "e2k.*")
++  set(E2K 1)
+ else()
+   if(NOT OPENCV_SUPPRESS_MESSAGE_UNRECOGNIZED_SYSTEM_PROCESSOR)
+     message(WARNING "OpenCV: unrecognized target processor configuration")
+diff --git a/modules/core/src/system.cpp b/modules/core/src/system.cpp
+index 901a503..01f67e9 100644
+--- a/modules/core/src/system.cpp
++++ b/modules/core/src/system.cpp
+@@ -574,6 +574,18 @@ struct HWFeatures
+ 
+             close(cpufile);
+         }
++    #elif defined __e2k__
++        have[CV_CPU_MMX]    = true;
++        have[CV_CPU_SSE]    = true;
++        have[CV_CPU_SSE2]   = true;
++        have[CV_CPU_SSE3]   = true;
++        have[CV_CPU_SSSE3]  = true;
++        have[CV_CPU_SSE4_1] = true;
++        have[CV_CPU_POPCNT] = true;
++    #ifdef __AVX2__ 
++        have[CV_CPU_AVX]    = true;
++        have[CV_CPU_AVX2]   = true;
++    #endif
+     #endif
+     #elif (defined __clang__ || defined __APPLE__)
+     #if (defined __ARM_NEON__ || (defined __ARM_NEON && defined __aarch64__))
+diff --git a/modules/ts/include/opencv2/ts/ts_gtest.h b/modules/ts/include/opencv2/ts/ts_gtest.h
+index b1c6c12..fea5dac 100644
+--- a/modules/ts/include/opencv2/ts/ts_gtest.h
++++ b/modules/ts/include/opencv2/ts/ts_gtest.h
+@@ -11915,7 +11915,12 @@ typename ParamNameGenFunc<ParamType>::Type *GetParamNameGen() {
+ }
+ 
+ } // namespace internal::  // fixes MacOS X issue with "friend class internal/*::anon*/::ParameterizedTestFactory;"
++#ifdef __e2k__
++// LCC bug workaround, part one
++namespace internal {
++#else
+ namespace { // wrap into anynomous namespace to avoid build warnings like GCC's -Wsubobject-linkage
++#endif
+ 
+ // INTERNAL IMPLEMENTATION - DO NOT USE IN USER CODE.
+ //
+@@ -21710,7 +21715,12 @@ class WithParamInterface {
+   }
+ 
+   // TestClass must be a subclass of WithParamInterface<T> and Test.
++#ifdef __e2k__
++  // LCC bug workaround, part two
++  template <class TestClass> friend class internal::ParameterizedTestFactory;
++#else
+   template <class TestClass> friend class /*internal::*/ParameterizedTestFactory;
++#endif
+ };
+ 
+ // Most value-parameterized classes can ignore the existence of
+-- 
+2.17.1
+
