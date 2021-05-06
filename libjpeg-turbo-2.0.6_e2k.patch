@@ -1,46 +1,40 @@
-From e81140e5c60986573c7f6009ef2fafd0b3f3ee8d Mon Sep 17 00:00:00 2001
+From 2b9fc74773e3ca192f13e7da995f01a5c8b4eae6 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Thu, 18 Feb 2021 21:43:06 +0700
+Date: Sat, 27 Feb 2021 14:54:06 +0700
 Subject: [PATCH] libjpeg-turbo-2.0.6 e2k support
 
 ---
- CMakeLists.txt           |   8 +
- simd/CMakeLists.txt      |  48 +++
- simd/e2k/jccolext-e2k.c  | 210 ++++++++++
- simd/e2k/jccolor-e2k.c   | 102 +++++
- simd/e2k/jcgray-e2k.c    |  93 +++++
- simd/e2k/jcgryext-e2k.c  | 139 +++++++
- simd/e2k/jchuff-e2k.c    | 310 +++++++++++++++
- simd/e2k/jcsample-e2k.c  | 146 +++++++
+ CMakeLists.txt           |   5 +
+ simd/CMakeLists.txt      |  23 ++
+ simd/e2k/jccolext-e2k.c  | 213 +++++++++++
+ simd/e2k/jccolor-e2k.c   | 163 +++++++++
+ simd/e2k/jchuff-e2k.c    | 310 ++++++++++++++++
+ simd/e2k/jcsample-e2k.c  | 203 +++++++++++
  simd/e2k/jcsample.h      |  28 ++
- simd/e2k/jdcolext-e2k.c  | 230 +++++++++++
- simd/e2k/jdcolor-e2k.c   |  88 ++++
- simd/e2k/jdmerge-e2k.c   |  91 +++++
- simd/e2k/jdmrgext-e2k.c  | 256 ++++++++++++
- simd/e2k/jdsample-e2k.c  | 334 ++++++++++++++++
- simd/e2k/jfdctflt-e2k.c  | 127 ++++++
- simd/e2k/jfdctfst-e2k.c  | 145 +++++++
- simd/e2k/jfdctint-e2k.c  | 255 ++++++++++++
- simd/e2k/jidctflt-e2k.c  | 215 ++++++++++
- simd/e2k/jidctfst-e2k.c  | 187 +++++++++
- simd/e2k/jidctint-e2k.c  | 294 ++++++++++++++
- simd/e2k/jquantf-e2k.c   | 120 ++++++
- simd/e2k/jquanti-e2k.c   | 234 +++++++++++
- simd/e2k/jsimd.c         | 837 +++++++++++++++++++++++++++++++++++++++
- simd/e2k/jsimd_api_e2k.h | 109 +++++
- simd/e2k/jsimd_e2k.h     | 217 ++++++++++
- 25 files changed, 4823 insertions(+)
+ simd/e2k/jdcolext-e2k.c  | 258 ++++++++++++++
+ simd/e2k/jdcolor-e2k.c   | 289 +++++++++++++++
+ simd/e2k/jdcoltab-e2k.c  |  80 +++++
+ simd/e2k/jdsample-e2k.c  | 389 +++++++++++++++++++++
+ simd/e2k/jfdctflt-e2k.c  | 127 +++++++
+ simd/e2k/jfdctfst-e2k.c  | 145 ++++++++
+ simd/e2k/jfdctint-e2k.c  | 255 ++++++++++++++
+ simd/e2k/jidctflt-e2k.c  | 215 ++++++++++++
+ simd/e2k/jidctfst-e2k.c  | 187 ++++++++++
+ simd/e2k/jidctint-e2k.c  | 294 ++++++++++++++++
+ simd/e2k/jquantf-e2k.c   | 121 +++++++
+ simd/e2k/jquanti-e2k.c   | 178 ++++++++++
+ simd/e2k/jsimd.c         | 739 +++++++++++++++++++++++++++++++++++++++
+ simd/e2k/jsimd_api_e2k.h |  89 +++++
+ simd/e2k/jsimd_e2k.h     | 207 +++++++++++
+ 22 files changed, 4518 insertions(+)
  create mode 100644 simd/e2k/jccolext-e2k.c
  create mode 100644 simd/e2k/jccolor-e2k.c
- create mode 100644 simd/e2k/jcgray-e2k.c
- create mode 100644 simd/e2k/jcgryext-e2k.c
  create mode 100644 simd/e2k/jchuff-e2k.c
  create mode 100644 simd/e2k/jcsample-e2k.c
  create mode 100644 simd/e2k/jcsample.h
  create mode 100644 simd/e2k/jdcolext-e2k.c
  create mode 100644 simd/e2k/jdcolor-e2k.c
- create mode 100644 simd/e2k/jdmerge-e2k.c
- create mode 100644 simd/e2k/jdmrgext-e2k.c
+ create mode 100644 simd/e2k/jdcoltab-e2k.c
  create mode 100644 simd/e2k/jdsample-e2k.c
  create mode 100644 simd/e2k/jfdctflt-e2k.c
  create mode 100644 simd/e2k/jfdctfst-e2k.c
@@ -55,7 +49,7 @@ Subject: [PATCH] libjpeg-turbo-2.0.6 e2k support
  create mode 100644 simd/e2k/jsimd_e2k.h
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index a832909..fcbee8e 100644
+index a832909..cea51e4 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -64,6 +64,9 @@ elseif(CMAKE_SYSTEM_PROCESSOR_LC STREQUAL "aarch64" OR
@@ -68,17 +62,7 @@ index a832909..fcbee8e 100644
  else()
    set(CPU_TYPE ${CMAKE_SYSTEM_PROCESSOR_LC})
  endif()
-@@ -548,6 +551,9 @@ endif()
- 
- if(WITH_SIMD)
-   add_subdirectory(simd)
-+  if(HAVE_EML)
-+    link_libraries(-leml)
-+  endif()
- elseif(NOT WITH_12BIT)
-   message(STATUS "SIMD extensions: None (WITH_SIMD = ${WITH_SIMD})")
- endif()
-@@ -908,6 +914,8 @@ else()
+@@ -908,6 +911,8 @@ else()
    if((CPU_TYPE STREQUAL "powerpc" OR CPU_TYPE STREQUAL "arm64") AND
      NOT CMAKE_C_COMPILER_ID STREQUAL "Clang")
      set(DEFAULT_FLOATTEST fp-contract)
@@ -88,10 +72,10 @@ index a832909..fcbee8e 100644
      set(DEFAULT_FLOATTEST no-fp-contract)
    endif()
 diff --git a/simd/CMakeLists.txt b/simd/CMakeLists.txt
-index ba0bd13..a20ddff 100644
+index ba0bd13..0586ba8 100644
 --- a/simd/CMakeLists.txt
 +++ b/simd/CMakeLists.txt
-@@ -373,6 +373,54 @@ if(CMAKE_POSITION_INDEPENDENT_CODE OR ENABLE_SHARED)
+@@ -373,6 +373,29 @@ if(CMAKE_POSITION_INDEPENDENT_CODE OR ENABLE_SHARED)
    set_target_properties(simd PROPERTIES POSITION_INDEPENDENT_CODE 1)
  endif()
  
@@ -101,27 +85,9 @@ index ba0bd13..a20ddff 100644
 +
 +elseif(CPU_TYPE STREQUAL "e2k")
 +
-+option(WITH_EML "Use Elbrus Math Library" FALSE)
-+boolean_number(WITH_EML)
-+
-+if(WITH_EML)
-+  set(CMAKE_REQUIRED_INCLUDES /usr/include/eml)
-+  set(CMAKE_REQUIRED_LINK_OPTIONS -leml)
-+  check_c_source_compiles("
-+    #include <eml.h>
-+    int main(void) {
-+      eml_8u rgb[12] = { 0 }, y[4], cb[4], cr[4];
-+      eml_Video_ColorRGB2YCC444_8U(rgb, y, cb, cr, 4);
-+      eml_Video_ColorYCC2RGB444_8U(y, cb, cr, rgb, 4);
-+      return 0;
-+    }" HAVE_EML)
-+  unset(CMAKE_REQUIRED_INCLUDES)
-+  unset(CMAKE_REQUIRED_LINK_OPTIONS)
-+endif()
-+
 +set(SIMD_SOURCES e2k/jquanti-e2k.c e2k/jquantf-e2k.c
-+  e2k/jccolor-e2k.c e2k/jcgray-e2k.c e2k/jcsample-e2k.c
-+  e2k/jdcolor-e2k.c e2k/jdmerge-e2k.c e2k/jdsample-e2k.c
++  e2k/jccolor-e2k.c e2k/jcsample-e2k.c
++  e2k/jdcolor-e2k.c e2k/jdsample-e2k.c
 +  e2k/jfdctint-e2k.c e2k/jfdctfst-e2k.c e2k/jfdctflt-e2k.c
 +  e2k/jidctint-e2k.c e2k/jidctfst-e2k.c e2k/jidctflt-e2k.c
 +  e2k/jchuff-e2k.c)
@@ -130,13 +96,6 @@ index ba0bd13..a20ddff 100644
 +  COMPILE_FLAGS -msse4.1)
 +
 +set(SIMD_SOURCES ${SIMD_SOURCES} e2k/jsimd.c)
-+
-+if(HAVE_EML)
-+  set_source_files_properties(${SIMD_SOURCES} PROPERTIES
-+    COMPILE_DEFINITIONS HAVE_EML)
-+  set_source_files_properties(${SIMD_SOURCES} PROPERTIES
-+    INCLUDE_DIRECTORIES /usr/include/eml)
-+endif()
 +
 +add_library(simd OBJECT ${SIMD_SOURCES})
 +
@@ -148,10 +107,10 @@ index ba0bd13..a20ddff 100644
  # None
 diff --git a/simd/e2k/jccolext-e2k.c b/simd/e2k/jccolext-e2k.c
 new file mode 100644
-index 0000000..8440030
+index 0000000..49abdb4
 --- /dev/null
 +++ b/simd/e2k/jccolext-e2k.c
-@@ -0,0 +1,210 @@
+@@ -0,0 +1,213 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
@@ -178,32 +137,19 @@ index 0000000..8440030
 +
 +/* This file is included by jccolor-e2k.c */
 +
-+#ifdef HAVE_EML
-+#if RGB_RED == 0 && RGB_GREEN == 1 && RGB_BLUE == 2 && RGB_PIXELSIZE == 3
-+#define EML_CONV_FN eml_Video_ColorRGB2YCC444_8U
-+#elif RGB_RED == 1 && RGB_GREEN == 2 && RGB_BLUE == 3 && RGB_PIXELSIZE == 4
-+#define EML_CONV_FN eml_Video_ColorARGB2YCC444_8U
-+#elif RGB_RED == 2 && RGB_GREEN == 1 && RGB_BLUE == 0 && RGB_PIXELSIZE == 4
-+#define EML_CONV_FN eml_Video_ColorBGRA2YCC444_8U
-+#elif RGB_RED == 3 && RGB_GREEN == 2 && RGB_BLUE == 1 && RGB_PIXELSIZE == 4
-+#define EML_CONV_FN eml_Video_ColorABGR2YCC444_8U
-+#endif
-+#endif
-+
-+void jsimd_rgb_ycc_convert_e2k(JDIMENSION img_width, JSAMPARRAY input_buf,
-+                               JSAMPIMAGE output_buf,
-+                               JDIMENSION output_row, int num_rows)
++void rgbn_ycc_convert(JDIMENSION img_width, JSAMPARRAY input_buf,
++                      JSAMPIMAGE output_buf, JDIMENSION output_row,
++                      int num_rows, int shuf_idx)
 +{
 +  JSAMPROW inptr, outptr0, outptr1, outptr2;
-+  int pitch = img_width * RGB_PIXELSIZE, num_cols;
-+  unsigned char __attribute__((aligned(16))) tmpbuf[RGB_PIXELSIZE * 16];
++  unsigned char __attribute__((aligned(16))) tmpbuf[PIXELSIZE * 16];
 +
 +  __m128i pb_zero = _mm_setzero_si128();
-+  __m128i pb_shuf0 = _mm_setr_epi8(RGBG_INDEX);
-+#if RGB_PIXELSIZE == 4
++  __m128i pb_shuf0 = VEC_LD(rgb_ycc_shuf_const[shuf_idx]);
++#if PIXELSIZE == 4
 +  __m128i rgb3 = pb_zero;
 +#else
-+  __m128i pb_shuf4 = _mm_setr_epi8(RGBG_INDEX4(RGBG_INDEX));
++  __m128i pb_shuf4 = VEC_LD(rgb_ycc_shuf_const[shuf_idx] + 16);
 +#endif
 +  __m128i rgb0, rgb1 = pb_zero, rgb2 = pb_zero,
 +    rgbg0, rgbg1, rgbg2, rgbg3, rg0, rg1, rg2, rg3, bg0, bg1, bg2, bg3;
@@ -219,155 +165,171 @@ index 0000000..8440030
 +    pw_mf050_f000 = _mm_setr_epi16(__4X2(-F_0_500, 0)),
 +    pd_onehalf = _mm_set1_epi32(ONE_HALF),
 +    pd_onehalfm1_cj = _mm_set1_epi32(ONE_HALF - 1 + (CENTERJSAMPLE << SCALEBITS));
++#ifdef NEED_ALIGN8
++  ALIGN8_COMMON
++  ALIGN8_VARS(src)
++#endif
 +
-+  if (pitch > 0)
++  if (img_width > 0)
 +  while (--num_rows >= 0) {
++    int num_cols;
 +    inptr = *input_buf++;
 +    outptr0 = output_buf[0][output_row];
 +    outptr1 = output_buf[1][output_row];
 +    outptr2 = output_buf[2][output_row];
 +    output_row++;
 +
-+#ifdef EML_CONV_FN
-+    if (jsimd_use_eml && !(((size_t)inptr |
-+        (size_t)outptr0 | (size_t)outptr1 | (size_t)outptr2) & 7)) {
-+      EML_CONV_FN(inptr, outptr0, outptr1, outptr2, img_width);
-+    } else
-+#undef EML_CONV_FN
++    if (img_width >= 16) {
++#ifdef NEED_ALIGN8
++      ALIGN8_START(inptr, src)
++      inptr += (img_width & -16) * PIXELSIZE;
 +#endif
-+    for (num_cols = pitch; num_cols > 0;
-+         num_cols -= RGB_PIXELSIZE * 16, inptr += RGB_PIXELSIZE * 16,
-+         outptr0 += 16, outptr1 += 16, outptr2 += 16) {
 +
-+        if (__builtin_expect(num_cols < RGB_PIXELSIZE * 16 && (num_cols & 15), 0)) {
-+          /* Slow path */
-+          memcpy(tmpbuf, inptr, min(num_cols, RGB_PIXELSIZE * 16));
-+          rgb0 = VEC_LD(tmpbuf);
-+          rgb1 = VEC_LD(tmpbuf + 16);
-+          rgb2 = VEC_LD(tmpbuf + 32);
-+#if RGB_PIXELSIZE == 4
-+          rgb3 = VEC_LD(tmpbuf + 48);
++      PRAGMA_E2K("ivdep")
++      for (num_cols = img_width; num_cols >= 16; num_cols -= 16,
++           outptr0 += 16, outptr1 += 16, outptr2 += 16) {
++#ifdef NEED_ALIGN8
++        ALIGN8_READ16(rgb0, src, 0)
++        ALIGN8_READ16(rgb1, src, 1)
++        ALIGN8_READ16(rgb2, src, 2)
++#if PIXELSIZE == 4
++        ALIGN8_READ16(rgb3, src, 3)
 +#endif
-+        } else {
-+          /* Fast path */
-+          rgb0 = VEC_LD(inptr);
-+          if (num_cols > 16) rgb1 = VEC_LD(inptr + 16);
-+          if (num_cols > 32) rgb2 = VEC_LD(inptr + 32);
-+#if RGB_PIXELSIZE == 4
-+          if (num_cols > 48) rgb3 = VEC_LD(inptr + 48);
-+#endif
-+        }
-+
-+#if RGB_PIXELSIZE == 3
-+      /* rgb0 = R0 G0 B0 R1 G1 B1 R2 G2 B2 R3 G3 B3 R4 G4 B4 R5
-+       * rgb1 = G5 B5 R6 G6 B6 R7 G7 B7 R8 G8 B8 R9 G9 B9 Ra Ga
-+       * rgb2 = Ba Rb Gb Bb Rc Gc Bc Rd Gd Bd Re Ge Be Rf Gf Bf
-+       */
-+      rgbg0 = _mm_shuffle_epi8(rgb0, pb_shuf0);
-+      rgbg1 = _mm_shuffle_epi8(VEC_ALIGNR8(rgb1, rgb0), pb_shuf4);
-+      rgbg2 = _mm_shuffle_epi8(VEC_ALIGNR8(rgb2, rgb1), pb_shuf0);
-+      rgbg3 = _mm_shuffle_epi8(rgb2, pb_shuf4);
++        src_ptr += PIXELSIZE * 2;
 +#else
-+      /* rgb0 = R0 G0 B0 X0 R1 G1 B1 X1 R2 G2 B2 X2 R3 G3 B3 X3
-+       * rgb1 = R4 G4 B4 X4 R5 G5 B5 X5 R6 G6 B6 X6 R7 G7 B7 X7
-+       * rgb2 = R8 G8 B8 X8 R9 G9 B9 X9 Ra Ga Ba Xa Rb Gb Bb Xb
-+       * rgb3 = Rc Gc Bc Xc Rd Gd Bd Xd Re Ge Be Xe Rf Gf Bf Xf
-+       */
-+      rgbg0 = _mm_shuffle_epi8(rgb0, pb_shuf0);
-+      rgbg1 = _mm_shuffle_epi8(rgb1, pb_shuf0);
-+      rgbg2 = _mm_shuffle_epi8(rgb2, pb_shuf0);
-+      rgbg3 = _mm_shuffle_epi8(rgb3, pb_shuf0);
++        rgb0 = VEC_LD(inptr);
++        rgb1 = VEC_LD(inptr + 16);
++        rgb2 = VEC_LD(inptr + 32);
++#if PIXELSIZE == 4
++        rgb3 = VEC_LD(inptr + 48);
 +#endif
-+      /* rgbg0 = R0 G0 R1 G1 R2 G2 R3 G3 B0 G0 B1 G1 B2 G2 B3 G3
-+       * rgbg1 = R4 G4 R5 G5 R6 G6 R7 G7 B4 G4 B5 G5 B6 G6 B7 G7
-+       * rgbg2 = R8 G8 R9 G9 Ra Ga Rb Gb B8 G8 B9 G9 Ba Ga Bb Gb
-+       * rgbg3 = Rc Gc Rd Gd Re Ge Rf Gf Bc Gc Bd Gd Be Ge Bf Gf
-+       *
-+       * rg0 = R0 G0 R1 G1 R2 G2 R3 G3
-+       * bg0 = B0 G0 B1 G1 B2 G2 B3 G3
-+       * ...
-+       */
-+      rg0 = _mm_unpacklo_epi8(rgbg0, pb_zero);
-+      bg0 = _mm_unpackhi_epi8(rgbg0, pb_zero);
-+      rg1 = _mm_unpacklo_epi8(rgbg1, pb_zero);
-+      bg1 = _mm_unpackhi_epi8(rgbg1, pb_zero);
-+      rg2 = _mm_unpacklo_epi8(rgbg2, pb_zero);
-+      bg2 = _mm_unpackhi_epi8(rgbg2, pb_zero);
-+      rg3 = _mm_unpacklo_epi8(rgbg3, pb_zero);
-+      bg3 = _mm_unpackhi_epi8(rgbg3, pb_zero);
++        inptr += PIXELSIZE * 16;
++#endif
++        RGB_SHUFFLE
++        CALC_Y(outptr0)
++        CALC_CC(outptr1, outptr2)
++      }
++    }
 +
-+      /* (Original)
-+       * Y  =  0.29900 * R + 0.58700 * G + 0.11400 * B
-+       * Cb = -0.16874 * R - 0.33126 * G + 0.50000 * B + CENTERJSAMPLE
-+       * Cr =  0.50000 * R - 0.41869 * G - 0.08131 * B + CENTERJSAMPLE
-+       *
-+       * (This implementation)
-+       * Y  =  0.29900 * R + 0.33700 * G + 0.11400 * B + 0.25000 * G
-+       * Cb = -0.16874 * R - 0.33126 * G + 0.50000 * B + CENTERJSAMPLE
-+       * Cr =  0.50000 * R - 0.41869 * G - 0.08131 * B + CENTERJSAMPLE
-+       */
++    num_cols = img_width & 15;
++    if (num_cols) {
++      int i;
++      memcpy(tmpbuf, inptr, num_cols * PIXELSIZE);
++      rgb0 = VEC_LD(tmpbuf);
++      rgb1 = VEC_LD(tmpbuf + 16);
++      rgb2 = VEC_LD(tmpbuf + 32);
++#if PIXELSIZE == 4
++      rgb3 = VEC_LD(tmpbuf + 48);
++#endif
++      RGB_SHUFFLE
++      CALC_Y(tmpbuf)
++      CALC_CC(tmpbuf + 16, tmpbuf + 32)
 +
-+      /* Calculate Y values */
-+      y0 = _mm_add_epi32(_mm_madd_epi16(rg0, pw_f0299_f0337), pd_onehalf);
-+      y1 = _mm_add_epi32(_mm_madd_epi16(rg1, pw_f0299_f0337), pd_onehalf);
-+      y2 = _mm_add_epi32(_mm_madd_epi16(rg2, pw_f0299_f0337), pd_onehalf);
-+      y3 = _mm_add_epi32(_mm_madd_epi16(rg3, pw_f0299_f0337), pd_onehalf);
-+      y0 = _mm_add_epi32(_mm_madd_epi16(bg0, pw_f0114_f0250), y0);
-+      y1 = _mm_add_epi32(_mm_madd_epi16(bg1, pw_f0114_f0250), y1);
-+      y2 = _mm_add_epi32(_mm_madd_epi16(bg2, pw_f0114_f0250), y2);
-+      y3 = _mm_add_epi32(_mm_madd_epi16(bg3, pw_f0114_f0250), y3);
-+
-+      yl = PACK_HIGH16(y0, y1);
-+      yh = PACK_HIGH16(y2, y3);
-+      y = _mm_packus_epi16(yl, yh);
-+      VEC_ST(outptr0, y);
-+
-+      /* Calculate Cb values */
-+      cb0 = _mm_add_epi32(_mm_madd_epi16(rg0, pw_mf016_mf033), pd_onehalfm1_cj);
-+      cb1 = _mm_add_epi32(_mm_madd_epi16(rg1, pw_mf016_mf033), pd_onehalfm1_cj);
-+      cb2 = _mm_add_epi32(_mm_madd_epi16(rg2, pw_mf016_mf033), pd_onehalfm1_cj);
-+      cb3 = _mm_add_epi32(_mm_madd_epi16(rg3, pw_mf016_mf033), pd_onehalfm1_cj);
-+      cb0 = _mm_sub_epi32(cb0, _mm_madd_epi16(bg0, pw_mf050_f000));
-+      cb1 = _mm_sub_epi32(cb1, _mm_madd_epi16(bg1, pw_mf050_f000));
-+      cb2 = _mm_sub_epi32(cb2, _mm_madd_epi16(bg2, pw_mf050_f000));
-+      cb3 = _mm_sub_epi32(cb3, _mm_madd_epi16(bg3, pw_mf050_f000));
-+
-+      cbl = PACK_HIGH16(cb0, cb1);
-+      cbh = PACK_HIGH16(cb2, cb3);
-+      cb = _mm_packus_epi16(cbl, cbh);
-+      VEC_ST(outptr1, cb);
-+
-+      /* Calculate Cr values */
-+      cr0 = _mm_add_epi32(_mm_madd_epi16(bg0, pw_mf008_mf041), pd_onehalfm1_cj);
-+      cr1 = _mm_add_epi32(_mm_madd_epi16(bg1, pw_mf008_mf041), pd_onehalfm1_cj);
-+      cr2 = _mm_add_epi32(_mm_madd_epi16(bg2, pw_mf008_mf041), pd_onehalfm1_cj);
-+      cr3 = _mm_add_epi32(_mm_madd_epi16(bg3, pw_mf008_mf041), pd_onehalfm1_cj);
-+      cr0 = _mm_sub_epi32(cr0, _mm_madd_epi16(rg0, pw_mf050_f000));
-+      cr1 = _mm_sub_epi32(cr1, _mm_madd_epi16(rg1, pw_mf050_f000));
-+      cr2 = _mm_sub_epi32(cr2, _mm_madd_epi16(rg2, pw_mf050_f000));
-+      cr3 = _mm_sub_epi32(cr3, _mm_madd_epi16(rg3, pw_mf050_f000));
-+
-+      crl = PACK_HIGH16(cr0, cr1);
-+      crh = PACK_HIGH16(cr2, cr3);
-+      cr = _mm_packus_epi16(crl, crh);
-+      VEC_ST(outptr2, cr);
++      for (i = 0; i < num_cols; i++) {
++        outptr0[i] = tmpbuf[i];
++        outptr1[i] = tmpbuf[i + 16];
++        outptr2[i] = tmpbuf[i + 32];
++      }
 +    }
 +  }
 +}
-+#undef RGB_RED
-+#undef RGB_GREEN
-+#undef RGB_BLUE
-+#undef RGB_PIXELSIZE
-+#ifdef jsimd_rgb_ycc_convert_e2k
-+#undef jsimd_rgb_ycc_convert_e2k
++
++void rgbn_gray_convert(JDIMENSION img_width, JSAMPARRAY input_buf,
++                       JSAMPIMAGE output_buf, JDIMENSION output_row,
++                       int num_rows, int shuf_idx)
++{
++  JSAMPROW inptr, outptr;
++  uint8_t __attribute__((aligned(16))) tmpbuf[PIXELSIZE * 16];
++
++  __m128i pb_zero = _mm_setzero_si128();
++  __m128i pb_shuf0 = VEC_LD(rgb_ycc_shuf_const[shuf_idx]);
++#if PIXELSIZE == 4
++  __m128i rgb3 = pb_zero;
++#else
++  __m128i pb_shuf4 = VEC_LD(rgb_ycc_shuf_const[shuf_idx] + 16);
 +#endif
++  __m128i rgb0, rgb1 = pb_zero, rgb2 = pb_zero,
++    rgbg0, rgbg1, rgbg2, rgbg3, rg0, rg1, rg2, rg3, bg0, bg1, bg2, bg3;
++  __m128i y, yl, yh, y0, y1, y2, y3;
++
++  /* Constants */
++  __m128i pw_f0299_f0337 = _mm_setr_epi16(__4X2(F_0_299, F_0_337)),
++    pw_f0114_f0250 = _mm_setr_epi16(__4X2(F_0_114, F_0_250)),
++    pd_onehalf = _mm_set1_epi32(ONE_HALF);
++#ifdef NEED_ALIGN8
++  ALIGN8_COMMON
++  ALIGN8_VARS(src)
++#endif
++
++  if (img_width > 0)
++  while (--num_rows >= 0) {
++    int num_cols;
++    inptr = *input_buf++;
++    outptr = output_buf[0][output_row];
++    output_row++;
++
++    if (img_width >= 16) {
++#ifdef NEED_ALIGN8
++      ALIGN8_START(inptr, src)
++      inptr += (img_width & -16) * PIXELSIZE;
++#endif
++
++      PRAGMA_E2K("ivdep")
++      for (num_cols = img_width; num_cols >= 16; num_cols -= 16,
++           outptr += 16) {
++#ifdef NEED_ALIGN8
++        ALIGN8_READ16(rgb0, src, 0)
++        ALIGN8_READ16(rgb1, src, 1)
++        ALIGN8_READ16(rgb2, src, 2)
++#if PIXELSIZE == 4
++        ALIGN8_READ16(rgb3, src, 3)
++#endif
++        src_ptr += PIXELSIZE * 2;
++#else
++        rgb0 = VEC_LD(inptr);
++        rgb1 = VEC_LD(inptr + 16);
++        rgb2 = VEC_LD(inptr + 32);
++#if PIXELSIZE == 4
++        rgb3 = VEC_LD(inptr + 48);
++#endif
++        inptr += PIXELSIZE * 16;
++#endif
++        RGB_SHUFFLE
++        CALC_Y(outptr)
++      }
++    }
++
++    num_cols = img_width & 15;
++    if (num_cols) {
++      int i;
++      memcpy(tmpbuf, inptr, num_cols * PIXELSIZE);
++      rgb0 = VEC_LD(tmpbuf);
++      rgb1 = VEC_LD(tmpbuf + 16);
++      rgb2 = VEC_LD(tmpbuf + 32);
++#if PIXELSIZE == 4
++      rgb3 = VEC_LD(tmpbuf + 48);
++#endif
++      RGB_SHUFFLE
++      CALC_Y(tmpbuf)
++
++      for (i = 0; i < num_cols; i++) {
++        outptr[i] = tmpbuf[i];
++      }
++    }
++  }
++}
++
++#undef RGB_SHUFFLE
++#undef PIXELSIZE
++#undef rgbn_ycc_convert
++#undef rgbn_gray_convert
 +
 diff --git a/simd/e2k/jccolor-e2k.c b/simd/e2k/jccolor-e2k.c
 new file mode 100644
-index 0000000..332af2d
+index 0000000..0af2626
 --- /dev/null
 +++ b/simd/e2k/jccolor-e2k.c
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,163 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
@@ -394,10 +356,6 @@ index 0000000..332af2d
 +/* RGB --> YCC CONVERSION */
 +
 +#include "jsimd_e2k.h"
-+#ifdef HAVE_EML
-+#include "eml.h"
-+#endif
-+
 +
 +#define F_0_081  5329                 /* FIX(0.08131) */
 +#define F_0_114  7471                 /* FIX(0.11400) */
@@ -414,305 +372,126 @@ index 0000000..332af2d
 +#define SCALEBITS  16
 +#define ONE_HALF  (1 << (SCALEBITS - 1))
 +
-+#define RGBG_INDEX4_(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) \
-+  a + 4, b + 4, c + 4, d + 4, e + 4, f + 4, g + 4, h + 4, \
-+  i + 4, j + 4, k + 4, l + 4, m + 4, n + 4, o + 4, p + 4
-+#define RGBG_INDEX4(a) RGBG_INDEX4_(a)
-+#define RGBG_INDEX_(c0, i) RGB_##c0 + i * RGB_PIXELSIZE, \
-+  RGB_GREEN + i * RGB_PIXELSIZE
-+#define RGBG_INDEX \
-+  RGBG_INDEX_(RED, 0), RGBG_INDEX_(RED, 1), \
-+  RGBG_INDEX_(RED, 2), RGBG_INDEX_(RED, 3), \
-+  RGBG_INDEX_(BLUE, 0), RGBG_INDEX_(BLUE, 1), \
-+  RGBG_INDEX_(BLUE, 2), RGBG_INDEX_(BLUE, 3)
++#define RGBG_INDEX_(name, color, i, x) \
++  name##_##color + i * name##_PIXELSIZE + x, \
++  name##_GREEN + i * name##_PIXELSIZE + x
++#define RGBG_INDEX(name, x) \
++  RGBG_INDEX_(name, RED, 0, x), RGBG_INDEX_(name, RED, 1, x), \
++  RGBG_INDEX_(name, RED, 2, x), RGBG_INDEX_(name, RED, 3, x), \
++  RGBG_INDEX_(name, BLUE, 0, x), RGBG_INDEX_(name, BLUE, 1, x), \
++  RGBG_INDEX_(name, BLUE, 2, x), RGBG_INDEX_(name, BLUE, 3, x)
 +
++static const uint8_t __attribute__((aligned(16)))
++rgb_ycc_shuf_const[7][32] = {
++  { RGBG_INDEX(RGB, 0), RGBG_INDEX(RGB, 4) },
++  { RGBG_INDEX(EXT_RGB, 0), RGBG_INDEX(EXT_RGB, 4) },
++  { RGBG_INDEX(EXT_RGBX, 0), RGBG_INDEX(EXT_RGBX, 4) },
++  { RGBG_INDEX(EXT_BGR, 0), RGBG_INDEX(EXT_BGR, 4) },
++  { RGBG_INDEX(EXT_BGRX, 0), RGBG_INDEX(EXT_BGRX, 4) },
++  { RGBG_INDEX(EXT_XBGR, 0), RGBG_INDEX(EXT_XBGR, 4) },
++  { RGBG_INDEX(EXT_XRGB, 0), RGBG_INDEX(EXT_XRGB, 4) }
++};
++
++  /* rgbg0 = R0 G0 R1 G1 R2 G2 R3 G3 B0 G0 B1 G1 B2 G2 B3 G3 
++   * rgbg1 = R4 G4 R5 G5 R6 G6 R7 G7 B4 G4 B5 G5 B6 G6 B7 G7
++   * rgbg2 = R8 G8 R9 G9 Ra Ga Rb Gb B8 G8 B9 G9 Ba Ga Bb Gb
++   * rgbg3 = Rc Gc Rd Gd Re Ge Rf Gf Bc Gc Bd Gd Be Ge Bf Gf
++   *
++   * rg0 = R0 G0 R1 G1 R2 G2 R3 G3
++   * bg0 = B0 G0 B1 G1 B2 G2 B3 G3
++   * ...
++   */
++
++  /* (Original)
++   * Y  =  0.29900 * R + 0.58700 * G + 0.11400 * B
++   * Cb = -0.16874 * R - 0.33126 * G + 0.50000 * B + CENTERJSAMPLE
++   * Cr =  0.50000 * R - 0.41869 * G - 0.08131 * B + CENTERJSAMPLE
++   *
++   * (This implementation)
++   * Y  =  0.29900 * R + 0.33700 * G + 0.11400 * B + 0.25000 * G
++   * Cb = -0.16874 * R - 0.33126 * G + 0.50000 * B + CENTERJSAMPLE
++   * Cr =  0.50000 * R - 0.41869 * G - 0.08131 * B + CENTERJSAMPLE
++   */
++
++#define CALC_Y(outptr0) \
++  rg0 = _mm_unpacklo_epi8(rgbg0, pb_zero); \
++  bg0 = _mm_unpackhi_epi8(rgbg0, pb_zero); \
++  rg1 = _mm_unpacklo_epi8(rgbg1, pb_zero); \
++  bg1 = _mm_unpackhi_epi8(rgbg1, pb_zero); \
++  rg2 = _mm_unpacklo_epi8(rgbg2, pb_zero); \
++  bg2 = _mm_unpackhi_epi8(rgbg2, pb_zero); \
++  rg3 = _mm_unpacklo_epi8(rgbg3, pb_zero); \
++  bg3 = _mm_unpackhi_epi8(rgbg3, pb_zero); \
++  \
++  /* Calculate Y values */ \
++  y0 = _mm_add_epi32(_mm_madd_epi16(rg0, pw_f0299_f0337), pd_onehalf); \
++  y1 = _mm_add_epi32(_mm_madd_epi16(rg1, pw_f0299_f0337), pd_onehalf); \
++  y2 = _mm_add_epi32(_mm_madd_epi16(rg2, pw_f0299_f0337), pd_onehalf); \
++  y3 = _mm_add_epi32(_mm_madd_epi16(rg3, pw_f0299_f0337), pd_onehalf); \
++  y0 = _mm_add_epi32(_mm_madd_epi16(bg0, pw_f0114_f0250), y0); \
++  y1 = _mm_add_epi32(_mm_madd_epi16(bg1, pw_f0114_f0250), y1); \
++  y2 = _mm_add_epi32(_mm_madd_epi16(bg2, pw_f0114_f0250), y2); \
++  y3 = _mm_add_epi32(_mm_madd_epi16(bg3, pw_f0114_f0250), y3); \
++  \
++  yl = _mm_packhi_epi32(y0, y1); \
++  yh = _mm_packhi_epi32(y2, y3); \
++  y = _mm_packus_epi16(yl, yh); \
++  VEC_ST(outptr0, y);
++
++#define CALC_CC(outptr1, outptr2) \
++  /* Calculate Cb values */ \
++  cb0 = _mm_add_epi32(_mm_madd_epi16(rg0, pw_mf016_mf033), pd_onehalfm1_cj); \
++  cb1 = _mm_add_epi32(_mm_madd_epi16(rg1, pw_mf016_mf033), pd_onehalfm1_cj); \
++  cb2 = _mm_add_epi32(_mm_madd_epi16(rg2, pw_mf016_mf033), pd_onehalfm1_cj); \
++  cb3 = _mm_add_epi32(_mm_madd_epi16(rg3, pw_mf016_mf033), pd_onehalfm1_cj); \
++  cb0 = _mm_sub_epi32(cb0, _mm_madd_epi16(bg0, pw_mf050_f000)); \
++  cb1 = _mm_sub_epi32(cb1, _mm_madd_epi16(bg1, pw_mf050_f000)); \
++  cb2 = _mm_sub_epi32(cb2, _mm_madd_epi16(bg2, pw_mf050_f000)); \
++  cb3 = _mm_sub_epi32(cb3, _mm_madd_epi16(bg3, pw_mf050_f000)); \
++  \
++  cbl = _mm_packhi_epi32(cb0, cb1); \
++  cbh = _mm_packhi_epi32(cb2, cb3); \
++  cb = _mm_packus_epi16(cbl, cbh); \
++  VEC_ST(outptr1, cb); \
++  \
++  /* Calculate Cr values */ \
++  cr0 = _mm_add_epi32(_mm_madd_epi16(bg0, pw_mf008_mf041), pd_onehalfm1_cj); \
++  cr1 = _mm_add_epi32(_mm_madd_epi16(bg1, pw_mf008_mf041), pd_onehalfm1_cj); \
++  cr2 = _mm_add_epi32(_mm_madd_epi16(bg2, pw_mf008_mf041), pd_onehalfm1_cj); \
++  cr3 = _mm_add_epi32(_mm_madd_epi16(bg3, pw_mf008_mf041), pd_onehalfm1_cj); \
++  cr0 = _mm_sub_epi32(cr0, _mm_madd_epi16(rg0, pw_mf050_f000)); \
++  cr1 = _mm_sub_epi32(cr1, _mm_madd_epi16(rg1, pw_mf050_f000)); \
++  cr2 = _mm_sub_epi32(cr2, _mm_madd_epi16(rg2, pw_mf050_f000)); \
++  cr3 = _mm_sub_epi32(cr3, _mm_madd_epi16(rg3, pw_mf050_f000)); \
++  \
++  crl = _mm_packhi_epi32(cr0, cr1); \
++  crh = _mm_packhi_epi32(cr2, cr3); \
++  cr = _mm_packus_epi16(crl, crh); \
++  VEC_ST(outptr2, cr);
++
++
++#define PIXELSIZE 3
++#define RGB_SHUFFLE \
++  rgbg0 = _mm_shuffle_epi8(rgb0, pb_shuf0); \
++  rgbg1 = _mm_shuffle_epi8(VEC_ALIGNR8(rgb1, rgb0), pb_shuf4); \
++  rgbg2 = _mm_shuffle_epi8(VEC_ALIGNR8(rgb2, rgb1), pb_shuf0); \
++  rgbg3 = _mm_shuffle_epi8(rgb2, pb_shuf4);
++
++#define rgbn_ycc_convert  jsimd_rgb3_ycc_convert_e2k
++#define rgbn_gray_convert jsimd_rgb3_gray_convert_e2k
 +#include "jccolext-e2k.c"
 +
-+#define RGB_RED  EXT_RGB_RED
-+#define RGB_GREEN  EXT_RGB_GREEN
-+#define RGB_BLUE  EXT_RGB_BLUE
-+#define RGB_PIXELSIZE  EXT_RGB_PIXELSIZE
-+#define jsimd_rgb_ycc_convert_e2k  jsimd_extrgb_ycc_convert_e2k
++
++#define PIXELSIZE 4
++#define RGB_SHUFFLE \
++  rgbg0 = _mm_shuffle_epi8(rgb0, pb_shuf0); \
++  rgbg1 = _mm_shuffle_epi8(rgb1, pb_shuf0); \
++  rgbg2 = _mm_shuffle_epi8(rgb2, pb_shuf0); \
++  rgbg3 = _mm_shuffle_epi8(rgb3, pb_shuf0);
++
++#define rgbn_ycc_convert  jsimd_rgb4_ycc_convert_e2k
++#define rgbn_gray_convert jsimd_rgb4_gray_convert_e2k
 +#include "jccolext-e2k.c"
-+
-+#define RGB_RED  EXT_RGBX_RED
-+#define RGB_GREEN  EXT_RGBX_GREEN
-+#define RGB_BLUE  EXT_RGBX_BLUE
-+#define RGB_PIXELSIZE  EXT_RGBX_PIXELSIZE
-+#define jsimd_rgb_ycc_convert_e2k  jsimd_extrgbx_ycc_convert_e2k
-+#include "jccolext-e2k.c"
-+
-+#define RGB_RED  EXT_BGR_RED
-+#define RGB_GREEN  EXT_BGR_GREEN
-+#define RGB_BLUE  EXT_BGR_BLUE
-+#define RGB_PIXELSIZE  EXT_BGR_PIXELSIZE
-+#define jsimd_rgb_ycc_convert_e2k  jsimd_extbgr_ycc_convert_e2k
-+#include "jccolext-e2k.c"
-+
-+#define RGB_RED  EXT_BGRX_RED
-+#define RGB_GREEN  EXT_BGRX_GREEN
-+#define RGB_BLUE  EXT_BGRX_BLUE
-+#define RGB_PIXELSIZE  EXT_BGRX_PIXELSIZE
-+#define jsimd_rgb_ycc_convert_e2k  jsimd_extbgrx_ycc_convert_e2k
-+#include "jccolext-e2k.c"
-+
-+#define RGB_RED  EXT_XBGR_RED
-+#define RGB_GREEN  EXT_XBGR_GREEN
-+#define RGB_BLUE  EXT_XBGR_BLUE
-+#define RGB_PIXELSIZE  EXT_XBGR_PIXELSIZE
-+#define jsimd_rgb_ycc_convert_e2k  jsimd_extxbgr_ycc_convert_e2k
-+#include "jccolext-e2k.c"
-+
-+#define RGB_RED  EXT_XRGB_RED
-+#define RGB_GREEN  EXT_XRGB_GREEN
-+#define RGB_BLUE  EXT_XRGB_BLUE
-+#define RGB_PIXELSIZE  EXT_XRGB_PIXELSIZE
-+#define jsimd_rgb_ycc_convert_e2k  jsimd_extxrgb_ycc_convert_e2k
-+#include "jccolext-e2k.c"
-+
-diff --git a/simd/e2k/jcgray-e2k.c b/simd/e2k/jcgray-e2k.c
-new file mode 100644
-index 0000000..07d2cfb
---- /dev/null
-+++ b/simd/e2k/jcgray-e2k.c
-@@ -0,0 +1,93 @@
-+/*
-+ * Elbrus optimizations for libjpeg-turbo
-+ *
-+ * Copyright (C) 2014, D. R. Commander.  All Rights Reserved.
-+ * Copyright (C) 2021, Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
-+ *
-+ * This software is provided 'as-is', without any express or implied
-+ * warranty.  In no event will the authors be held liable for any damages
-+ * arising from the use of this software.
-+ *
-+ * Permission is granted to anyone to use this software for any purpose,
-+ * including commercial applications, and to alter it and redistribute it
-+ * freely, subject to the following restrictions:
-+ *
-+ * 1. The origin of this software must not be misrepresented; you must not
-+ *    claim that you wrote the original software. If you use this software
-+ *    in a product, an acknowledgment in the product documentation would be
-+ *    appreciated but is not required.
-+ * 2. Altered source versions must be plainly marked as such, and must not be
-+ *    misrepresented as being the original software.
-+ * 3. This notice may not be removed or altered from any source distribution.
-+ */
-+
-+/* RGB --> GRAYSCALE CONVERSION */
-+
-+#include "jsimd_e2k.h"
-+
-+
-+#define F_0_114  7471                 /* FIX(0.11400) */
-+#define F_0_250  16384                /* FIX(0.25000) */
-+#define F_0_299  19595                /* FIX(0.29900) */
-+#define F_0_587  38470                /* FIX(0.58700) */
-+#define F_0_337  (F_0_587 - F_0_250)  /* FIX(0.58700) - FIX(0.25000) */
-+
-+#define SCALEBITS  16
-+#define ONE_HALF  (1 << (SCALEBITS - 1))
-+
-+#define RGBG_INDEX4_(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) \
-+  a + 4, b + 4, c + 4, d + 4, e + 4, f + 4, g + 4, h + 4, \
-+  i + 4, j + 4, k + 4, l + 4, m + 4, n + 4, o + 4, p + 4
-+#define RGBG_INDEX4(a) RGBG_INDEX4_(a)
-+#define RGBG_INDEX_(c0, i) RGB_##c0 + i * RGB_PIXELSIZE, \
-+  RGB_GREEN + i * RGB_PIXELSIZE
-+#define RGBG_INDEX \
-+  RGBG_INDEX_(RED, 0), RGBG_INDEX_(RED, 1), \
-+  RGBG_INDEX_(RED, 2), RGBG_INDEX_(RED, 3), \
-+  RGBG_INDEX_(BLUE, 0), RGBG_INDEX_(BLUE, 1), \
-+  RGBG_INDEX_(BLUE, 2), RGBG_INDEX_(BLUE, 3)
-+
-+#include "jcgryext-e2k.c"
-+
-+#define RGB_RED  EXT_RGB_RED
-+#define RGB_GREEN  EXT_RGB_GREEN
-+#define RGB_BLUE  EXT_RGB_BLUE
-+#define RGB_PIXELSIZE  EXT_RGB_PIXELSIZE
-+#define jsimd_rgb_gray_convert_e2k  jsimd_extrgb_gray_convert_e2k
-+#include "jcgryext-e2k.c"
-+
-+#define RGB_RED  EXT_RGBX_RED
-+#define RGB_GREEN  EXT_RGBX_GREEN
-+#define RGB_BLUE  EXT_RGBX_BLUE
-+#define RGB_PIXELSIZE  EXT_RGBX_PIXELSIZE
-+#define jsimd_rgb_gray_convert_e2k  jsimd_extrgbx_gray_convert_e2k
-+#include "jcgryext-e2k.c"
-+
-+#define RGB_RED  EXT_BGR_RED
-+#define RGB_GREEN  EXT_BGR_GREEN
-+#define RGB_BLUE  EXT_BGR_BLUE
-+#define RGB_PIXELSIZE  EXT_BGR_PIXELSIZE
-+#define jsimd_rgb_gray_convert_e2k  jsimd_extbgr_gray_convert_e2k
-+#include "jcgryext-e2k.c"
-+
-+#define RGB_RED  EXT_BGRX_RED
-+#define RGB_GREEN  EXT_BGRX_GREEN
-+#define RGB_BLUE  EXT_BGRX_BLUE
-+#define RGB_PIXELSIZE  EXT_BGRX_PIXELSIZE
-+#define jsimd_rgb_gray_convert_e2k  jsimd_extbgrx_gray_convert_e2k
-+#include "jcgryext-e2k.c"
-+
-+#define RGB_RED  EXT_XBGR_RED
-+#define RGB_GREEN  EXT_XBGR_GREEN
-+#define RGB_BLUE  EXT_XBGR_BLUE
-+#define RGB_PIXELSIZE  EXT_XBGR_PIXELSIZE
-+#define jsimd_rgb_gray_convert_e2k  jsimd_extxbgr_gray_convert_e2k
-+#include "jcgryext-e2k.c"
-+
-+#define RGB_RED  EXT_XRGB_RED
-+#define RGB_GREEN  EXT_XRGB_GREEN
-+#define RGB_BLUE  EXT_XRGB_BLUE
-+#define RGB_PIXELSIZE  EXT_XRGB_PIXELSIZE
-+#define jsimd_rgb_gray_convert_e2k  jsimd_extxrgb_gray_convert_e2k
-+#include "jcgryext-e2k.c"
-+
-diff --git a/simd/e2k/jcgryext-e2k.c b/simd/e2k/jcgryext-e2k.c
-new file mode 100644
-index 0000000..05b558d
---- /dev/null
-+++ b/simd/e2k/jcgryext-e2k.c
-@@ -0,0 +1,139 @@
-+/*
-+ * Elbrus optimizations for libjpeg-turbo
-+ *
-+ * Copyright (C) 2014-2015, D. R. Commander.  All Rights Reserved.
-+ * Copyright (C) 2014, Jay Foad.  All Rights Reserved.
-+ * Copyright (C) 2021, Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
-+ *
-+ * This software is provided 'as-is', without any express or implied
-+ * warranty.  In no event will the authors be held liable for any damages
-+ * arising from the use of this software.
-+ *
-+ * Permission is granted to anyone to use this software for any purpose,
-+ * including commercial applications, and to alter it and redistribute it
-+ * freely, subject to the following restrictions:
-+ *
-+ * 1. The origin of this software must not be misrepresented; you must not
-+ *    claim that you wrote the original software. If you use this software
-+ *    in a product, an acknowledgment in the product documentation would be
-+ *    appreciated but is not required.
-+ * 2. Altered source versions must be plainly marked as such, and must not be
-+ *    misrepresented as being the original software.
-+ * 3. This notice may not be removed or altered from any source distribution.
-+ */
-+
-+/* This file is included by jcgray-e2k.c */
-+
-+
-+void jsimd_rgb_gray_convert_e2k(JDIMENSION img_width, JSAMPARRAY input_buf,
-+                                JSAMPIMAGE output_buf,
-+                                JDIMENSION output_row, int num_rows)
-+{
-+  JSAMPROW inptr, outptr;
-+  int pitch = img_width * RGB_PIXELSIZE, num_cols;
-+
-+  __m128i pb_zero = _mm_setzero_si128();
-+  __m128i pb_shuf0 = _mm_setr_epi8(RGBG_INDEX);
-+#if RGB_PIXELSIZE == 4
-+  __m128i rgb3 = pb_zero;
-+#else
-+  __m128i pb_shuf4 = _mm_setr_epi8(RGBG_INDEX4(RGBG_INDEX));
-+#endif
-+  __m128i rgb0, rgb1 = pb_zero, rgb2 = pb_zero,
-+    rgbg0, rgbg1, rgbg2, rgbg3, rg0, rg1, rg2, rg3, bg0, bg1, bg2, bg3;
-+  __m128i y, yl, yh, y0, y1, y2, y3;
-+
-+  /* Constants */
-+  __m128i pw_f0299_f0337 = _mm_setr_epi16(__4X2(F_0_299, F_0_337)),
-+    pw_f0114_f0250 = _mm_setr_epi16(__4X2(F_0_114, F_0_250)),
-+    pd_onehalf = _mm_set1_epi32(ONE_HALF);
-+
-+  if (pitch > 0)
-+  while (--num_rows >= 0) {
-+    inptr = *input_buf++;
-+    outptr = output_buf[0][output_row];
-+    output_row++;
-+
-+    for (num_cols = pitch; num_cols > 0;
-+         num_cols -= RGB_PIXELSIZE * 16, inptr += RGB_PIXELSIZE * 16,
-+         outptr += 16) {
-+
-+      /* Little endian */
-+      rgb0 = VEC_LD(inptr);
-+      if (num_cols > 16) rgb1 = VEC_LD(inptr + 16);
-+      if (num_cols > 32) rgb2 = VEC_LD(inptr + 32);
-+#if RGB_PIXELSIZE == 4
-+      if (num_cols > 48) rgb3 = VEC_LD(inptr + 48);
-+#endif
-+
-+#if RGB_PIXELSIZE == 3
-+      /* rgb0 = R0 G0 B0 R1 G1 B1 R2 G2 B2 R3 G3 B3 R4 G4 B4 R5
-+       * rgb1 = G5 B5 R6 G6 B6 R7 G7 B7 R8 G8 B8 R9 G9 B9 Ra Ga
-+       * rgb2 = Ba Rb Gb Bb Rc Gc Bc Rd Gd Bd Re Ge Be Rf Gf Bf
-+       */
-+      rgbg0 = _mm_shuffle_epi8(rgb0, pb_shuf0);
-+      rgbg1 = _mm_shuffle_epi8(VEC_ALIGNR8(rgb1, rgb0), pb_shuf4);
-+      rgbg2 = _mm_shuffle_epi8(VEC_ALIGNR8(rgb2, rgb1), pb_shuf0);
-+      rgbg3 = _mm_shuffle_epi8(rgb2, pb_shuf4);
-+#else
-+      /* rgb0 = R0 G0 B0 X0 R1 G1 B1 X1 R2 G2 B2 X2 R3 G3 B3 X3
-+       * rgb1 = R4 G4 B4 X4 R5 G5 B5 X5 R6 G6 B6 X6 R7 G7 B7 X7
-+       * rgb2 = R8 G8 B8 X8 R9 G9 B9 X9 Ra Ga Ba Xa Rb Gb Bb Xb
-+       * rgb3 = Rc Gc Bc Xc Rd Gd Bd Xd Re Ge Be Xe Rf Gf Bf Xf
-+       */
-+      rgbg0 = _mm_shuffle_epi8(rgb0, pb_shuf0);
-+      rgbg1 = _mm_shuffle_epi8(rgb1, pb_shuf0);
-+      rgbg2 = _mm_shuffle_epi8(rgb2, pb_shuf0);
-+      rgbg3 = _mm_shuffle_epi8(rgb3, pb_shuf0);
-+#endif
-+      /* rgbg0 = R0 G0 R1 G1 R2 G2 R3 G3 B0 G0 B1 G1 B2 G2 B3 G3
-+       * rgbg1 = R4 G4 R5 G5 R6 G6 R7 G7 B4 G4 B5 G5 B6 G6 B7 G7
-+       * rgbg2 = R8 G8 R9 G9 Ra Ga Rb Gb B8 G8 B9 G9 Ba Ga Bb Gb
-+       * rgbg3 = Rc Gc Rd Gd Re Ge Rf Gf Bc Gc Bd Gd Be Ge Bf Gf
-+       *
-+       * rg0 = R0 G0 R1 G1 R2 G2 R3 G3
-+       * bg0 = B0 G0 B1 G1 B2 G2 B3 G3
-+       * ...
-+       */
-+      rg0 = _mm_unpacklo_epi8(rgbg0, pb_zero);
-+      bg0 = _mm_unpackhi_epi8(rgbg0, pb_zero);
-+      rg1 = _mm_unpacklo_epi8(rgbg1, pb_zero);
-+      bg1 = _mm_unpackhi_epi8(rgbg1, pb_zero);
-+      rg2 = _mm_unpacklo_epi8(rgbg2, pb_zero);
-+      bg2 = _mm_unpackhi_epi8(rgbg2, pb_zero);
-+      rg3 = _mm_unpacklo_epi8(rgbg3, pb_zero);
-+      bg3 = _mm_unpackhi_epi8(rgbg3, pb_zero);
-+
-+      /* (Original)
-+       * Y  =  0.29900 * R + 0.58700 * G + 0.11400 * B
-+       *
-+       * (This implementation)
-+       * Y  =  0.29900 * R + 0.33700 * G + 0.11400 * B + 0.25000 * G
-+       */
-+
-+      /* Calculate Y values */
-+
-+      y0 = _mm_add_epi32(_mm_madd_epi16(rg0, pw_f0299_f0337), pd_onehalf);
-+      y1 = _mm_add_epi32(_mm_madd_epi16(rg1, pw_f0299_f0337), pd_onehalf);
-+      y2 = _mm_add_epi32(_mm_madd_epi16(rg2, pw_f0299_f0337), pd_onehalf);
-+      y3 = _mm_add_epi32(_mm_madd_epi16(rg3, pw_f0299_f0337), pd_onehalf);
-+      y0 = _mm_add_epi32(_mm_madd_epi16(bg0, pw_f0114_f0250), y0);
-+      y1 = _mm_add_epi32(_mm_madd_epi16(bg1, pw_f0114_f0250), y1);
-+      y2 = _mm_add_epi32(_mm_madd_epi16(bg2, pw_f0114_f0250), y2);
-+      y3 = _mm_add_epi32(_mm_madd_epi16(bg3, pw_f0114_f0250), y3);
-+
-+      yl = PACK_HIGH16(y0, y1);
-+      yh = PACK_HIGH16(y2, y3);
-+      y = _mm_packus_epi16(yl, yh);
-+      VEC_ST(outptr, y);
-+    }
-+  }
-+}
-+#undef RGB_RED
-+#undef RGB_GREEN
-+#undef RGB_BLUE
-+#undef RGB_PIXELSIZE
-+#ifdef jsimd_rgb_gray_convert_e2k
-+#undef jsimd_rgb_gray_convert_e2k
-+#endif
 +
 diff --git a/simd/e2k/jchuff-e2k.c b/simd/e2k/jchuff-e2k.c
 new file mode 100644
@@ -1032,10 +811,10 @@ index 0000000..0750c20
 +}
 diff --git a/simd/e2k/jcsample-e2k.c b/simd/e2k/jcsample-e2k.c
 new file mode 100644
-index 0000000..fa0b262
+index 0000000..03ddc2c
 --- /dev/null
 +++ b/simd/e2k/jcsample-e2k.c
-@@ -0,0 +1,146 @@
+@@ -0,0 +1,203 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
@@ -1064,7 +843,6 @@ index 0000000..fa0b262
 +#include "jsimd_e2k.h"
 +#include "jcsample.h"
 +
-+
 +void jsimd_h2v1_downsample_e2k(JDIMENSION image_width,
 +                               int max_v_samp_factor,
 +                               JDIMENSION v_samp_factor,
@@ -1072,8 +850,8 @@ index 0000000..fa0b262
 +                               JSAMPARRAY input_data,
 +                               JSAMPARRAY output_data)
 +{
-+  int outrow, outcol;
-+  JDIMENSION output_cols = width_in_blocks * DCTSIZE;
++  int outcol;
++  JDIMENSION output_cols = width_in_blocks * DCTSIZE, outrow;
 +  JSAMPROW inptr, outptr;
 +
 +  __m128i this0, next0, out;
@@ -1081,49 +859,73 @@ index 0000000..fa0b262
 +
 +  /* Constants */
 +  __m128i pw_bias = _mm_set1_epi32(1 << 16),
-+    even_mask = _mm_set1_epi16(255),
-+    pb_zero = _mm_setzero_si128();
++    even_mask = _mm_set1_epi16(255);
++#ifdef NEED_ALIGN8
++  ALIGN8_COMMON
++  ALIGN8_VARS(src)
++#endif
 +
-+  expand_right_edge(input_data, max_v_samp_factor, image_width,
-+                    output_cols * 2);
++  expand_right_edge(input_data, max_v_samp_factor,
++                    image_width, output_cols * 2);
 +
-+  for (outrow = 0; (JDIMENSION)outrow < v_samp_factor; outrow++) {
++  if (output_cols > 0)
++  for (outrow = 0; outrow < v_samp_factor; outrow++) {
 +    outptr = output_data[outrow];
 +    inptr = input_data[outrow];
 +
-+    for (outcol = output_cols; outcol > 0;
++#ifdef NEED_ALIGN8
++    ALIGN8_START(inptr, src)
++#endif
++    PRAGMA_E2K("ivdep")
++    for (outcol = output_cols; outcol > 8;
 +         outcol -= 16, inptr += 32, outptr += 16) {
 +
++#ifdef NEED_ALIGN8
++      ALIGN8_READ16(this0, src, 0)
++      ALIGN8_READ16(next0, src, 1)
++      src_ptr += 4;
++#else
 +      this0 = VEC_LD(inptr);
++      next0 = VEC_LD(inptr + 16);
++      inptr += 32;
++#endif
++      this0e = _mm_and_si128(this0, even_mask);
++      this0o = _mm_srli_epi16(this0, 8);
++      outl = _mm_add_epi16(this0e, this0o);
++      outl = _mm_srli_epi16(_mm_add_epi16(outl, pw_bias), 1);
++      next0e = _mm_and_si128(next0, even_mask);
++      next0o = _mm_srli_epi16(next0, 8);
++      outh = _mm_add_epi16(next0e, next0o);
++      outh = _mm_srli_epi16(_mm_add_epi16(outh, pw_bias), 1);
++
++      out = _mm_packus_epi16(outl, outh);
++      VEC_ST(outptr, out);
++    }
++    if (outcol > 0) {
++#ifdef NEED_ALIGN8
++      ALIGN8_READ16(this0, src, 0)
++#else
++      this0 = VEC_LD(inptr);
++#endif
 +      this0e = _mm_and_si128(this0, even_mask);
 +      this0o = _mm_srli_epi16(this0, 8);
 +      outl = _mm_add_epi16(this0e, this0o);
 +      outl = _mm_srli_epi16(_mm_add_epi16(outl, pw_bias), 1);
 +
-+      if (outcol > 8) {
-+        next0 = VEC_LD(inptr + 16);
-+        next0e = _mm_and_si128(next0, even_mask);
-+        next0o = _mm_srli_epi16(next0, 8);
-+        outh = _mm_add_epi16(next0e, next0o);
-+        outh = _mm_srli_epi16(_mm_add_epi16(outh, pw_bias), 1);
-+      } else
-+        outh = pb_zero;
-+
-+      out = _mm_packus_epi16(outl, outh);
-+      VEC_ST(outptr, out);
++      out = _mm_packus_epi16(outl, outl);
++      VEC_STL(outptr, out);
 +    }
 +  }
 +}
 +
 +
-+void
-+jsimd_h2v2_downsample_e2k(JDIMENSION image_width, int max_v_samp_factor,
-+                              JDIMENSION v_samp_factor,
-+                              JDIMENSION width_in_blocks,
-+                              JSAMPARRAY input_data, JSAMPARRAY output_data)
++void jsimd_h2v2_downsample_e2k(JDIMENSION image_width, int max_v_samp_factor,
++                               JDIMENSION v_samp_factor,
++                               JDIMENSION width_in_blocks,
++                               JSAMPARRAY input_data, JSAMPARRAY output_data)
 +{
-+  int inrow, outrow, outcol;
-+  JDIMENSION output_cols = width_in_blocks * DCTSIZE;
++  int outcol;
++  JDIMENSION output_cols = width_in_blocks * DCTSIZE, outrow;
 +  JSAMPROW inptr0, inptr1, outptr;
 +
 +  __m128i this0, next0, this1, next1, out;
@@ -1132,53 +934,87 @@ index 0000000..fa0b262
 +
 +  /* Constants */
 +  __m128i pw_bias = _mm_set1_epi32(1 | 2 << 16),
-+    even_mask = _mm_set1_epi16(255),
-+    pb_zero = _mm_setzero_si128();
++    even_mask = _mm_set1_epi16(255);
++#ifdef NEED_ALIGN8
++  ALIGN8_COMMON
++  ALIGN8_VARS(src0)
++  ALIGN8_VARS(src1)
++#endif
 +
-+  expand_right_edge(input_data, max_v_samp_factor, image_width,
-+                    output_cols * 2);
++  expand_right_edge(input_data, max_v_samp_factor,
++                    image_width, output_cols * 2);
 +
-+  for (inrow = 0, outrow = 0; (JDIMENSION)outrow < v_samp_factor;
-+       inrow += 2, outrow++) {
-+
-+    inptr0 = input_data[inrow];
-+    inptr1 = input_data[inrow + 1];
++  if (output_cols > 0)
++  for (outrow = 0; outrow < v_samp_factor; outrow++) {
++    inptr0 = input_data[outrow * 2];
++    inptr1 = input_data[outrow * 2 + 1];
 +    outptr = output_data[outrow];
 +
-+    for (outcol = output_cols; outcol > 0;
++#ifdef NEED_ALIGN8
++    ALIGN8_START(inptr0, src0)
++    ALIGN8_START(inptr1, src1)
++#endif
++    PRAGMA_E2K("ivdep")
++    for (outcol = output_cols; outcol > 8;
 +         outcol -= 16, inptr0 += 32, inptr1 += 32, outptr += 16) {
 +
-+      this0 = VEC_LD(inptr0);
++#ifdef NEED_ALIGN8
++      ALIGN8_READ16(this0, src0, 0) src0_ptr += 2;
++      ALIGN8_READ16(this1, src1, 0) src1_ptr += 2;
++#else
++      this0 = VEC_LD(inptr0); inptr0 += 16;
++      this1 = VEC_LD(inptr1); inptr1 += 16;
++#endif
 +      this0e = _mm_and_si128(this0, even_mask);
-+      this0o = _mm_srli_epi16(this0, 8);
-+      out0l = _mm_add_epi16(this0e, this0o);
-+
-+      this1 = VEC_LD(inptr1);
 +      this1e = _mm_and_si128(this1, even_mask);
++      this0o = _mm_srli_epi16(this0, 8);
 +      this1o = _mm_srli_epi16(this1, 8);
++      out0l = _mm_add_epi16(this0e, this0o);
 +      out1l = _mm_add_epi16(this1e, this1o);
 +
 +      outl = _mm_add_epi16(out0l, out1l);
 +      outl = _mm_srli_epi16(_mm_add_epi16(outl, pw_bias), 2);
 +
-+      if (outcol > 8) {
-+        next0 = VEC_LD(inptr0 + 16);
-+        next0e = _mm_and_si128(next0, even_mask);
-+        next0o = _mm_srli_epi16(next0, 8);
-+        out0h = _mm_add_epi16(next0e, next0o);
++#ifdef NEED_ALIGN8
++      ALIGN8_READ16(next0, src0, 0) src0_ptr += 2;
++      ALIGN8_READ16(next1, src1, 0) src1_ptr += 2;
++#else
++      next0 = VEC_LD(inptr0 + 16); inptr0 += 16;
++      next1 = VEC_LD(inptr1 + 16); inptr1 += 16;
++#endif
++      next0e = _mm_and_si128(next0, even_mask);
++      next1e = _mm_and_si128(next1, even_mask);
++      next0o = _mm_srli_epi16(next0, 8);
++      next1o = _mm_srli_epi16(next1, 8);
++      out0h = _mm_add_epi16(next0e, next0o);
++      out1h = _mm_add_epi16(next1e, next1o);
 +
-+        next1 = VEC_LD(inptr1 + 16);
-+        next1e = _mm_and_si128(next1, even_mask);
-+        next1o = _mm_srli_epi16(next1, 8);
-+        out1h = _mm_add_epi16(next1e, next1o);
-+
-+        outh = _mm_add_epi16(out0h, out1h);
-+        outh = _mm_srli_epi16(_mm_add_epi16(outh, pw_bias), 2);
-+      } else
-+        outh = pb_zero;
++      outh = _mm_add_epi16(out0h, out1h);
++      outh = _mm_srli_epi16(_mm_add_epi16(outh, pw_bias), 2);
 +
 +      out = _mm_packus_epi16(outl, outh);
 +      VEC_ST(outptr, out);
++    }
++    if (outcol > 0) {
++#ifdef NEED_ALIGN8
++      ALIGN8_READ16(this0, src0, 0)
++      ALIGN8_READ16(this1, src1, 0)
++#else
++      this0 = VEC_LD(inptr0);
++      this1 = VEC_LD(inptr1);
++#endif
++      this0e = _mm_and_si128(this0, even_mask);
++      this1e = _mm_and_si128(this1, even_mask);
++      this0o = _mm_srli_epi16(this0, 8);
++      this1o = _mm_srli_epi16(this1, 8);
++      out0l = _mm_add_epi16(this0e, this0o);
++      out1l = _mm_add_epi16(this1e, this1o);
++
++      outl = _mm_add_epi16(out0l, out1l);
++      outl = _mm_srli_epi16(_mm_add_epi16(outl, pw_bias), 2);
++
++      out = _mm_packus_epi16(outl, outl);
++      VEC_STL(outptr, out);
 +    }
 +  }
 +}
@@ -1218,10 +1054,10 @@ index 0000000..2ac4816
 +}
 diff --git a/simd/e2k/jdcolext-e2k.c b/simd/e2k/jdcolext-e2k.c
 new file mode 100644
-index 0000000..b41a875
+index 0000000..4f12aef
 --- /dev/null
 +++ b/simd/e2k/jdcolext-e2k.c
-@@ -0,0 +1,230 @@
+@@ -0,0 +1,258 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
@@ -1247,23 +1083,12 @@ index 0000000..b41a875
 +
 +/* This file is included by jdcolor-e2k.c */
 +
-+#ifdef HAVE_EML
-+#if RGB_RED == 0 && RGB_GREEN == 1 && RGB_BLUE == 2 && RGB_PIXELSIZE == 3
-+#define EML_CONV_FN eml_Video_ColorYCC2RGB444_8U
-+#elif RGB_RED == 1 && RGB_GREEN == 2 && RGB_BLUE == 3 && RGB_PIXELSIZE == 4
-+#define EML_CONV_FN eml_Video_ColorYCC2ARGB444_8U
-+#elif RGB_RED == 2 && RGB_GREEN == 1 && RGB_BLUE == 0 && RGB_PIXELSIZE == 4
-+#define EML_CONV_FN eml_Video_ColorYCC2BGRA444_8U
-+#endif
-+#endif
-+
-+void jsimd_ycc_rgb_convert_e2k(JDIMENSION out_width, JSAMPIMAGE input_buf,
-+                               JDIMENSION input_row, JSAMPARRAY output_buf,
-+                               int num_rows)
++void ycc_rgbn_convert(JDIMENSION out_width, JSAMPIMAGE input_buf,
++                      JDIMENSION input_row, JSAMPARRAY output_buf,
++                      int num_rows, int shuf_idx)
 +{
 +  JSAMPROW outptr, inptr0, inptr1, inptr2;
-+  int pitch = out_width * RGB_PIXELSIZE, num_cols;
-+  unsigned char __attribute__((aligned(16))) tmpbuf[RGB_PIXELSIZE * 16];
++  uint8_t __attribute__((aligned(16))) tmpbuf[PIXELSIZE * 16];
 +
 +  __m128i rgb0, rgb1, rgb2, rgb3, y, cb, cr;
 +  __m128i rg0, rg1, bx0, bx1, yl, yh, cbl, cbh,
@@ -1281,183 +1106,222 @@ index 0000000..b41a875
 +    pw_cj = _mm_set1_epi16(CENTERJSAMPLE),
 +    pd_onehalf = _mm_set1_epi32(ONE_HALF),
 +    pb_zero = _mm_setzero_si128();
-+#if RGB_PIXELSIZE == 3
-+    CONV_RGBX_RGB_INIT
++  RGB_SHUFFLE_INIT
++#ifdef NEED_ALIGN8
++  ALIGN8_COMMON
++  ALIGN8_VARS(src0)
++  ALIGN8_VARS(src1)
++  ALIGN8_VARS(src2)
 +#endif
 +
-+  if (pitch > 0)
++  if (out_width > 0)
 +  while (--num_rows >= 0) {
++    int num_cols;
 +    inptr0 = input_buf[0][input_row];
 +    inptr1 = input_buf[1][input_row];
 +    inptr2 = input_buf[2][input_row];
 +    input_row++;
 +    outptr = *output_buf++;
 +
-+#ifdef EML_CONV_FN
-+    if (jsimd_use_eml &&
-+        !(((size_t)inptr0 | (size_t)inptr1 | (size_t)inptr2 |
-+        (size_t)outptr) & 7)) {
-+      EML_CONV_FN(inptr0, inptr1, inptr2, outptr, out_width);
-+    } else
-+#undef EML_CONV_FN
++    if (out_width >= 16) {
++#ifdef NEED_ALIGN8
++      ALIGN8_START(inptr0, src0)
++      ALIGN8_START(inptr1, src1)
++      ALIGN8_START(inptr2, src2)
++      inptr0 += out_width & -16;
++      inptr1 += out_width & -16;
++      inptr2 += out_width & -16;
 +#endif
-+    for (num_cols = pitch; num_cols > 0;
-+         num_cols -= RGB_PIXELSIZE * 16, outptr += RGB_PIXELSIZE * 16,
-+         inptr0 += 16, inptr1 += 16, inptr2 += 16) {
-+
-+      y = VEC_LD(inptr0);
-+      yl = _mm_unpacklo_epi8(y, pb_zero);
-+      yh = _mm_unpackhi_epi8(y, pb_zero);
-+
-+      cb = VEC_LD(inptr1);
-+      cbl = _mm_unpacklo_epi8(cb, pb_zero);
-+      cbh = _mm_unpackhi_epi8(cb, pb_zero);
-+      cbl = _mm_sub_epi16(cbl, pw_cj);
-+      cbh = _mm_sub_epi16(cbh, pw_cj);
-+
-+      cr = VEC_LD(inptr2);
-+      crl = _mm_unpacklo_epi8(cr, pb_zero);
-+      crh = _mm_unpackhi_epi8(cr, pb_zero);
-+      crl = _mm_sub_epi16(crl, pw_cj);
-+      crh = _mm_sub_epi16(crh, pw_cj);
-+
-+      /* (Original)
-+       * R = Y                + 1.40200 * Cr
-+       * G = Y - 0.34414 * Cb - 0.71414 * Cr
-+       * B = Y + 1.77200 * Cb
-+       *
-+       * (This implementation)
-+       * R = Y                + 0.40200 * Cr + Cr
-+       * G = Y - 0.34414 * Cb + 0.28586 * Cr - Cr
-+       * B = Y - 0.22800 * Cb + Cb + Cb
-+       */
-+      bl = _mm_mulhrs_epi16(cbl, pw_mf0228);
-+      bh = _mm_mulhrs_epi16(cbh, pw_mf0228);
-+      bl = _mm_add_epi16(bl, _mm_add_epi16(cbl, cbl));
-+      bh = _mm_add_epi16(bh, _mm_add_epi16(cbh, cbh));
-+      bl = _mm_add_epi16(bl, yl);
-+      bh = _mm_add_epi16(bh, yh);
-+
-+      rl = _mm_mulhrs_epi16(crl, pw_f0402);
-+      rh = _mm_mulhrs_epi16(crh, pw_f0402);
-+      rl = _mm_add_epi16(rl, crl);
-+      rh = _mm_add_epi16(rh, crh);
-+      rl = _mm_add_epi16(rl, yl);
-+      rh = _mm_add_epi16(rh, yh);
-+
-+      g0w = _mm_unpacklo_epi16(cbl, crl);
-+      g1w = _mm_unpackhi_epi16(cbl, crl);
-+      g0 = _mm_add_epi32(_mm_madd_epi16(g0w, pw_mf0344_f0285), pd_onehalf);
-+      g1 = _mm_add_epi32(_mm_madd_epi16(g1w, pw_mf0344_f0285), pd_onehalf);
-+      g2w = _mm_unpacklo_epi16(cbh, crh);
-+      g3w = _mm_unpackhi_epi16(cbh, crh);
-+      g2 = _mm_add_epi32(_mm_madd_epi16(g2w, pw_mf0344_f0285), pd_onehalf);
-+      g3 = _mm_add_epi32(_mm_madd_epi16(g3w, pw_mf0344_f0285), pd_onehalf);
-+
-+      gl = PACK_HIGH16(g0, g1);
-+      gh = PACK_HIGH16(g2, g3);
-+      gl = _mm_sub_epi16(gl, crl);
-+      gh = _mm_sub_epi16(gh, crh);
-+      gl = _mm_add_epi16(gl, yl);
-+      gh = _mm_add_epi16(gh, yh);
-+
-+      rl = _mm_packus_epi16(rl, rh);
-+      gl = _mm_packus_epi16(gl, gh);
-+      bl = _mm_packus_epi16(bl, bh);
-+
-+#if RGB_RED == 0
-+#define C0 rl
-+#elif RGB_GREEN == 0
-+#define C0 gl
-+#elif RGB_BLUE == 0
-+#define C0 bl
++      PRAGMA_E2K("ivdep")
++      for (num_cols = out_width; num_cols >= 16;
++           num_cols -= 16, outptr += PIXELSIZE * 16) {
++#ifdef NEED_ALIGN8
++        ALIGN8_READ16(y, src0, 0) src0_ptr += 2;
++        ALIGN8_READ16(cb, src1, 0) src1_ptr += 2;
++        ALIGN8_READ16(cr, src2, 0) src2_ptr += 2;
 +#else
-+#define C0 pb_255
++        y = VEC_LD(inptr0); inptr0 += 16;
++        cb = VEC_LD(inptr1); inptr1 += 16;
++        cr = VEC_LD(inptr2); inptr2 += 16;
 +#endif
-+
-+#if RGB_RED == 1
-+#define C1 rl
-+#elif RGB_GREEN == 1
-+#define C1 gl
-+#elif RGB_BLUE == 1
-+#define C1 bl
-+#else
-+#define C1 pb_255
-+#endif
-+
-+#if RGB_RED == 2
-+#define C2 rl
-+#elif RGB_GREEN == 2
-+#define C2 gl
-+#elif RGB_BLUE == 2
-+#define C2 bl
-+#else
-+#define C2 pb_255
-+#endif
-+
-+#if RGB_RED == 3
-+#define C3 rl
-+#elif RGB_GREEN == 3
-+#define C3 gl
-+#elif RGB_BLUE == 3
-+#define C3 bl
-+#else
-+#define C3 pb_255
-+#endif
-+      rg0 = _mm_unpacklo_epi8(C0, C1);
-+      rg1 = _mm_unpackhi_epi8(C0, C1);
-+      bx0 = _mm_unpacklo_epi8(C2, C3);
-+      bx1 = _mm_unpackhi_epi8(C2, C3);
-+#undef C0
-+#undef C1
-+#undef C2
-+#undef C3
-+
-+      rgb0 = _mm_unpacklo_epi16(rg0, bx0);
-+      rgb1 = _mm_unpackhi_epi16(rg0, bx0);
-+      rgb2 = _mm_unpacklo_epi16(rg1, bx1);
-+      rgb3 = _mm_unpackhi_epi16(rg1, bx1);
-+
-+#if RGB_PIXELSIZE == 3
-+      CONV_RGBX_RGB
-+#endif
-+
-+      if (__builtin_expect(num_cols < RGB_PIXELSIZE * 16 && (num_cols & 15), 0)) {
-+        /* Slow path */
-+        VEC_ST(tmpbuf, rgb0);
-+        VEC_ST(tmpbuf + 16, rgb1);
-+        VEC_ST(tmpbuf + 32, rgb2);
-+#if RGB_PIXELSIZE == 4
-+        VEC_ST(tmpbuf + 48, rgb3);
-+#endif
-+        memcpy(outptr, tmpbuf, min(num_cols, RGB_PIXELSIZE * 16));
-+        break;
-+      } else {
-+        /* Fast path */
++        CALC_RGB
++        RGB_SHUFFLE
 +        VEC_ST(outptr, rgb0);
-+        if (num_cols > 16) VEC_ST(outptr + 16, rgb1);
-+        if (num_cols > 32) VEC_ST(outptr + 32, rgb2);
-+#if RGB_PIXELSIZE == 4
-+        if (num_cols > 48) VEC_ST(outptr + 48, rgb3);
++        VEC_ST(outptr + 16, rgb1);
++        VEC_ST(outptr + 32, rgb2);
++#if PIXELSIZE == 4
++        VEC_ST(outptr + 48, rgb3);
 +#endif
 +      }
 +    }
++
++    num_cols = out_width & 15;
++    if (num_cols) {
++      int i;
++      for (i = 0; i < num_cols; i++) {
++        tmpbuf[i] = inptr0[i];
++        tmpbuf[i + 16] = inptr1[i];
++        tmpbuf[i + 32] = inptr2[i];
++      }
++      y = VEC_LD(tmpbuf);
++      cb = VEC_LD(tmpbuf + 16);
++      cr = VEC_LD(tmpbuf + 32);
++      CALC_RGB
++      RGB_SHUFFLE
++      VEC_ST(tmpbuf, rgb0);
++      VEC_ST(tmpbuf + 16, rgb1);
++      VEC_ST(tmpbuf + 32, rgb2);
++#if PIXELSIZE == 4
++      VEC_ST(tmpbuf + 48, rgb3);
++#endif
++      memcpy(outptr, tmpbuf, num_cols * PIXELSIZE);
++    }
 +  }
 +}
-+#undef RGB_RED
-+#undef RGB_GREEN
-+#undef RGB_BLUE
-+#undef RGB_PIXELSIZE
-+#ifdef jsimd_ycc_rgb_convert_e2k
-+#undef jsimd_ycc_rgb_convert_e2k
++
++void ycc_rgbn_merged(JDIMENSION out_width, JSAMPIMAGE input_buf,
++                     JDIMENSION in_row_group_ctr,
++                     JDIMENSION in_row_group_ctr_y,
++                     JSAMPARRAY output_buf, int shuf_idx)
++{
++  JSAMPROW outptr, inptr0, inptr1, inptr2;
++  int num_cols;
++  uint8_t __attribute__((aligned(16))) tmpbuf[4 * 16];
++
++  __m128i rgb0, rgb1, rgb2, rgb3, y, cb, cr;
++  __m128i rg0, rg1, bx0, bx1, yl, yh, cbl, cbh,
++    crl, crh, r_yl, r_yh, g_yl, g_yh, b_yl, b_yh, g_y0w, g_y1w, g_y2w, g_y3w,
++    rl, rh, gl, gh, bl, bh;
++  __m128i g_y0, g_y1, g_y2, g_y3;
++
++  /* Constants
++   * NOTE: The >> 1 is to compensate for the fact that vec_madds() returns 17
++   * high-order bits, not 16.
++   */
++  __m128i pw_f0402 = _mm_set1_epi16(F_0_402 >> 1),
++    pw_mf0228 = _mm_set1_epi16(-F_0_228 >> 1),
++    pw_mf0344_f0285 = _mm_setr_epi16(__4X2(-F_0_344, F_0_285)),
++    pb_255 = _mm_set1_epi8(-1),
++    pw_cj = _mm_set1_epi16(CENTERJSAMPLE),
++    pd_onehalf = _mm_set1_epi32(ONE_HALF),
++    pb_zero = _mm_setzero_si128();
++  RGB_SHUFFLE_INIT
++#ifdef NEED_ALIGN8
++  ALIGN8_COMMON
++  ALIGN8_VARS(src0)
++  ALIGN8_VARS(src1)
++  ALIGN8_VARS(src2)
 +#endif
++
++  inptr0 = input_buf[0][in_row_group_ctr_y];
++  inptr1 = input_buf[1][in_row_group_ctr];
++  inptr2 = input_buf[2][in_row_group_ctr];
++  outptr = output_buf[0];
++
++  if (out_width >= 32) {
++#ifdef NEED_ALIGN8
++    ALIGN8_START(inptr0, src0)
++    ALIGN8_START(inptr1, src1)
++    ALIGN8_START(inptr2, src2)
++    inptr0 += out_width & -32;
++    inptr1 += (out_width & -32) >> 1;
++    inptr2 += (out_width & -32) >> 1;
++#endif
++    PRAGMA_E2K("ivdep")
++    for (num_cols = out_width; num_cols >= 32; num_cols -= 32) {
++
++#ifdef NEED_ALIGN8
++      ALIGN8_READ16(cb, src1, 0) src1_ptr += 2;
++      ALIGN8_READ16(cr, src2, 0) src2_ptr += 2;
++#else
++      cb = VEC_LD(inptr1); inptr1 += 16;
++      cr = VEC_LD(inptr2); inptr2 += 16;
++#endif
++      CALC_MERGED1
++
++#ifdef NEED_ALIGN8
++      ALIGN8_READ16(y, src0, 0) src0_ptr += 2;
++#else
++      y = VEC_LD(inptr0); inptr0 += 16;
++#endif
++      CALC_MERGED2(r_yl, g_yl, b_yl)
++      RGB_SHUFFLE
++      VEC_ST(outptr, rgb0);
++      VEC_ST(outptr + 16, rgb1);
++      VEC_ST(outptr + 32, rgb2);
++#if PIXELSIZE == 4
++      VEC_ST(outptr + 48, rgb3);
++#endif
++      outptr += PIXELSIZE * 16;
++
++#ifdef NEED_ALIGN8
++      ALIGN8_READ16(y, src0, 0) src0_ptr += 2;
++#else
++      y = VEC_LD(inptr0); inptr0 += 16;
++#endif
++      CALC_MERGED2(r_yh, g_yh, b_yh)
++      RGB_SHUFFLE
++      VEC_ST(outptr, rgb0);
++      VEC_ST(outptr + 16, rgb1);
++      VEC_ST(outptr + 32, rgb2);
++#if PIXELSIZE == 4
++      VEC_ST(outptr + 48, rgb3);
++#endif
++      outptr += PIXELSIZE * 16;
++    }
++  }
++
++  num_cols = out_width & 31;
++  if (num_cols) {
++    int i;
++    for (i = 0; i < (num_cols + 1) >> 1; i++) {
++      tmpbuf[i] = inptr1[i];
++      tmpbuf[i + 16] = inptr2[i];
++      tmpbuf[i * 2 + 32] = inptr0[i * 2];
++      tmpbuf[i * 2 + 32 + 1] = inptr0[i * 2 + 1];
++    }
++    cb = VEC_LD(tmpbuf);
++    cr = VEC_LD(tmpbuf + 16);
++    CALC_MERGED1
++
++    y = VEC_LD(tmpbuf + 32);
++    CALC_MERGED2(r_yl, g_yl, b_yl)
++    RGB_SHUFFLE
++    if (num_cols >= 16) {
++      VEC_ST(outptr, rgb0);
++      VEC_ST(outptr + 16, rgb1);
++      VEC_ST(outptr + 32, rgb2);
++#if PIXELSIZE == 4
++      VEC_ST(outptr + 48, rgb3);
++#endif
++      outptr += PIXELSIZE * 16;
++
++      y = VEC_LD(tmpbuf + 48);
++      CALC_MERGED2(r_yh, g_yh, b_yh)
++      RGB_SHUFFLE
++    }
++    VEC_ST(tmpbuf, rgb0);
++    VEC_ST(tmpbuf + 16, rgb1);
++    VEC_ST(tmpbuf + 32, rgb2);
++#if PIXELSIZE == 4
++    VEC_ST(tmpbuf + 48, rgb3);
++#endif
++    memcpy(outptr, tmpbuf, (out_width & 15) * PIXELSIZE);
++  }
++}
++
++#undef RGB_SHUFFLE_INIT
++#undef RGB_SHUFFLE
++#undef PIXELSIZE
++#undef ycc_rgbn_convert
++#undef ycc_rgbn_merged
 +
 diff --git a/simd/e2k/jdcolor-e2k.c b/simd/e2k/jdcolor-e2k.c
 new file mode 100644
-index 0000000..7994c47
+index 0000000..94c80e9
 --- /dev/null
 +++ b/simd/e2k/jdcolor-e2k.c
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,289 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
@@ -1484,433 +1348,361 @@ index 0000000..7994c47
 +/* YCC --> RGB CONVERSION */
 +
 +#include "jsimd_e2k.h"
-+#ifdef HAVE_EML
-+#include "eml.h"
++
++#define F_0_344  22554              /* FIX(0.34414) */
++#define F_0_714  46802              /* FIX(0.71414) */
++#define F_1_402  91881              /* FIX(1.40200) */
++#define F_1_772  116130             /* FIX(1.77200) */
++#define F_0_402  (F_1_402 - 65536)  /* FIX(1.40200) - FIX(1) */
++#define F_0_285  (65536 - F_0_714)  /* FIX(1) - FIX(0.71414) */
++#define F_0_228  (131072 - F_1_772) /* FIX(2) - FIX(1.77200) */
++
++#define SCALEBITS  16
++#define ONE_HALF  (1 << (SCALEBITS - 1))
++
++static const uint8_t __attribute__((aligned(16)))
++#if defined(__iset__) && __iset__ >= 5
++ycc_rgb_shuf_const[7][48] = {
++#define SHUF_CONST3          \
++  C0,      C1,      C2,      \
++  C0 + 4,  C1 + 4,  C2 + 4,  \
++  C0 + 8,  C1 + 8,  C2 + 8,  \
++  C0 + 12, C1 + 12, C2 + 12, \
++  C0 + 16, C1 + 16, C2 + 16, \
++  C0 + 20, C1 + 4,  C2 + 4,  \
++  C0 + 8,  C1 + 8,  C2 + 8,  \
++  C0 + 12, C1 + 12, C2 + 12, \
++  C0 + 16, C1 + 16, C2 + 16, \
++  C0 + 20, C1 + 20, C2 + 20, \
++  C0 + 24, C1 + 24, C2 + 8,  \
++  C0 + 12, C1 + 12, C2 + 12, \
++  C0 + 16, C1 + 16, C2 + 16, \
++  C0 + 20, C1 + 20, C2 + 20, \
++  C0 + 24, C1 + 24, C2 + 24, \
++  C0 + 28, C1 + 28, C2 + 28
++#else
++ycc_rgb_shuf_const[7][24] = {
++#define SHUF_CONST3          \
++  C0,      C1,      C2,      \
++  C0 + 4,  C1 + 4,  C2 + 4,  \
++  C0 + 8,  C1 + 8,  C2,      \
++  C0 + 4,  C1 + 4,  C2 + 4,  \
++  C0 + 8,  C1 + 8,  C2 + 8,  \
++  C0 + 12, C1 + 4,  C2 + 4,  \
++  C0 + 8,  C1 + 8,  C2 + 8,  \
++  C0 + 12, C1 + 12, C2 + 12
 +#endif
 +
++#define SHUF_CONST4 C0, C1, C2, C3, C0 + 4, C1 + 4, C2 + 4, C3 + 4, \
++  C0 + 8, C1 + 8, C2 + 8, C3 + 8, C0 + 12, C1 + 12, C2 + 12, C3 + 12
 +
-+#define F_0_344  22554              /* FIX(0.34414) */
-+#define F_0_714  46802              /* FIX(0.71414) */
-+#define F_1_402  91881              /* FIX(1.40200) */
-+#define F_1_772  116130             /* FIX(1.77200) */
-+#define F_0_402  (F_1_402 - 65536)  /* FIX(1.40200) - FIX(1) */
-+#define F_0_285  (65536 - F_0_714)  /* FIX(1) - FIX(0.71414) */
-+#define F_0_228  (131072 - F_1_772) /* FIX(2) - FIX(1.77200) */
++#define TMP_RED    RGB_RED
++#define TMP_GREEN  RGB_GREEN
++#define TMP_BLUE   RGB_BLUE
++#define PIXELSIZE  RGB_PIXELSIZE
++#include "jdcoltab-e2k.c"
++  ,
++#define TMP_RED    EXT_RGB_RED
++#define TMP_GREEN  EXT_RGB_GREEN
++#define TMP_BLUE   EXT_RGB_BLUE
++#define PIXELSIZE  EXT_RGB_PIXELSIZE
++#include "jdcoltab-e2k.c"
++  ,
++#define TMP_RED    EXT_RGBX_RED
++#define TMP_GREEN  EXT_RGBX_GREEN
++#define TMP_BLUE   EXT_RGBX_BLUE
++#define PIXELSIZE  EXT_RGBX_PIXELSIZE
++#include "jdcoltab-e2k.c"
++  ,
++#define TMP_RED    EXT_BGR_RED
++#define TMP_GREEN  EXT_BGR_GREEN
++#define TMP_BLUE   EXT_BGR_BLUE
++#define PIXELSIZE  EXT_BGR_PIXELSIZE
++#include "jdcoltab-e2k.c"
++  ,
++#define TMP_RED    EXT_BGRX_RED
++#define TMP_GREEN  EXT_BGRX_GREEN
++#define TMP_BLUE   EXT_BGRX_BLUE
++#define PIXELSIZE  EXT_BGRX_PIXELSIZE
++#include "jdcoltab-e2k.c"
++  ,
++#define TMP_RED    EXT_XBGR_RED
++#define TMP_GREEN  EXT_XBGR_GREEN
++#define TMP_BLUE   EXT_XBGR_BLUE
++#define PIXELSIZE  EXT_XBGR_PIXELSIZE
++#include "jdcoltab-e2k.c"
++  ,
++#define TMP_RED    EXT_XRGB_RED
++#define TMP_GREEN  EXT_XRGB_GREEN
++#define TMP_BLUE   EXT_XRGB_BLUE
++#define PIXELSIZE  EXT_XRGB_PIXELSIZE
++#include "jdcoltab-e2k.c"
++};
 +
-+#define SCALEBITS  16
-+#define ONE_HALF  (1 << (SCALEBITS - 1))
-+
-+#define RGB_INDEX  0, 1, 2,  4, 5, 6,  8, 9, 10,  12, 13, 14
-+
-+#include "jdcolext-e2k.c"
-+
-+#define RGB_RED  EXT_RGB_RED
-+#define RGB_GREEN  EXT_RGB_GREEN
-+#define RGB_BLUE  EXT_RGB_BLUE
-+#define RGB_PIXELSIZE  EXT_RGB_PIXELSIZE
-+#define jsimd_ycc_rgb_convert_e2k  jsimd_ycc_extrgb_convert_e2k
-+#include "jdcolext-e2k.c"
-+
-+#define RGB_RED  EXT_RGBX_RED
-+#define RGB_GREEN  EXT_RGBX_GREEN
-+#define RGB_BLUE  EXT_RGBX_BLUE
-+#define RGB_PIXELSIZE  EXT_RGBX_PIXELSIZE
-+#define jsimd_ycc_rgb_convert_e2k  jsimd_ycc_extrgbx_convert_e2k
-+#include "jdcolext-e2k.c"
-+
-+#define RGB_RED  EXT_BGR_RED
-+#define RGB_GREEN  EXT_BGR_GREEN
-+#define RGB_BLUE  EXT_BGR_BLUE
-+#define RGB_PIXELSIZE  EXT_BGR_PIXELSIZE
-+#define jsimd_ycc_rgb_convert_e2k  jsimd_ycc_extbgr_convert_e2k
-+#include "jdcolext-e2k.c"
-+
-+#define RGB_RED  EXT_BGRX_RED
-+#define RGB_GREEN  EXT_BGRX_GREEN
-+#define RGB_BLUE  EXT_BGRX_BLUE
-+#define RGB_PIXELSIZE  EXT_BGRX_PIXELSIZE
-+#define jsimd_ycc_rgb_convert_e2k  jsimd_ycc_extbgrx_convert_e2k
-+#include "jdcolext-e2k.c"
-+
-+#define RGB_RED  EXT_XBGR_RED
-+#define RGB_GREEN  EXT_XBGR_GREEN
-+#define RGB_BLUE  EXT_XBGR_BLUE
-+#define RGB_PIXELSIZE  EXT_XBGR_PIXELSIZE
-+#define jsimd_ycc_rgb_convert_e2k  jsimd_ycc_extxbgr_convert_e2k
-+#include "jdcolext-e2k.c"
-+
-+#define RGB_RED  EXT_XRGB_RED
-+#define RGB_GREEN  EXT_XRGB_GREEN
-+#define RGB_BLUE  EXT_XRGB_BLUE
-+#define RGB_PIXELSIZE  EXT_XRGB_PIXELSIZE
-+#define jsimd_ycc_rgb_convert_e2k  jsimd_ycc_extxrgb_convert_e2k
-+#include "jdcolext-e2k.c"
-+
-diff --git a/simd/e2k/jdmerge-e2k.c b/simd/e2k/jdmerge-e2k.c
-new file mode 100644
-index 0000000..9ba0164
---- /dev/null
-+++ b/simd/e2k/jdmerge-e2k.c
-@@ -0,0 +1,91 @@
-+/*
-+ * Elbrus optimizations for libjpeg-turbo
-+ *
-+ * Copyright (C) 2015, D. R. Commander.  All Rights Reserved.
-+ * Copyright (C) 2021, Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
-+ *
-+ * This software is provided 'as-is', without any express or implied
-+ * warranty.  In no event will the authors be held liable for any damages
-+ * arising from the use of this software.
-+ *
-+ * Permission is granted to anyone to use this software for any purpose,
-+ * including commercial applications, and to alter it and redistribute it
-+ * freely, subject to the following restrictions:
-+ *
-+ * 1. The origin of this software must not be misrepresented; you must not
-+ *    claim that you wrote the original software. If you use this software
-+ *    in a product, an acknowledgment in the product documentation would be
-+ *    appreciated but is not required.
-+ * 2. Altered source versions must be plainly marked as such, and must not be
-+ *    misrepresented as being the original software.
-+ * 3. This notice may not be removed or altered from any source distribution.
-+ */
-+
-+/* MERGED YCC --> RGB CONVERSION AND UPSAMPLING */
-+
-+#include "jsimd_e2k.h"
-+
-+
-+#define F_0_344  22554              /* FIX(0.34414) */
-+#define F_0_714  46802              /* FIX(0.71414) */
-+#define F_1_402  91881              /* FIX(1.40200) */
-+#define F_1_772  116130             /* FIX(1.77200) */
-+#define F_0_402  (F_1_402 - 65536)  /* FIX(1.40200) - FIX(1) */
-+#define F_0_285  (65536 - F_0_714)  /* FIX(1) - FIX(0.71414) */
-+#define F_0_228  (131072 - F_1_772) /* FIX(2) - FIX(1.77200) */
-+
-+#define SCALEBITS  16
-+#define ONE_HALF  (1 << (SCALEBITS - 1))
-+
-+#define RGB_INDEX  0, 1, 2,  4, 5, 6,  8, 9, 10,  12, 13, 14
-+
-+#include "jdmrgext-e2k.c"
-+
-+#define RGB_RED  EXT_RGB_RED
-+#define RGB_GREEN  EXT_RGB_GREEN
-+#define RGB_BLUE  EXT_RGB_BLUE
-+#define RGB_PIXELSIZE  EXT_RGB_PIXELSIZE
-+#define jsimd_h2v1_merged_upsample_e2k jsimd_h2v1_extrgb_merged_upsample_e2k
-+#define jsimd_h2v2_merged_upsample_e2k jsimd_h2v2_extrgb_merged_upsample_e2k
-+#include "jdmrgext-e2k.c"
-+
-+#define RGB_RED  EXT_RGBX_RED
-+#define RGB_GREEN  EXT_RGBX_GREEN
-+#define RGB_BLUE  EXT_RGBX_BLUE
-+#define RGB_PIXELSIZE  EXT_RGBX_PIXELSIZE
-+#define jsimd_h2v1_merged_upsample_e2k jsimd_h2v1_extrgbx_merged_upsample_e2k
-+#define jsimd_h2v2_merged_upsample_e2k jsimd_h2v2_extrgbx_merged_upsample_e2k
-+#include "jdmrgext-e2k.c"
-+
-+#define RGB_RED  EXT_BGR_RED
-+#define RGB_GREEN  EXT_BGR_GREEN
-+#define RGB_BLUE  EXT_BGR_BLUE
-+#define RGB_PIXELSIZE  EXT_BGR_PIXELSIZE
-+#define jsimd_h2v1_merged_upsample_e2k jsimd_h2v1_extbgr_merged_upsample_e2k
-+#define jsimd_h2v2_merged_upsample_e2k jsimd_h2v2_extbgr_merged_upsample_e2k
-+#include "jdmrgext-e2k.c"
-+
-+#define RGB_RED  EXT_BGRX_RED
-+#define RGB_GREEN  EXT_BGRX_GREEN
-+#define RGB_BLUE  EXT_BGRX_BLUE
-+#define RGB_PIXELSIZE  EXT_BGRX_PIXELSIZE
-+#define jsimd_h2v1_merged_upsample_e2k jsimd_h2v1_extbgrx_merged_upsample_e2k
-+#define jsimd_h2v2_merged_upsample_e2k jsimd_h2v2_extbgrx_merged_upsample_e2k
-+#include "jdmrgext-e2k.c"
-+
-+#define RGB_RED  EXT_XBGR_RED
-+#define RGB_GREEN  EXT_XBGR_GREEN
-+#define RGB_BLUE  EXT_XBGR_BLUE
-+#define RGB_PIXELSIZE  EXT_XBGR_PIXELSIZE
-+#define jsimd_h2v1_merged_upsample_e2k jsimd_h2v1_extxbgr_merged_upsample_e2k
-+#define jsimd_h2v2_merged_upsample_e2k jsimd_h2v2_extxbgr_merged_upsample_e2k
-+#include "jdmrgext-e2k.c"
-+
-+#define RGB_RED  EXT_XRGB_RED
-+#define RGB_GREEN  EXT_XRGB_GREEN
-+#define RGB_BLUE  EXT_XRGB_BLUE
-+#define RGB_PIXELSIZE  EXT_XRGB_PIXELSIZE
-+#define jsimd_h2v1_merged_upsample_e2k jsimd_h2v1_extxrgb_merged_upsample_e2k
-+#define jsimd_h2v2_merged_upsample_e2k jsimd_h2v2_extxrgb_merged_upsample_e2k
-+#include "jdmrgext-e2k.c"
-+
-diff --git a/simd/e2k/jdmrgext-e2k.c b/simd/e2k/jdmrgext-e2k.c
-new file mode 100644
-index 0000000..68c7a0e
---- /dev/null
-+++ b/simd/e2k/jdmrgext-e2k.c
-@@ -0,0 +1,256 @@
-+/*
-+ * Elbrus optimizations for libjpeg-turbo
-+ *
-+ * Copyright (C) 2015, D. R. Commander.  All Rights Reserved.
-+ * Copyright (C) 2021, Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
-+ *
-+ * This software is provided 'as-is', without any express or implied
-+ * warranty.  In no event will the authors be held liable for any damages
-+ * arising from the use of this software.
-+ *
-+ * Permission is granted to anyone to use this software for any purpose,
-+ * including commercial applications, and to alter it and redistribute it
-+ * freely, subject to the following restrictions:
-+ *
-+ * 1. The origin of this software must not be misrepresented; you must not
-+ *    claim that you wrote the original software. If you use this software
-+ *    in a product, an acknowledgment in the product documentation would be
-+ *    appreciated but is not required.
-+ * 2. Altered source versions must be plainly marked as such, and must not be
-+ *    misrepresented as being the original software.
-+ * 3. This notice may not be removed or altered from any source distribution.
-+ */
-+
-+/* This file is included by jdmerge-e2k.c */
-+
-+
-+void jsimd_h2v1_merged_upsample_e2k(JDIMENSION output_width,
-+                                    JSAMPIMAGE input_buf,
-+                                    JDIMENSION in_row_group_ctr,
-+                                    JSAMPARRAY output_buf)
-+{
-+  JSAMPROW outptr, inptr0, inptr1, inptr2;
-+  int pitch = output_width * RGB_PIXELSIZE, num_cols, yloop;
-+  unsigned char __attribute__((aligned(16))) tmpbuf[RGB_PIXELSIZE * 16];
-+
-+  __m128i rgb0, rgb1, rgb2, rgb3, y, cb, cr;
-+  __m128i rg0, rg1, bx0, bx1, ye, yo, cbl, cbh,
-+    crl, crh, r_yl, r_yh, g_yl, g_yh, b_yl, b_yh, g_y0w, g_y1w, g_y2w, g_y3w,
-+    rl, rh, gl, gh, bl, bh, re, ro, ge, go, be, bo;
-+  __m128i g_y0, g_y1, g_y2, g_y3;
-+
-+  /* Constants
-+   * NOTE: The >> 1 is to compensate for the fact that vec_madds() returns 17
-+   * high-order bits, not 16.
++  /* (Original)
++   * R = Y                + 1.40200 * Cr
++   * G = Y - 0.34414 * Cb - 0.71414 * Cr
++   * B = Y + 1.77200 * Cb
++   *
++   * (This implementation)
++   * R = Y                + 0.40200 * Cr + Cr
++   * G = Y - 0.34414 * Cb + 0.28586 * Cr - Cr
++   * B = Y - 0.22800 * Cb + Cb + Cb
 +   */
-+  __m128i pw_f0402 = _mm_set1_epi16(F_0_402 >> 1),
-+    pw_mf0228 = _mm_set1_epi16(-F_0_228 >> 1),
-+    pw_mf0344_f0285 = _mm_setr_epi16(__4X2(-F_0_344, F_0_285)),
-+    pb_255 = _mm_set1_epi8(-1),
-+    even_mask = _mm_set1_epi16(255),
-+    pw_cj = _mm_set1_epi16(CENTERJSAMPLE),
-+    pd_onehalf = _mm_set1_epi32(ONE_HALF),
-+    pb_zero = _mm_setzero_si128();
-+#if RGB_PIXELSIZE == 3
-+    CONV_RGBX_RGB_INIT
-+#endif
 +
-+  inptr0 = input_buf[0][in_row_group_ctr];
-+  inptr1 = input_buf[1][in_row_group_ctr];
-+  inptr2 = input_buf[2][in_row_group_ctr];
-+  outptr = output_buf[0];
++#define CALC_RGB \
++  yl = _mm_unpacklo_epi8(y, pb_zero); \
++  yh = _mm_unpackhi_epi8(y, pb_zero); \
++  \
++  cbl = _mm_unpacklo_epi8(cb, pb_zero); \
++  cbh = _mm_unpackhi_epi8(cb, pb_zero); \
++  cbl = _mm_sub_epi16(cbl, pw_cj); \
++  cbh = _mm_sub_epi16(cbh, pw_cj); \
++  \
++  crl = _mm_unpacklo_epi8(cr, pb_zero); \
++  crh = _mm_unpackhi_epi8(cr, pb_zero); \
++  crl = _mm_sub_epi16(crl, pw_cj); \
++  crh = _mm_sub_epi16(crh, pw_cj); \
++  \
++  bl = _mm_mulhrs_epi16(cbl, pw_mf0228); \
++  bh = _mm_mulhrs_epi16(cbh, pw_mf0228); \
++  bl = _mm_add_epi16(bl, _mm_add_epi16(cbl, cbl)); \
++  bh = _mm_add_epi16(bh, _mm_add_epi16(cbh, cbh)); \
++  bl = _mm_add_epi16(bl, yl); \
++  bh = _mm_add_epi16(bh, yh); \
++  \
++  rl = _mm_mulhrs_epi16(crl, pw_f0402); \
++  rh = _mm_mulhrs_epi16(crh, pw_f0402); \
++  rl = _mm_add_epi16(rl, crl); \
++  rh = _mm_add_epi16(rh, crh); \
++  rl = _mm_add_epi16(rl, yl); \
++  rh = _mm_add_epi16(rh, yh); \
++  \
++  g0w = _mm_unpacklo_epi16(cbl, crl); \
++  g1w = _mm_unpackhi_epi16(cbl, crl); \
++  g0 = _mm_add_epi32(_mm_madd_epi16(g0w, pw_mf0344_f0285), pd_onehalf); \
++  g1 = _mm_add_epi32(_mm_madd_epi16(g1w, pw_mf0344_f0285), pd_onehalf); \
++  g2w = _mm_unpacklo_epi16(cbh, crh); \
++  g3w = _mm_unpackhi_epi16(cbh, crh); \
++  g2 = _mm_add_epi32(_mm_madd_epi16(g2w, pw_mf0344_f0285), pd_onehalf); \
++  g3 = _mm_add_epi32(_mm_madd_epi16(g3w, pw_mf0344_f0285), pd_onehalf); \
++  \
++  gl = _mm_packhi_epi32(g0, g1); \
++  gh = _mm_packhi_epi32(g2, g3); \
++  gl = _mm_sub_epi16(gl, crl); \
++  gh = _mm_sub_epi16(gh, crh); \
++  gl = _mm_add_epi16(gl, yl); \
++  gh = _mm_add_epi16(gh, yh); \
++  \
++  rl = _mm_packus_epi16(rl, rh); \
++  gl = _mm_packus_epi16(gl, gh); \
++  bl = _mm_packus_epi16(bl, bh); \
++  \
++  rg0 = _mm_unpacklo_epi8(rl, gl); \
++  rg1 = _mm_unpackhi_epi8(rl, gl); \
++  bx0 = _mm_unpacklo_epi8(bl, pb_255); \
++  bx1 = _mm_unpackhi_epi8(bl, pb_255); \
++  \
++  rgb0 = _mm_unpacklo_epi16(rg0, bx0); \
++  rgb1 = _mm_unpackhi_epi16(rg0, bx0); \
++  rgb2 = _mm_unpacklo_epi16(rg1, bx1); \
++  rgb3 = _mm_unpackhi_epi16(rg1, bx1);
 +
-+  for (num_cols = pitch; num_cols > 0; inptr1 += 16, inptr2 += 16) {
++#define CALC_MERGED1 \
++  cbl = _mm_unpacklo_epi8(cb, pb_zero); \
++  cbh = _mm_unpackhi_epi8(cb, pb_zero); \
++  cbl = _mm_sub_epi16(cbl, pw_cj); \
++  cbh = _mm_sub_epi16(cbh, pw_cj); \
++  \
++  crl = _mm_unpacklo_epi8(cr, pb_zero); \
++  crh = _mm_unpackhi_epi8(cr, pb_zero); \
++  crl = _mm_sub_epi16(crl, pw_cj); \
++  crh = _mm_sub_epi16(crh, pw_cj); \
++  \
++  b_yl = _mm_mulhrs_epi16(cbl, pw_mf0228); \
++  b_yh = _mm_mulhrs_epi16(cbh, pw_mf0228); \
++  b_yl = _mm_add_epi16(b_yl, _mm_add_epi16(cbl, cbl)); \
++  b_yh = _mm_add_epi16(b_yh, _mm_add_epi16(cbh, cbh)); \
++  \
++  r_yl = _mm_mulhrs_epi16(crl, pw_f0402); \
++  r_yh = _mm_mulhrs_epi16(crh, pw_f0402); \
++  r_yl = _mm_add_epi16(r_yl, crl); \
++  r_yh = _mm_add_epi16(r_yh, crh); \
++  \
++  g_y0w = _mm_unpacklo_epi16(cbl, crl); \
++  g_y1w = _mm_unpackhi_epi16(cbl, crl); \
++  g_y0 = _mm_add_epi32(_mm_madd_epi16(g_y0w, pw_mf0344_f0285), pd_onehalf); \
++  g_y1 = _mm_add_epi32(_mm_madd_epi16(g_y1w, pw_mf0344_f0285), pd_onehalf); \
++  g_y2w = _mm_unpacklo_epi16(cbh, crh); \
++  g_y3w = _mm_unpackhi_epi16(cbh, crh); \
++  g_y2 = _mm_add_epi32(_mm_madd_epi16(g_y2w, pw_mf0344_f0285), pd_onehalf); \
++  g_y3 = _mm_add_epi32(_mm_madd_epi16(g_y3w, pw_mf0344_f0285), pd_onehalf); \
++  \
++  g_yl = _mm_packhi_epi32(g_y0, g_y1); \
++  g_yh = _mm_packhi_epi32(g_y2, g_y3); \
++  g_yl = _mm_sub_epi16(g_yl, crl); \
++  g_yh = _mm_sub_epi16(g_yh, crh);
 +
-+    cb = VEC_LD(inptr1);
-+    cbl = _mm_unpacklo_epi8(cb, pb_zero);
-+    cbh = _mm_unpackhi_epi8(cb, pb_zero);
-+    cbl = _mm_sub_epi16(cbl, pw_cj);
-+    cbh = _mm_sub_epi16(cbh, pw_cj);
++#define CALC_MERGED2(r_yl, g_yl, b_yl) \
++  yl = _mm_unpacklo_epi8(y, pb_zero); \
++  yh = _mm_unpackhi_epi8(y, pb_zero); \
++  bl = _mm_add_epi16(_mm_unpacklo_epi16(b_yl, b_yl), yl); \
++  bh = _mm_add_epi16(_mm_unpackhi_epi16(b_yl, b_yl), yh); \
++  rl = _mm_add_epi16(_mm_unpacklo_epi16(r_yl, r_yl), yl); \
++  rh = _mm_add_epi16(_mm_unpackhi_epi16(r_yl, r_yl), yh); \
++  gl = _mm_add_epi16(_mm_unpacklo_epi16(g_yl, g_yl), yl); \
++  gh = _mm_add_epi16(_mm_unpackhi_epi16(g_yl, g_yl), yh); \
++  rl = _mm_packus_epi16(rl, rh); \
++  gl = _mm_packus_epi16(gl, gh); \
++  bl = _mm_packus_epi16(bl, bh); \
++  \
++  rg0 = _mm_unpacklo_epi8(rl, gl); \
++  rg1 = _mm_unpackhi_epi8(rl, gl); \
++  bx0 = _mm_unpacklo_epi8(bl, pb_255); \
++  bx1 = _mm_unpackhi_epi8(bl, pb_255); \
++  \
++  rgb0 = _mm_unpacklo_epi16(rg0, bx0); \
++  rgb1 = _mm_unpackhi_epi16(rg0, bx0); \
++  rgb2 = _mm_unpacklo_epi16(rg1, bx1); \
++  rgb3 = _mm_unpackhi_epi16(rg1, bx1);
 +
-+    cr = VEC_LD(inptr2);
-+    crl = _mm_unpacklo_epi8(cr, pb_zero);
-+    crh = _mm_unpackhi_epi8(cr, pb_zero);
-+    crl = _mm_sub_epi16(crl, pw_cj);
-+    crh = _mm_sub_epi16(crh, pw_cj);
-+
-+    /* (Original)
-+     * R = Y                + 1.40200 * Cr
-+     * G = Y - 0.34414 * Cb - 0.71414 * Cr
-+     * B = Y + 1.77200 * Cb
-+     *
-+     * (This implementation)
-+     * R = Y                + 0.40200 * Cr + Cr
-+     * G = Y - 0.34414 * Cb + 0.28586 * Cr - Cr
-+     * B = Y - 0.22800 * Cb + Cb + Cb
-+     */
-+    b_yl = _mm_mulhrs_epi16(cbl, pw_mf0228);
-+    b_yh = _mm_mulhrs_epi16(cbh, pw_mf0228);
-+    b_yl = _mm_add_epi16(b_yl, _mm_add_epi16(cbl, cbl));
-+    b_yh = _mm_add_epi16(b_yh, _mm_add_epi16(cbh, cbh));
-+
-+    r_yl = _mm_mulhrs_epi16(crl, pw_f0402);
-+    r_yh = _mm_mulhrs_epi16(crh, pw_f0402);
-+    r_yl = _mm_add_epi16(r_yl, crl);
-+    r_yh = _mm_add_epi16(r_yh, crh);
-+
-+    g_y0w = _mm_unpacklo_epi16(cbl, crl);
-+    g_y1w = _mm_unpackhi_epi16(cbl, crl);
-+    g_y0 = _mm_add_epi32(_mm_madd_epi16(g_y0w, pw_mf0344_f0285), pd_onehalf);
-+    g_y1 = _mm_add_epi32(_mm_madd_epi16(g_y1w, pw_mf0344_f0285), pd_onehalf);
-+    g_y2w = _mm_unpacklo_epi16(cbh, crh);
-+    g_y3w = _mm_unpackhi_epi16(cbh, crh);
-+    g_y2 = _mm_add_epi32(_mm_madd_epi16(g_y2w, pw_mf0344_f0285), pd_onehalf);
-+    g_y3 = _mm_add_epi32(_mm_madd_epi16(g_y3w, pw_mf0344_f0285), pd_onehalf);
-+
-+    g_yl = PACK_HIGH16(g_y0, g_y1);
-+    g_yh = PACK_HIGH16(g_y2, g_y3);
-+    g_yl = _mm_sub_epi16(g_yl, crl);
-+    g_yh = _mm_sub_epi16(g_yh, crh);
-+
-+    for (yloop = 0; yloop < 2 && num_cols > 0; yloop++,
-+         num_cols -= RGB_PIXELSIZE * 16,
-+         outptr += RGB_PIXELSIZE * 16, inptr0 += 16) {
-+
-+      y = VEC_LD(inptr0);
-+      ye = _mm_and_si128(y, even_mask);
-+      yo = _mm_srli_epi16(y, 8);
-+
-+      if (yloop == 0) {
-+        be = _mm_add_epi16(b_yl, ye);
-+        bo = _mm_add_epi16(b_yl, yo);
-+        re = _mm_add_epi16(r_yl, ye);
-+        ro = _mm_add_epi16(r_yl, yo);
-+        ge = _mm_add_epi16(g_yl, ye);
-+        go = _mm_add_epi16(g_yl, yo);
-+      } else {
-+        be = _mm_add_epi16(b_yh, ye);
-+        bo = _mm_add_epi16(b_yh, yo);
-+        re = _mm_add_epi16(r_yh, ye);
-+        ro = _mm_add_epi16(r_yh, yo);
-+        ge = _mm_add_epi16(g_yh, ye);
-+        go = _mm_add_epi16(g_yh, yo);
-+      }
-+
-+      rl = _mm_unpacklo_epi16(re, ro);
-+      rh = _mm_unpackhi_epi16(re, ro);
-+      gl = _mm_unpacklo_epi16(ge, go);
-+      gh = _mm_unpackhi_epi16(ge, go);
-+      bl = _mm_unpacklo_epi16(be, bo);
-+      bh = _mm_unpackhi_epi16(be, bo);
-+
-+      rl = _mm_packus_epi16(rl, rh);
-+      gl = _mm_packus_epi16(gl, gh);
-+      bl = _mm_packus_epi16(bl, bh);
-+
-+#if RGB_RED == 0
-+#define C0 rl
-+#elif RGB_GREEN == 0
-+#define C0 gl
-+#elif RGB_BLUE == 0
-+#define C0 bl
++#define PIXELSIZE 3
++#if defined(__iset__) && __iset__ >= 5
++#define RGB_SHUFFLE_INIT __m128i \
++  rgb_index0 = VEC_LD(ycc_rgb_shuf_const[shuf_idx]), \
++  rgb_index1 = VEC_LD(ycc_rgb_shuf_const[shuf_idx] + 16), \
++  rgb_index2 = VEC_LD(ycc_rgb_shuf_const[shuf_idx] + 32);
++#define RGB_SHUFFLE \
++  rgb0 = _mm_shuffle2_epi8(rgb0, rgb1, rgb_index0); \
++  rgb1 = _mm_shuffle2_epi8(rgb1, rgb2, rgb_index1); \
++  rgb2 = _mm_shuffle2_epi8(rgb2, rgb3, rgb_index2);
 +#else
-+#define C0 pb_255
++#define RGB_SHUFFLE_INIT __m64 \
++  rgb_index0 = *(__m64*)ycc_rgb_shuf_const[shuf_idx], \
++  rgb_index1 = *(__m64*)(ycc_rgb_shuf_const[shuf_idx] + 8), \
++  rgb_index2 = *(__m64*)(ycc_rgb_shuf_const[shuf_idx] + 16);
++#define RGB_SHUFFLE { \
++  union { __m128i v; __m64 d[2]; } a = { rgb0 }, \
++    b = { rgb1 }, c = { rgb2 }, d = { rgb3 }; \
++  a.d[0] = _mm_shuffle2_pi8(a.d[0], a.d[1], rgb_index0); \
++  a.d[1] = _mm_shuffle2_pi8(a.d[1], b.d[0], rgb_index1); \
++  b.d[0] = _mm_shuffle2_pi8(b.d[0], b.d[1], rgb_index2); \
++  b.d[1] = _mm_shuffle2_pi8(c.d[0], c.d[1], rgb_index0); \
++  c.d[0] = _mm_shuffle2_pi8(c.d[1], d.d[0], rgb_index1); \
++  c.d[1] = _mm_shuffle2_pi8(d.d[0], d.d[1], rgb_index2); \
++  rgb0 = a.v; rgb1 = b.v; rgb2 = c.v; \
++}
 +#endif
 +
-+#if RGB_RED == 1
-+#define C1 rl
-+#elif RGB_GREEN == 1
-+#define C1 gl
-+#elif RGB_BLUE == 1
-+#define C1 bl
++#define ycc_rgbn_convert jsimd_ycc_rgb3_convert_e2k
++#define ycc_rgbn_merged  jsimd_ycc_rgb3_merged_upsample_e2k
++#include "jdcolext-e2k.c"
++
++#define PIXELSIZE 4
++#define RGB_SHUFFLE_INIT __m128i \
++  rgb_index0 = VEC_LD(ycc_rgb_shuf_const[shuf_idx]);
++#define RGB_SHUFFLE \
++  rgb0 = _mm_shuffle_epi8(rgb0, rgb_index0); \
++  rgb1 = _mm_shuffle_epi8(rgb1, rgb_index0); \
++  rgb2 = _mm_shuffle_epi8(rgb2, rgb_index0); \
++  rgb3 = _mm_shuffle_epi8(rgb3, rgb_index0);
++
++#define ycc_rgbn_convert jsimd_ycc_rgb4_convert_e2k
++#define ycc_rgbn_merged  jsimd_ycc_rgb4_merged_upsample_e2k
++#include "jdcolext-e2k.c"
++
+diff --git a/simd/e2k/jdcoltab-e2k.c b/simd/e2k/jdcoltab-e2k.c
+new file mode 100644
+index 0000000..e19666d
+--- /dev/null
++++ b/simd/e2k/jdcoltab-e2k.c
+@@ -0,0 +1,80 @@
++/*
++ * Elbrus optimizations for libjpeg-turbo
++ *
++ * Copyright (C) 2021, Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
++ *
++ * This software is provided 'as-is', without any express or implied
++ * warranty.  In no event will the authors be held liable for any damages
++ * arising from the use of this software.
++ *
++ * Permission is granted to anyone to use this software for any purpose,
++ * including commercial applications, and to alter it and redistribute it
++ * freely, subject to the following restrictions:
++ *
++ * 1. The origin of this software must not be misrepresented; you must not
++ *    claim that you wrote the original software. If you use this software
++ *    in a product, an acknowledgment in the product documentation would be
++ *    appreciated but is not required.
++ * 2. Altered source versions must be plainly marked as such, and must not be
++ *    misrepresented as being the original software.
++ * 3. This notice may not be removed or altered from any source distribution.
++ */
++
++/* This file is included by jdcolor-e2k.c */
++
++#if TMP_RED == 0
++#define C0 0
++#elif TMP_GREEN == 0
++#define C0 1
++#elif TMP_BLUE == 0
++#define C0 2
 +#else
-+#define C1 pb_255
++#define C0 3
 +#endif
 +
-+#if RGB_RED == 2
-+#define C2 rl
-+#elif RGB_GREEN == 2
-+#define C2 gl
-+#elif RGB_BLUE == 2
-+#define C2 bl
++#if TMP_RED == 1
++#define C1 0
++#elif TMP_GREEN == 1
++#define C1 1
++#elif TMP_BLUE == 1
++#define C1 2
 +#else
-+#define C2 pb_255
++#define C1 3
 +#endif
 +
-+#if RGB_RED == 3
-+#define C3 rl
-+#elif RGB_GREEN == 3
-+#define C3 gl
-+#elif RGB_BLUE == 3
-+#define C3 bl
++#if TMP_RED == 2
++#define C2 0
++#elif TMP_GREEN == 2
++#define C2 1
++#elif TMP_BLUE == 2
++#define C2 2
 +#else
-+#define C3 pb_255
++#define C2 3
 +#endif
-+      rg0 = _mm_unpacklo_epi8(C0, C1);
-+      rg1 = _mm_unpackhi_epi8(C0, C1);
-+      bx0 = _mm_unpacklo_epi8(C2, C3);
-+      bx1 = _mm_unpackhi_epi8(C2, C3);
++
++#if TMP_RED == 3
++#define C3 0
++#elif TMP_GREEN == 3
++#define C3 1
++#elif TMP_BLUE == 3
++#define C3 2
++#else
++#define C3 3
++#endif
++
++#if PIXELSIZE == 3
++{ SHUF_CONST3 }
++#else
++{ SHUF_CONST4 }
++#endif
++
 +#undef C0
 +#undef C1
 +#undef C2
 +#undef C3
 +
-+      rgb0 = _mm_unpacklo_epi16(rg0, bx0);
-+      rgb1 = _mm_unpackhi_epi16(rg0, bx0);
-+      rgb2 = _mm_unpacklo_epi16(rg1, bx1);
-+      rgb3 = _mm_unpackhi_epi16(rg1, bx1);
-+
-+#if RGB_PIXELSIZE == 3
-+      CONV_RGBX_RGB
-+#endif
-+
-+      if (__builtin_expect(num_cols < RGB_PIXELSIZE * 16 && (num_cols & 15), 0)) {
-+        /* Slow path */
-+        VEC_ST(tmpbuf, rgb0);
-+        VEC_ST(tmpbuf + 16, rgb1);
-+        VEC_ST(tmpbuf + 32, rgb2);
-+#if RGB_PIXELSIZE == 4
-+        VEC_ST(tmpbuf + 48, rgb3);
-+#endif
-+        memcpy(outptr, tmpbuf, min(num_cols, RGB_PIXELSIZE * 16));
-+      } else {
-+        /* Fast path */
-+        VEC_ST(outptr, rgb0);
-+        if (num_cols > 16) VEC_ST(outptr + 16, rgb1);
-+        if (num_cols > 32) VEC_ST(outptr + 32, rgb2);
-+#if RGB_PIXELSIZE == 4
-+        if (num_cols > 48) VEC_ST(outptr + 48, rgb3);
-+#endif
-+      }
-+    }
-+  }
-+}
-+
-+
-+void jsimd_h2v2_merged_upsample_e2k(JDIMENSION output_width,
-+                                    JSAMPIMAGE input_buf,
-+                                    JDIMENSION in_row_group_ctr,
-+                                    JSAMPARRAY output_buf)
-+{
-+  JSAMPROW inptr, outptr;
-+
-+  inptr = input_buf[0][in_row_group_ctr];
-+  outptr = output_buf[0];
-+
-+  input_buf[0][in_row_group_ctr] = input_buf[0][in_row_group_ctr * 2];
-+  jsimd_h2v1_merged_upsample_e2k(output_width, input_buf, in_row_group_ctr,
-+                                 output_buf);
-+
-+  input_buf[0][in_row_group_ctr] = input_buf[0][in_row_group_ctr * 2 + 1];
-+  output_buf[0] = output_buf[1];
-+  jsimd_h2v1_merged_upsample_e2k(output_width, input_buf, in_row_group_ctr,
-+                                 output_buf);
-+
-+  input_buf[0][in_row_group_ctr] = inptr;
-+  output_buf[0] = outptr;
-+}
-+#undef RGB_RED
-+#undef RGB_GREEN
-+#undef RGB_BLUE
-+#undef RGB_PIXELSIZE
-+#ifdef jsimd_h2v1_merged_upsample_e2k
-+#undef jsimd_h2v1_merged_upsample_e2k
-+#undef jsimd_h2v2_merged_upsample_e2k
-+#endif
++#undef TMP_RED
++#undef TMP_GREEN
++#undef TMP_BLUE
++#undef PIXELSIZE
 +
 diff --git a/simd/e2k/jdsample-e2k.c b/simd/e2k/jdsample-e2k.c
 new file mode 100644
-index 0000000..488ce57
+index 0000000..572b3af
 --- /dev/null
 +++ b/simd/e2k/jdsample-e2k.c
-@@ -0,0 +1,334 @@
+@@ -0,0 +1,389 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
@@ -1952,6 +1744,10 @@ index 0000000..488ce57
 +  __m128i this0, last0, p_last0, next0 = pb_zero, p_next0, out;
 +  __m128i this0l, this0h, last0l, last0h,
 +    next0l, next0h, outle, outhe, outlo, outho;
++#ifdef NEED_ALIGN8
++  ALIGN8_COMMON
++  ALIGN8_VARS(src)
++#endif
 +
 +  /* Constants */
 +  __m128i pw_three = _mm_set1_epi16(3),
@@ -1967,11 +1763,17 @@ index 0000000..488ce57
 +    if (downsampled_width & 15)
 +      inptr[downsampled_width] = inptr[downsampled_width - 1];
 +
++#ifdef NEED_ALIGN8
++    ALIGN8_START(inptr, src)
++    ALIGN8_READ16(this0, src, 0)
++#else
 +    this0 = VEC_LD(inptr);
++#endif
 +    last0 = _mm_bslli_si128(this0, 15);
 +
++    PRAGMA_E2K("ivdep")
 +    for (incol = downsampled_width; incol > 0;
-+         incol -= 16, inptr += 16, outptr += 32) {
++         incol -= 16, outptr += 32) {
 +
 +      p_last0 = _mm_alignr_epi8(this0, last0, 15);
 +      last0 = this0;
@@ -1979,7 +1781,11 @@ index 0000000..488ce57
 +      if (__builtin_expect(incol <= 16, 0))
 +        p_next0 = _mm_shuffle_epi8(this0, next_index_lastcol);
 +      else {
-+        next0 = VEC_LD(inptr + 16);
++#ifdef NEED_ALIGN8
++        ALIGN8_READ16(next0, src, 1) src_ptr += 2;
++#else
++        next0 = VEC_LD(inptr + 16); inptr += 16;
++#endif
 +        p_next0 = _mm_alignr_epi8(next0, this0, 1);
 +      }
 +
@@ -2027,6 +1833,12 @@ index 0000000..488ce57
 +  JSAMPARRAY output_data = *output_data_ptr;
 +  JSAMPROW inptr_1, inptr0, inptr1, outptr0, outptr1;
 +  int inrow, outrow, incol;
++#ifdef NEED_ALIGN8
++  ALIGN8_COMMON
++  ALIGN8_VARS(src_1)
++  ALIGN8_VARS(src0)
++  ALIGN8_VARS(src1)
++#endif
 +
 +  __m128i pb_zero = _mm_setzero_si128();
 +  __m128i this_1, this0, this1, out;
@@ -2060,29 +1872,39 @@ index 0000000..488ce57
 +      inptr1[downsampled_width] = inptr1[downsampled_width - 1];
 +    }
 +
++#ifdef NEED_ALIGN8
++    ALIGN8_START(inptr0, src0)
++    ALIGN8_START(inptr_1, src_1)
++    ALIGN8_START(inptr1, src1)
++    ALIGN8_READ16(this0, src0, 0)
++    ALIGN8_READ16(this_1, src_1, 0)
++    ALIGN8_READ16(this1, src1, 0)
++#else
 +    this0 = VEC_LD(inptr0);
++    this_1 = VEC_LD(inptr_1);
++    this1 = VEC_LD(inptr1);
++#endif
++
 +    this0l = _mm_unpacklo_epi8(this0, pb_zero);
 +    this0h = _mm_unpackhi_epi8(this0, pb_zero);
 +    this0l = _mm_mullo_epi16(this0l, pw_three);
 +    this0h = _mm_mullo_epi16(this0h, pw_three);
 +
-+    this_1 = VEC_LD(inptr_1);
 +    this_1l = _mm_unpacklo_epi8(this_1, pb_zero);
 +    this_1h = _mm_unpackhi_epi8(this_1, pb_zero);
 +    thiscolsum_1l = _mm_add_epi16(this0l, this_1l);
 +    thiscolsum_1h = _mm_add_epi16(this0h, this_1h);
 +    lastcolsum_1h = _mm_bslli_si128(thiscolsum_1l, 14);;
 +
-+    this1 = VEC_LD(inptr1);
 +    this1l = _mm_unpacklo_epi8(this1, pb_zero);
 +    this1h = _mm_unpackhi_epi8(this1, pb_zero);
 +    thiscolsum1l = _mm_add_epi16(this0l, this1l);
 +    thiscolsum1h = _mm_add_epi16(this0h, this1h);
 +    lastcolsum1h = _mm_bslli_si128(thiscolsum1l, 14);
 +
++    PRAGMA_E2K("ivdep")
 +    for (incol = downsampled_width; incol > 0;
-+         incol -= 16, inptr_1 += 16, inptr0 += 16, inptr1 += 16,
-+         outptr0 += 32, outptr1 += 32) {
++         incol -= 16, outptr0 += 32, outptr1 += 32) {
 +
 +      p_lastcolsum_1l = _mm_alignr_epi8(thiscolsum_1l, lastcolsum_1h, 14);
 +      p_lastcolsum_1h = _mm_alignr_epi8(thiscolsum_1h, thiscolsum_1l, 14);
@@ -2097,13 +1919,20 @@ index 0000000..488ce57
 +        p_nextcolsum1l = _mm_alignr_epi8(thiscolsum1h, thiscolsum1l, 2);
 +        p_nextcolsum1h = _mm_shuffle_epi8(thiscolsum1h, next_index_lastcol);
 +      } else {
-+        this0 = VEC_LD(inptr0 + 16);
++#ifdef NEED_ALIGN8
++        ALIGN8_READ16(this0, src0, 1) src0_ptr += 2;
++        ALIGN8_READ16(this_1, src_1, 1) src_1_ptr += 2;
++        ALIGN8_READ16(this1, src1, 1) src1_ptr += 2;
++#else
++        this0 = VEC_LD(inptr0 + 16); inptr0 += 16;
++        this_1 = VEC_LD(inptr_1 + 16); inptr_1 += 16;
++        this1 = VEC_LD(inptr1 + 16); inptr1 += 16;
++#endif
 +        this0l = _mm_unpacklo_epi8(this0, pb_zero);
 +        this0h = _mm_unpackhi_epi8(this0, pb_zero);
 +        this0l = _mm_mullo_epi16(this0l, pw_three);
 +        this0h = _mm_mullo_epi16(this0h, pw_three);
 +
-+        this_1 = VEC_LD(inptr_1 + 16);
 +        this_1l = _mm_unpacklo_epi8(this_1, pb_zero);
 +        this_1h = _mm_unpackhi_epi8(this_1, pb_zero);
 +        nextcolsum_1l = _mm_add_epi16(this0l, this_1l);
@@ -2111,7 +1940,6 @@ index 0000000..488ce57
 +        p_nextcolsum_1l = _mm_alignr_epi8(thiscolsum_1h, thiscolsum_1l, 2);
 +        p_nextcolsum_1h = _mm_alignr_epi8(nextcolsum_1l, thiscolsum_1h, 2);
 +
-+        this1 = VEC_LD(inptr1 + 16);
 +        this1l = _mm_unpacklo_epi8(this1, pb_zero);
 +        this1h = _mm_unpackhi_epi8(this1, pb_zero);
 +        nextcolsum1l = _mm_add_epi16(this0l, this1l);
@@ -2184,7 +2012,7 @@ index 0000000..488ce57
 +/* These are rarely used (mainly just for decompressing YCCK images) */
 +
 +void jsimd_h2v1_upsample_e2k(int max_v_samp_factor,
-+                             JDIMENSION output_width,
++                             JDIMENSION out_width,
 +                             JSAMPARRAY input_data,
 +                             JSAMPARRAY *output_data_ptr)
 +{
@@ -2193,16 +2021,26 @@ index 0000000..488ce57
 +  int inrow, incol;
 +
 +  __m128i in, inl, inh;
++#ifdef NEED_ALIGN8
++  ALIGN8_COMMON
++  ALIGN8_VARS(src)
++#endif
 +
-+  if (output_width > 0)
++  if (out_width > 0)
 +  for (inrow = 0; inrow < max_v_samp_factor; inrow++) {
 +    inptr = input_data[inrow];
 +    outptr = output_data[inrow];
-+
-+    for (incol = output_width; incol > 0;
-+         incol -= 32, inptr += 16, outptr += 32) {
-+
-+      in = VEC_LD(inptr);
++#ifdef NEED_ALIGN8
++    ALIGN8_START(inptr, src)
++#endif
++    PRAGMA_E2K("ivdep")
++    for (incol = out_width; incol > 0;
++         incol -= 32, outptr += 32) {
++#ifdef NEED_ALIGN8
++      ALIGN8_READ16(in, src, 0) src_ptr += 2;
++#else
++      in = VEC_LD(inptr); inptr += 16;
++#endif
 +      inl = _mm_unpacklo_epi8(in, in);
 +      inh = _mm_unpackhi_epi8(in, in);
 +
@@ -2214,7 +2052,7 @@ index 0000000..488ce57
 +
 +
 +void jsimd_h2v2_upsample_e2k(int max_v_samp_factor,
-+                             JDIMENSION output_width,
++                             JDIMENSION out_width,
 +                             JSAMPARRAY input_data,
 +                             JSAMPARRAY *output_data_ptr)
 +{
@@ -2223,18 +2061,27 @@ index 0000000..488ce57
 +  int inrow, outrow, incol;
 +
 +  __m128i in, inl, inh;
++#ifdef NEED_ALIGN8
++  ALIGN8_COMMON
++  ALIGN8_VARS(src)
++#endif
 +
-+  if (output_width > 0)
++  if (out_width > 0)
 +  for (inrow = 0, outrow = 0; outrow < max_v_samp_factor; inrow++) {
-+
 +    inptr = input_data[inrow];
 +    outptr0 = output_data[outrow++];
 +    outptr1 = output_data[outrow++];
-+
-+    for (incol = output_width; incol > 0;
-+         incol -= 32, inptr += 16, outptr0 += 32, outptr1 += 32) {
-+
-+      in = VEC_LD(inptr);
++#ifdef NEED_ALIGN8
++    ALIGN8_START(inptr, src)
++#endif
++    PRAGMA_E2K("ivdep")
++    for (incol = out_width; incol > 0;
++         incol -= 32, outptr0 += 32, outptr1 += 32) {
++#ifdef NEED_ALIGN8
++      ALIGN8_READ16(in, src, 0) src_ptr += 2;
++#else
++      in = VEC_LD(inptr); inptr += 16;
++#endif
 +      inl = _mm_unpacklo_epi8(in, in);
 +      inh = _mm_unpackhi_epi8(in, in);
 +
@@ -3506,10 +3353,10 @@ index 0000000..7bb79c0
 +}
 diff --git a/simd/e2k/jquantf-e2k.c b/simd/e2k/jquantf-e2k.c
 new file mode 100644
-index 0000000..894afc0
+index 0000000..106e99a
 --- /dev/null
 +++ b/simd/e2k/jquantf-e2k.c
-@@ -0,0 +1,120 @@
+@@ -0,0 +1,121 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
@@ -3595,6 +3442,7 @@ index 0000000..894afc0
 +  __m128i pw_m16k = _mm_set1_epi16(-16384);
 +#endif
 +
++  PRAGMA_E2K("ivdep")
 +  for (; i < 4; i++, workspace += 16, divisors += 16, coef_block += 16) {
 +    row0 = _mm_loadu_ps(workspace + 0 * 4);
 +    row1 = _mm_loadu_ps(workspace + 1 * 4);
@@ -3632,10 +3480,10 @@ index 0000000..894afc0
 +}
 diff --git a/simd/e2k/jquanti-e2k.c b/simd/e2k/jquanti-e2k.c
 new file mode 100644
-index 0000000..d6fd53b
+index 0000000..a3e1ff1
 --- /dev/null
 +++ b/simd/e2k/jquanti-e2k.c
-@@ -0,0 +1,234 @@
+@@ -0,0 +1,178 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
@@ -3725,42 +3573,6 @@ index 0000000..d6fd53b
 +    recip0, recip1, recip2, recip3, recip4, recip5, recip6, recip7,
 +    scale0, scale1, scale2, scale3, scale4, scale5, scale6, scale7;
 +
-+#if defined(__e2k__) && __iset__ < 3
-+  row0 = VEC_LD(workspace + 0 * 8);
-+  row1 = VEC_LD(workspace + 1 * 8);
-+  row2 = VEC_LD(workspace + 2 * 8);
-+  row3 = VEC_LD(workspace + 3 * 8);
-+  row4 = VEC_LD(workspace + 4 * 8);
-+  row5 = VEC_LD(workspace + 5 * 8);
-+  row6 = VEC_LD(workspace + 6 * 8);
-+  row7 = VEC_LD(workspace + 7 * 8);
-+
-+  /* Branch-less absolute value */
-+  row0s = _mm_srai_epi16(row0, WORD_BIT - 1);
-+  row1s = _mm_srai_epi16(row1, WORD_BIT - 1);
-+  row2s = _mm_srai_epi16(row2, WORD_BIT - 1);
-+  row3s = _mm_srai_epi16(row3, WORD_BIT - 1);
-+  row4s = _mm_srai_epi16(row4, WORD_BIT - 1);
-+  row5s = _mm_srai_epi16(row5, WORD_BIT - 1);
-+  row6s = _mm_srai_epi16(row6, WORD_BIT - 1);
-+  row7s = _mm_srai_epi16(row7, WORD_BIT - 1);
-+  row0 = _mm_xor_si128(row0, row0s);
-+  row1 = _mm_xor_si128(row1, row1s);
-+  row2 = _mm_xor_si128(row2, row2s);
-+  row3 = _mm_xor_si128(row3, row3s);
-+  row4 = _mm_xor_si128(row4, row4s);
-+  row5 = _mm_xor_si128(row5, row5s);
-+  row6 = _mm_xor_si128(row6, row6s);
-+  row7 = _mm_xor_si128(row7, row7s);
-+  row0 = _mm_sub_epi16(row0, row0s);
-+  row1 = _mm_sub_epi16(row1, row1s);
-+  row2 = _mm_sub_epi16(row2, row2s);
-+  row3 = _mm_sub_epi16(row3, row3s);
-+  row4 = _mm_sub_epi16(row4, row4s);
-+  row5 = _mm_sub_epi16(row5, row5s);
-+  row6 = _mm_sub_epi16(row6, row6s);
-+  row7 = _mm_sub_epi16(row7, row7s);
-+#else
 +  row0s = VEC_LD(workspace + 0 * 8);
 +  row1s = VEC_LD(workspace + 1 * 8);
 +  row2s = VEC_LD(workspace + 2 * 8);
@@ -3777,7 +3589,6 @@ index 0000000..d6fd53b
 +  row5 = _mm_abs_epi16(row5s);
 +  row6 = _mm_abs_epi16(row6s);
 +  row7 = _mm_abs_epi16(row7s);
-+#endif
 +
 +  corr0 = VEC_LD(divisors + DCTSIZE2 + 0 * 8);
 +  corr1 = VEC_LD(divisors + DCTSIZE2 + 1 * 8);
@@ -3833,24 +3644,6 @@ index 0000000..d6fd53b
 +  MULTIPLY(row6, scale6, row6);
 +  MULTIPLY(row7, scale7, row7);
 +
-+#if defined(__e2k__) && __iset__ < 3
-+  row0 = _mm_xor_si128(row0, row0s);
-+  row1 = _mm_xor_si128(row1, row1s);
-+  row2 = _mm_xor_si128(row2, row2s);
-+  row3 = _mm_xor_si128(row3, row3s);
-+  row4 = _mm_xor_si128(row4, row4s);
-+  row5 = _mm_xor_si128(row5, row5s);
-+  row6 = _mm_xor_si128(row6, row6s);
-+  row7 = _mm_xor_si128(row7, row7s);
-+  row0 = _mm_sub_epi16(row0, row0s);
-+  row1 = _mm_sub_epi16(row1, row1s);
-+  row2 = _mm_sub_epi16(row2, row2s);
-+  row3 = _mm_sub_epi16(row3, row3s);
-+  row4 = _mm_sub_epi16(row4, row4s);
-+  row5 = _mm_sub_epi16(row5, row5s);
-+  row6 = _mm_sub_epi16(row6, row6s);
-+  row7 = _mm_sub_epi16(row7, row7s);
-+#else
 +  row0 = _mm_sign_epi16(row0, row0s);
 +  row1 = _mm_sign_epi16(row1, row1s);
 +  row2 = _mm_sign_epi16(row2, row2s);
@@ -3859,7 +3652,6 @@ index 0000000..d6fd53b
 +  row5 = _mm_sign_epi16(row5, row5s);
 +  row6 = _mm_sign_epi16(row6, row6s);
 +  row7 = _mm_sign_epi16(row7, row7s);
-+#endif
 +
 +  VEC_ST(coef_block + 0 * 8, row0);
 +  VEC_ST(coef_block + 1 * 8, row1);
@@ -3872,10 +3664,10 @@ index 0000000..d6fd53b
 +}
 diff --git a/simd/e2k/jsimd.c b/simd/e2k/jsimd.c
 new file mode 100644
-index 0000000..0d32071
+index 0000000..393416e
 --- /dev/null
 +++ b/simd/e2k/jsimd.c
-@@ -0,0 +1,837 @@
+@@ -0,0 +1,739 @@
 +/*
 + * jsimd_e2k.c
 + *
@@ -3902,9 +3694,6 @@ index 0000000..0d32071
 +#include "../jsimd.h"
 +#include "jsimd_api_e2k.h"
 +
-+#ifdef HAVE_EML
-+int jsimd_use_eml;
-+#endif
 +static unsigned int simd_support = ~0;
 +static unsigned int simd_huffman = 1;
 +
@@ -3924,17 +3713,9 @@ index 0000000..0d32071
 +    return;
 +
 +  simd_support = JSIMD_SSE2;
-+#ifdef HAVE_EML
-+  jsimd_use_eml = 1;
-+#endif
 +
 +#ifndef NO_GETENV
 +  /* Force different settings through environment variables */
-+#ifdef HAVE_EML
-+  env = getenv("JSIMD_NOEML");
-+  if ((env != NULL) && (strcmp(env, "1") == 0))
-+    jsimd_use_eml = 0;
-+#endif
 +  env = getenv("JSIMD_FORCENONE");
 +  if ((env != NULL) && (strcmp(env, "1") == 0))
 +    simd_support = 0;
@@ -3942,6 +3723,30 @@ index 0000000..0d32071
 +  if ((env != NULL) && (strcmp(env, "1") == 0))
 +    simd_huffman = 0;
 +#endif
++}
++
++static inline int color_space_idx(J_COLOR_SPACE color_space) {
++  switch (color_space) {
++  case JCS_EXT_RGB:
++    return 1 + (EXT_RGB_PIXELSIZE != 3) * 16;
++  case JCS_EXT_RGBX:
++  case JCS_EXT_RGBA:
++    return 2 + (EXT_RGBX_PIXELSIZE != 3) * 16;
++  case JCS_EXT_BGR:
++    return 3 + (EXT_BGR_PIXELSIZE != 3) * 16;
++  case JCS_EXT_BGRX:
++  case JCS_EXT_BGRA:
++    return 4 + (EXT_BGRX_PIXELSIZE != 3) * 16;
++  case JCS_EXT_XBGR:
++  case JCS_EXT_ABGR:
++    return 5 + (EXT_XBGR_PIXELSIZE != 3) * 16;
++  case JCS_EXT_XRGB:
++  case JCS_EXT_ARGB:
++    return 6 + (EXT_XRGB_PIXELSIZE != 3) * 16;
++  default:
++    break;
++  }
++  return 0 + (RGB_PIXELSIZE != 3) * 16;
 +}
 +
 +GLOBAL(int)
@@ -4006,37 +3811,14 @@ index 0000000..0d32071
 +                      JSAMPIMAGE output_buf, JDIMENSION output_row,
 +                      int num_rows)
 +{
-+  void (*e2kfct) (JDIMENSION, JSAMPARRAY, JSAMPIMAGE, JDIMENSION, int);
++  void (*e2kfct) (JDIMENSION, JSAMPARRAY, JSAMPIMAGE, JDIMENSION, int, int);
++  int idx = color_space_idx(cinfo->in_color_space);
 +
-+  switch (cinfo->in_color_space) {
-+  case JCS_EXT_RGB:
-+    e2kfct = jsimd_extrgb_ycc_convert_e2k;
-+    break;
-+  case JCS_EXT_RGBX:
-+  case JCS_EXT_RGBA:
-+    e2kfct = jsimd_extrgbx_ycc_convert_e2k;
-+    break;
-+  case JCS_EXT_BGR:
-+    e2kfct = jsimd_extbgr_ycc_convert_e2k;
-+    break;
-+  case JCS_EXT_BGRX:
-+  case JCS_EXT_BGRA:
-+    e2kfct = jsimd_extbgrx_ycc_convert_e2k;
-+    break;
-+  case JCS_EXT_XBGR:
-+  case JCS_EXT_ABGR:
-+    e2kfct = jsimd_extxbgr_ycc_convert_e2k;
-+    break;
-+  case JCS_EXT_XRGB:
-+  case JCS_EXT_ARGB:
-+    e2kfct = jsimd_extxrgb_ycc_convert_e2k;
-+    break;
-+  default:
-+    e2kfct = jsimd_rgb_ycc_convert_e2k;
-+    break;
-+  }
++  e2kfct = idx < 16 ? jsimd_rgb3_ycc_convert_e2k :
++                      jsimd_rgb4_ycc_convert_e2k;
++  idx &= 15;
 +
-+  e2kfct(cinfo->image_width, input_buf, output_buf, output_row, num_rows);
++  e2kfct(cinfo->image_width, input_buf, output_buf, output_row, num_rows, idx);
 +}
 +
 +GLOBAL(void)
@@ -4044,37 +3826,14 @@ index 0000000..0d32071
 +                       JSAMPIMAGE output_buf, JDIMENSION output_row,
 +                       int num_rows)
 +{
-+  void (*e2kfct) (JDIMENSION, JSAMPARRAY, JSAMPIMAGE, JDIMENSION, int);
++  void (*e2kfct) (JDIMENSION, JSAMPARRAY, JSAMPIMAGE, JDIMENSION, int, int);
++  int idx = color_space_idx(cinfo->in_color_space);
 +
-+  switch (cinfo->in_color_space) {
-+  case JCS_EXT_RGB:
-+    e2kfct = jsimd_extrgb_gray_convert_e2k;
-+    break;
-+  case JCS_EXT_RGBX:
-+  case JCS_EXT_RGBA:
-+    e2kfct = jsimd_extrgbx_gray_convert_e2k;
-+    break;
-+  case JCS_EXT_BGR:
-+    e2kfct = jsimd_extbgr_gray_convert_e2k;
-+    break;
-+  case JCS_EXT_BGRX:
-+  case JCS_EXT_BGRA:
-+    e2kfct = jsimd_extbgrx_gray_convert_e2k;
-+    break;
-+  case JCS_EXT_XBGR:
-+  case JCS_EXT_ABGR:
-+    e2kfct = jsimd_extxbgr_gray_convert_e2k;
-+    break;
-+  case JCS_EXT_XRGB:
-+  case JCS_EXT_ARGB:
-+    e2kfct = jsimd_extxrgb_gray_convert_e2k;
-+    break;
-+  default:
-+    e2kfct = jsimd_rgb_gray_convert_e2k;
-+    break;
-+  }
++  e2kfct = idx < 16 ? jsimd_rgb3_gray_convert_e2k :
++                      jsimd_rgb4_gray_convert_e2k;
++  idx &= 15;
 +
-+  e2kfct(cinfo->image_width, input_buf, output_buf, output_row, num_rows);
++  e2kfct(cinfo->image_width, input_buf, output_buf, output_row, num_rows, idx);
 +}
 +
 +GLOBAL(void)
@@ -4082,37 +3841,14 @@ index 0000000..0d32071
 +                      JDIMENSION input_row, JSAMPARRAY output_buf,
 +                      int num_rows)
 +{
-+  void (*e2kfct) (JDIMENSION, JSAMPIMAGE, JDIMENSION, JSAMPARRAY, int);
++  void (*e2kfct) (JDIMENSION, JSAMPIMAGE, JDIMENSION, JSAMPARRAY, int, int);
++  int idx = color_space_idx(cinfo->out_color_space);
 +
-+  switch (cinfo->out_color_space) {
-+  case JCS_EXT_RGB:
-+    e2kfct = jsimd_ycc_extrgb_convert_e2k;
-+    break;
-+  case JCS_EXT_RGBX:
-+  case JCS_EXT_RGBA:
-+    e2kfct = jsimd_ycc_extrgbx_convert_e2k;
-+    break;
-+  case JCS_EXT_BGR:
-+    e2kfct = jsimd_ycc_extbgr_convert_e2k;
-+    break;
-+  case JCS_EXT_BGRX:
-+  case JCS_EXT_BGRA:
-+    e2kfct = jsimd_ycc_extbgrx_convert_e2k;
-+    break;
-+  case JCS_EXT_XBGR:
-+  case JCS_EXT_ABGR:
-+    e2kfct = jsimd_ycc_extxbgr_convert_e2k;
-+    break;
-+  case JCS_EXT_XRGB:
-+  case JCS_EXT_ARGB:
-+    e2kfct = jsimd_ycc_extxrgb_convert_e2k;
-+    break;
-+  default:
-+    e2kfct = jsimd_ycc_rgb_convert_e2k;
-+    break;
-+  }
++  e2kfct = idx < 16 ? jsimd_ycc_rgb3_convert_e2k :
++                      jsimd_ycc_rgb4_convert_e2k;
++  idx &= 15;
 +
-+  e2kfct(cinfo->output_width, input_buf, input_row, output_buf, num_rows);
++  e2kfct(cinfo->output_width, input_buf, input_row, output_buf, num_rows, idx);
 +}
 +
 +GLOBAL(void)
@@ -4207,7 +3943,7 @@ index 0000000..0d32071
 +                    JSAMPARRAY input_data, JSAMPARRAY *output_data_ptr)
 +{
 +  jsimd_h2v2_upsample_e2k(cinfo->max_v_samp_factor, cinfo->output_width,
-+                              input_data, output_data_ptr);
++                          input_data, output_data_ptr);
 +}
 +
 +GLOBAL(void)
@@ -4215,7 +3951,7 @@ index 0000000..0d32071
 +                    JSAMPARRAY input_data, JSAMPARRAY *output_data_ptr)
 +{
 +  jsimd_h2v1_upsample_e2k(cinfo->max_v_samp_factor, cinfo->output_width,
-+                              input_data, output_data_ptr);
++                          input_data, output_data_ptr);
 +}
 +
 +GLOBAL(int)
@@ -4253,8 +3989,8 @@ index 0000000..0d32071
 +                          JSAMPARRAY input_data, JSAMPARRAY *output_data_ptr)
 +{
 +  jsimd_h2v2_fancy_upsample_e2k(cinfo->max_v_samp_factor,
-+                                    compptr->downsampled_width, input_data,
-+                                    output_data_ptr);
++                                compptr->downsampled_width, input_data,
++                                output_data_ptr);
 +}
 +
 +GLOBAL(void)
@@ -4262,8 +3998,8 @@ index 0000000..0d32071
 +                          JSAMPARRAY input_data, JSAMPARRAY *output_data_ptr)
 +{
 +  jsimd_h2v1_fancy_upsample_e2k(cinfo->max_v_samp_factor,
-+                                    compptr->downsampled_width, input_data,
-+                                    output_data_ptr);
++                                compptr->downsampled_width, input_data,
++                                output_data_ptr);
 +}
 +
 +GLOBAL(int)
@@ -4300,74 +4036,32 @@ index 0000000..0d32071
 +jsimd_h2v2_merged_upsample(j_decompress_ptr cinfo, JSAMPIMAGE input_buf,
 +                           JDIMENSION in_row_group_ctr, JSAMPARRAY output_buf)
 +{
-+  void (*e2kfct) (JDIMENSION, JSAMPIMAGE, JDIMENSION, JSAMPARRAY);
++  void (*e2kfct) (JDIMENSION, JSAMPIMAGE, JDIMENSION, JDIMENSION, JSAMPARRAY, int);
++  int idx = color_space_idx(cinfo->out_color_space);
 +
-+  switch (cinfo->out_color_space) {
-+  case JCS_EXT_RGB:
-+    e2kfct = jsimd_h2v2_extrgb_merged_upsample_e2k;
-+    break;
-+  case JCS_EXT_RGBX:
-+  case JCS_EXT_RGBA:
-+    e2kfct = jsimd_h2v2_extrgbx_merged_upsample_e2k;
-+    break;
-+  case JCS_EXT_BGR:
-+    e2kfct = jsimd_h2v2_extbgr_merged_upsample_e2k;
-+    break;
-+  case JCS_EXT_BGRX:
-+  case JCS_EXT_BGRA:
-+    e2kfct = jsimd_h2v2_extbgrx_merged_upsample_e2k;
-+    break;
-+  case JCS_EXT_XBGR:
-+  case JCS_EXT_ABGR:
-+    e2kfct = jsimd_h2v2_extxbgr_merged_upsample_e2k;
-+    break;
-+  case JCS_EXT_XRGB:
-+  case JCS_EXT_ARGB:
-+    e2kfct = jsimd_h2v2_extxrgb_merged_upsample_e2k;
-+    break;
-+  default:
-+    e2kfct = jsimd_h2v2_merged_upsample_e2k;
-+    break;
-+  }
++  e2kfct = idx < 16 ? jsimd_ycc_rgb3_merged_upsample_e2k :
++                      jsimd_ycc_rgb4_merged_upsample_e2k;
++  idx &= 15;
 +
-+  e2kfct(cinfo->output_width, input_buf, in_row_group_ctr, output_buf);
++  e2kfct(cinfo->output_width, input_buf, in_row_group_ctr,
++         in_row_group_ctr * 2, output_buf, idx);
++  e2kfct(cinfo->output_width, input_buf, in_row_group_ctr,
++         in_row_group_ctr * 2 + 1, output_buf + 1, idx);
 +}
 +
 +GLOBAL(void)
 +jsimd_h2v1_merged_upsample(j_decompress_ptr cinfo, JSAMPIMAGE input_buf,
 +                           JDIMENSION in_row_group_ctr, JSAMPARRAY output_buf)
 +{
-+  void (*e2kfct) (JDIMENSION, JSAMPIMAGE, JDIMENSION, JSAMPARRAY);
++  void (*e2kfct) (JDIMENSION, JSAMPIMAGE, JDIMENSION, JDIMENSION, JSAMPARRAY, int);
++  int idx = color_space_idx(cinfo->out_color_space);
 +
-+  switch (cinfo->out_color_space) {
-+  case JCS_EXT_RGB:
-+    e2kfct = jsimd_h2v1_extrgb_merged_upsample_e2k;
-+    break;
-+  case JCS_EXT_RGBX:
-+  case JCS_EXT_RGBA:
-+    e2kfct = jsimd_h2v1_extrgbx_merged_upsample_e2k;
-+    break;
-+  case JCS_EXT_BGR:
-+    e2kfct = jsimd_h2v1_extbgr_merged_upsample_e2k;
-+    break;
-+  case JCS_EXT_BGRX:
-+  case JCS_EXT_BGRA:
-+    e2kfct = jsimd_h2v1_extbgrx_merged_upsample_e2k;
-+    break;
-+  case JCS_EXT_XBGR:
-+  case JCS_EXT_ABGR:
-+    e2kfct = jsimd_h2v1_extxbgr_merged_upsample_e2k;
-+    break;
-+  case JCS_EXT_XRGB:
-+  case JCS_EXT_ARGB:
-+    e2kfct = jsimd_h2v1_extxrgb_merged_upsample_e2k;
-+    break;
-+  default:
-+    e2kfct = jsimd_h2v1_merged_upsample_e2k;
-+    break;
-+  }
++  e2kfct = idx < 16 ? jsimd_ycc_rgb3_merged_upsample_e2k :
++                      jsimd_ycc_rgb4_merged_upsample_e2k;
++  idx &= 15;
 +
-+  e2kfct(cinfo->output_width, input_buf, in_row_group_ctr, output_buf);
++  e2kfct(cinfo->output_width, input_buf, in_row_group_ctr,
++         in_row_group_ctr, output_buf, idx);
 +}
 +
 +GLOBAL(int)
@@ -4715,10 +4409,10 @@ index 0000000..0d32071
 +}
 diff --git a/simd/e2k/jsimd_api_e2k.h b/simd/e2k/jsimd_api_e2k.h
 new file mode 100644
-index 0000000..b308401
+index 0000000..c6fa247
 --- /dev/null
 +++ b/simd/e2k/jsimd_api_e2k.h
-@@ -0,0 +1,109 @@
+@@ -0,0 +1,89 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
@@ -4743,24 +4437,25 @@ index 0000000..b308401
 +
 +/* Function declarations */
 +
-+#define CONVERT_DECL(name) \
-+EXTERN(void) jsimd_##name##_ycc_convert_e2k \
-+  (JDIMENSION img_width, JSAMPARRAY input_buf, JSAMPIMAGE output_buf, \
-+   JDIMENSION output_row, int num_rows); \
-+EXTERN(void) jsimd_##name##_gray_convert_e2k \
-+  (JDIMENSION img_width, JSAMPARRAY input_buf, JSAMPIMAGE output_buf, \
-+   JDIMENSION output_row, int num_rows); \
-+EXTERN(void) jsimd_ycc_##name##_convert_e2k \
-+  (JDIMENSION out_width, JSAMPIMAGE input_buf, JDIMENSION input_row, \
-+   JSAMPARRAY output_buf, int num_rows);
++#define CONVERT_DECL(n) \
++EXTERN(void) jsimd_rgb##n##_ycc_convert_e2k(JDIMENSION img_width, \
++    JSAMPARRAY input_buf, JSAMPIMAGE output_buf, \
++    JDIMENSION output_row, int num_rows, int shuf_idx); \
++EXTERN(void) jsimd_rgb##n##_gray_convert_e2k(JDIMENSION img_width, \
++    JSAMPARRAY input_buf, JSAMPIMAGE output_buf, \
++    JDIMENSION output_row, int num_rows, int shuf_idx); \
++EXTERN(void) jsimd_ycc_rgb##n##_convert_e2k(JDIMENSION out_width, \
++    JSAMPIMAGE input_buf, JDIMENSION input_row, \
++    JSAMPARRAY output_buf, int num_rows, int shuf_idx); \
++EXTERN(void) jsimd_ycc_rgb##n##_convert_e2k(JDIMENSION out_width, \
++    JSAMPIMAGE input_buf, JDIMENSION input_row, JSAMPARRAY output_buf, \
++    int num_rows, int shuf_idx); \
++EXTERN(void) jsimd_ycc_rgb##n##_merged_upsample_e2k(JDIMENSION out_width, \
++    JSAMPIMAGE input_buf, JDIMENSION in_row_group_ctr, \
++    JDIMENSION in_row_group_ctr_y, JSAMPARRAY output_buf, int shuf_idx); \
 +
-+CONVERT_DECL(rgb)
-+CONVERT_DECL(extrgb)
-+CONVERT_DECL(extrgbx)
-+CONVERT_DECL(extbgr)
-+CONVERT_DECL(extbgrx)
-+CONVERT_DECL(extxbgr)
-+CONVERT_DECL(extxrgb)
++CONVERT_DECL(3)
++CONVERT_DECL(4)
 +
 +EXTERN(void) jsimd_h2v1_downsample_e2k
 +  (JDIMENSION image_width, int max_v_samp_factor, JDIMENSION v_samp_factor,
@@ -4778,27 +4473,6 @@ index 0000000..b308401
 +UPSAMPLE_DECL(h2v2)
 +UPSAMPLE_DECL(h2v1_fancy)
 +UPSAMPLE_DECL(h2v2_fancy)
-+
-+#define MERGED_DECL(name) \
-+EXTERN(void) jsimd_##name##_merged_upsample_e2k \
-+  (JDIMENSION output_width, JSAMPIMAGE input_buf, \
-+  JDIMENSION in_row_group_ctr, JSAMPARRAY output_buf);
-+
-+MERGED_DECL(h2v1)
-+MERGED_DECL(h2v1_extrgb)
-+MERGED_DECL(h2v1_extrgbx)
-+MERGED_DECL(h2v1_extbgr)
-+MERGED_DECL(h2v1_extbgrx)
-+MERGED_DECL(h2v1_extxbgr)
-+MERGED_DECL(h2v1_extxrgb)
-+
-+MERGED_DECL(h2v2)
-+MERGED_DECL(h2v2_extrgb)
-+MERGED_DECL(h2v2_extrgbx)
-+MERGED_DECL(h2v2_extbgr)
-+MERGED_DECL(h2v2_extbgrx)
-+MERGED_DECL(h2v2_extxbgr)
-+MERGED_DECL(h2v2_extxrgb)
 +
 +EXTERN(void) jsimd_convsamp_e2k
 +  (JSAMPARRAY sample_data, JDIMENSION start_col, DCTELEM *workspace);
@@ -4830,10 +4504,10 @@ index 0000000..b308401
 +
 diff --git a/simd/e2k/jsimd_e2k.h b/simd/e2k/jsimd_e2k.h
 new file mode 100644
-index 0000000..10c184b
+index 0000000..15d6262
 --- /dev/null
 +++ b/simd/e2k/jsimd_e2k.h
-@@ -0,0 +1,217 @@
+@@ -0,0 +1,207 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
@@ -4874,18 +4548,25 @@ index 0000000..10c184b
 +#define __4X2(a, b)  a, b, a, b, a, b, a, b
 +#define ALWAYS_INLINE __attribute__((__always_inline__)) inline
 +
-+#if defined(__e2k__)
++#ifdef __e2k__
++#define PRAGMA_E2K _Pragma
 +#define _mm_shuffle2_pi8(a, b, c) \
 +    ((__m64)__builtin_e2k_pshufb((uint64_t)(b), (uint64_t)(a), (uint64_t)(c)))
 +#define _mm_shuffle2_epi8(a, b, c) \
 +    ((__m128i)__builtin_e2k_qppermb((__v2di)(b), (__v2di)(a), (__v2di)(c)))
++#define _mm_blendv_pi8(a, b, c) \
++    ((__m64)__builtin_e2k_pmerge((uint64_t)(a), (uint64_t)(b), (uint64_t)(c)))
 +#else
++#define PRAGMA_E2K(x)
 +#define _mm_shuffle2_pi8(a, b, c) \
 +    _mm_movepi64_pi64(_mm_shuffle_epi8(_mm_unpacklo_epi64( \
 +        _mm_movpi64_epi64(a), _mm_movpi64_epi64(b)), _mm_movpi64_epi64(c)))
 +#define _mm_shuffle2_epi8(a, b, c) \
 +    _mm_blendv_epi8(_mm_shuffle_epi8(a, c), _mm_shuffle_epi8(b, c), \
 +        _mm_slli_epi16(c, 3))
++#define _mm_blendv_pi8(a, b, c) \
++    _mm_movepi64_pi64(_mm_blendv_epi8(_mm_movpi64_epi64(a), \
++        _mm_movpi64_epi64(b), _mm_movpi64_epi64(c)))
 +
 +#define BITREV_ROUND(c, i) a = (a & c) << i | (a >> i & c);
 +static ALWAYS_INLINE uint64_t __builtin_e2k_bitrevd(uint64_t a) {
@@ -4905,49 +4586,15 @@ index 0000000..10c184b
 +#endif
 +
 +#if defined(__iset__) && __iset__ >= 5
-+#define CONV_RGBX_RGB_INIT __m128i \
-+  rgb_index0 = _mm_setr_epi8( \
-+     0,  1,  2,  4,   5,  6,  8,  9,  10, 12, 13, 14,  16, 17, 18, 20), \
-+  rgb_index1 = _mm_setr_epi8( \
-+     5,  6,  8,  9,  10, 12, 13, 14,  16, 17, 18, 20,  21, 22, 24, 25), \
-+  rgb_index2 = _mm_setr_epi8( \
-+    10, 12, 13, 14,  16, 17, 18, 20,  21, 22, 24, 25,  26, 28, 29, 30);
-+
-+#define CONV_RGBX_RGB \
-+  rgb0 = _mm_shuffle2_epi8(rgb0, rgb1, rgb_index0); \
-+  rgb1 = _mm_shuffle2_epi8(rgb1, rgb2, rgb_index1); \
-+  rgb2 = _mm_shuffle2_epi8(rgb2, rgb3, rgb_index2);
-+
-+static ALWAYS_INLINE __m128i pack_high16(__m128i a, __m128i b) {
++static ALWAYS_INLINE __m128i _mm_packhi_epi32(__m128i a, __m128i b) {
 +  __m128i index = _mm_setr_epi8(
 +    2, 3, 6, 7, 10, 11, 14, 15, 18, 19, 22, 23, 26, 27, 30, 31);
 +  return _mm_shuffle2_epi8(a, b, index);
 +}
 +
-+#define PACK_HIGH16(a, b) pack_high16(a, b)
 +#define VEC_ISZERO(a) !_mm_cvtsi128_si64(_mm_packs_epi16(a, a))
 +#else
-+/* 11111111 11222222 22222333 33333333
-+   RGBxRGBx RGBxRGBx RGBxRGBx RGBxRGBx
-+   RGBRGBRG   BRGBRGBR    GBRGBRGB     */
-+#define CONV_RGBX_RGB_INIT __m64 \
-+  rgb_index0 = _mm_setr_pi8(0, 1, 2, 4, 5, 6, 8, 9), \
-+  rgb_index1 = _mm_setr_pi8(2, 4, 5, 6, 8, 9, 10, 12), \
-+  rgb_index2 = _mm_setr_pi8(5, 6, 8, 9, 10, 12, 13, 14);
-+
-+#define CONV_RGBX_RGB { \
-+  union { __m128i v; __m64 d[2]; } a = { rgb0 }, \
-+    b = { rgb1 }, c = { rgb2 }, d = { rgb3 }; \
-+  a.d[0] = _mm_shuffle2_pi8(a.d[0], a.d[1], rgb_index0); \
-+  a.d[1] = _mm_shuffle2_pi8(a.d[1], b.d[0], rgb_index1); \
-+  b.d[0] = _mm_shuffle2_pi8(b.d[0], b.d[1], rgb_index2); \
-+  b.d[1] = _mm_shuffle2_pi8(c.d[0], c.d[1], rgb_index0); \
-+  c.d[0] = _mm_shuffle2_pi8(c.d[1], d.d[0], rgb_index1); \
-+  c.d[1] = _mm_shuffle2_pi8(d.d[0], d.d[1], rgb_index2); \
-+  rgb0 = a.v; rgb1 = b.v; rgb2 = c.v; \
-+}
-+
-+static ALWAYS_INLINE __m128i pack_high16(__m128i a, __m128i b) {
++static ALWAYS_INLINE __m128i _mm_packhi_epi32(__m128i a, __m128i b) {
 +  union { __m128i v; __m64 d[2]; } l = { a }, h = { b }, x;
 +  __m64 index = _mm_setr_pi8(2, 3, 6, 7, 10, 11, 14, 15);
 +  x.d[0] = _mm_shuffle2_pi8(l.d[0], l.d[1], index);
@@ -4960,7 +4607,6 @@ index 0000000..10c184b
 +  return x[0] | x[1];
 +}
 +
-+#define PACK_HIGH16(a, b) pack_high16(a, b)
 +#define VEC_ISZERO(a) !vec_isnonzero(a)
 +#endif
 +
@@ -5050,6 +4696,24 @@ index 0000000..10c184b
 +#define VEC_STL(a, b) _mm_storel_epi64((__m128i*)(a), b)
 +#define VEC_STH(a, b) _mm_storeh_pd((double*)(a), _mm_castsi128_pd(b));
 +#define VEC_SPLAT(v, i) _mm_shuffle_epi8(v, _mm_set1_epi16((i) * 2 | ((i) * 2 + 1) << 8))
++
++#if !defined(__iset__) || __iset__ < 5
++#define NEED_ALIGN8
++#define ALIGN8_COMMON uint64_t src_shr; __m64 src_tmp0, src_tmp1;
++#define ALIGN8_VARS(src) __m64 *src##_ptr, src##_next, src##_index;
++#define ALIGN8_START(ptr, src) \
++  src_shr = (intptr_t)(ptr - 1) & 7; \
++  src##_ptr = (__m64*)((intptr_t)(ptr - 1) & -8); \
++  src##_next = src##_ptr[src_shr == 7]; \
++  src##_index = _mm_add_pi8(_mm_set1_pi8(src_shr), \
++                            _mm_setr_pi8(1, 2, 3, 4, 5, 6, 7, 8));
++#define ALIGN8_READ16(v0, src, i) \
++  src_tmp1 = src##_ptr[i * 2 + 1]; \
++  src_tmp0 = _mm_shuffle2_pi8(src##_next, src_tmp1, src##_index); \
++  src##_next = src##_ptr[i * 2 + 2]; \
++  src_tmp1 = _mm_shuffle2_pi8(src_tmp1, src##_next, src##_index); \
++  v0 = _mm_setr_epi64(src_tmp0, src_tmp1);
++#endif
 +
 -- 
 2.17.1
