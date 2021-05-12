@@ -1,6 +1,6 @@
-From 2396b17a3c0c405928d990536ddabfe0f9636d9e Mon Sep 17 00:00:00 2001
+From ad9f0da0b89ce3081c01f2de975c1a0973481285 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Mon, 3 May 2021 20:02:10 +0700
+Date: Wed, 12 May 2021 19:23:28 +0700
 Subject: [PATCH] ffmpeg-4.3.1 e2k support
 
 ---
@@ -18,11 +18,11 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavcodec/e2k/fft.h                 |   29 +
  libavcodec/e2k/fft_init.c            |  152 ++
  libavcodec/e2k/fmtconvert.c          |   55 +
- libavcodec/e2k/h264chroma.c          |   63 +
- libavcodec/e2k/h264chroma_template.c |  113 +
- libavcodec/e2k/h264dsp.c             |  820 ++++++++
- libavcodec/e2k/h264qpel.c            |  255 +++
- libavcodec/e2k/h264qpel_template.c   |  354 ++++
+ libavcodec/e2k/h264chroma.c          |   57 +
+ libavcodec/e2k/h264chroma_template.c |  209 ++
+ libavcodec/e2k/h264dsp.c             | 1012 +++++++++
+ libavcodec/e2k/h264qpel.c            |   83 +
+ libavcodec/e2k/h264qpel_template.c   |  504 +++++
  libavcodec/e2k/hevcdsp.c             | 2893 ++++++++++++++++++++++++++
  libavcodec/e2k/hpeldsp.c             |  490 +++++
  libavcodec/e2k/hpeldsp.h             |   30 +
@@ -37,7 +37,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavcodec/e2k/mpegvideoencdsp.c     |   75 +
  libavcodec/e2k/pixblockdsp.c         |   83 +
  libavcodec/e2k/svq1enc.c             |   68 +
- libavcodec/e2k/vc1dsp.c              |  303 +++
+ libavcodec/e2k/vc1dsp.c              |  298 +++
  libavcodec/e2k/videodsp.c            |   36 +
  libavcodec/e2k/vorbisdsp.c           |   62 +
  libavcodec/e2k/vp3dsp.c              |  169 ++
@@ -129,7 +129,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libswscale/yuv2rgb.c                 |    2 +
  tests/checkasm/checkasm.c            |    2 +
  tests/checkasm/huffyuvdsp.c          |    8 +-
- 125 files changed, 14771 insertions(+), 6 deletions(-)
+ 125 files changed, 15026 insertions(+), 6 deletions(-)
  create mode 100644 libavcodec/e2k/Makefile
  create mode 100644 libavcodec/e2k/audiodsp.c
  create mode 100644 libavcodec/e2k/blockdsp.c
@@ -2218,10 +2218,10 @@ index 0000000..bfd9cb5
 +}
 diff --git a/libavcodec/e2k/h264chroma.c b/libavcodec/e2k/h264chroma.c
 new file mode 100644
-index 0000000..802a26c
+index 0000000..f283e11
 --- /dev/null
 +++ b/libavcodec/e2k/h264chroma.c
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,57 @@
 +/*
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
 + * Copyright (c) 2004 Romain Dolbeau <romain@dolbeau.org>
@@ -2247,30 +2247,22 @@ index 0000000..802a26c
 +
 +#include "libavutil/attributes.h"
 +#include "libavutil/cpu.h"
-+#include "libavutil/intreadwrite.h"
 +#include "libavutil/e2k/cpu.h"
 +#include "libavutil/e2k/util_e2k.h"
 +
 +#include "libavcodec/h264chroma.h"
 +
-+#define PUT_OP_U8_E2K(d, s, dst) d = s
-+#define AVG_OP_U8_E2K(d, s, dst) d = _mm_avg_epu8(dst, s)
-+
-+#define OP_U8_E2K                          PUT_OP_U8_E2K
-+#define PREFIX_h264_chroma_mc8_e2k         put_h264_chroma_mc8_e2k
-+#define PREFIX_h264_chroma_mc8_num         e2k_put_h264_chroma_mc8_num
++#define OP8_E2K(d, s, dst) d = s
++#define OP16_E2K(d, s, dst) d = s
++#define PREFIX_h264_chroma_mc4_e2k put_h264_chroma_mc4_e2k
++#define PREFIX_h264_chroma_mc8_e2k put_h264_chroma_mc8_e2k
 +#include "h264chroma_template.c"
-+#undef OP_U8_E2K
-+#undef PREFIX_h264_chroma_mc8_e2k
-+#undef PREFIX_h264_chroma_mc8_num
 +
-+#define OP_U8_E2K                          AVG_OP_U8_E2K
-+#define PREFIX_h264_chroma_mc8_e2k         avg_h264_chroma_mc8_e2k
-+#define PREFIX_h264_chroma_mc8_num         e2k_avg_h264_chroma_mc8_num
++#define OP8_E2K(d, s, dst) d = _mm_avg_pu8(dst, s)
++#define OP16_E2K(d, s, dst) d = _mm_avg_epu8(dst, s)
++#define PREFIX_h264_chroma_mc4_e2k avg_h264_chroma_mc4_e2k
++#define PREFIX_h264_chroma_mc8_e2k avg_h264_chroma_mc8_e2k
 +#include "h264chroma_template.c"
-+#undef OP_U8_E2K
-+#undef PREFIX_h264_chroma_mc8_e2k
-+#undef PREFIX_h264_chroma_mc8_num
 +
 +av_cold void ff_h264chroma_init_e2k(H264ChromaContext *c, int bit_depth)
 +{
@@ -2283,17 +2275,18 @@ index 0000000..802a26c
 +    if (!high_bit_depth) {
 +        c->put_h264_chroma_pixels_tab[0] = put_h264_chroma_mc8_e2k;
 +        c->avg_h264_chroma_pixels_tab[0] = avg_h264_chroma_mc8_e2k;
++        c->put_h264_chroma_pixels_tab[1] = put_h264_chroma_mc4_e2k;
++        c->avg_h264_chroma_pixels_tab[1] = avg_h264_chroma_mc4_e2k;
 +    }
 +}
 diff --git a/libavcodec/e2k/h264chroma_template.c b/libavcodec/e2k/h264chroma_template.c
 new file mode 100644
-index 0000000..623e0b2
+index 0000000..208fc21
 --- /dev/null
 +++ b/libavcodec/e2k/h264chroma_template.c
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,209 @@
 +/*
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
-+ * Copyright (c) 2004 Romain Dolbeau <romain@dolbeau.org>
 + *
 + * This file is part of FFmpeg.
 + *
@@ -2315,72 +2308,164 @@ index 0000000..623e0b2
 +#include "libavutil/mem.h"
 +#include "libavutil/e2k/util_e2k.h"
 +
-+/* this code assume that stride % 16 == 0 */
++#define GET_VSRC1(v0) v0 = _mm_cvtsi32_si64(*(uint32_t*)src); src += stride;
++#define GET_VSRC2(v0, v1) \
++    v0 = _mm_cvtsi32_si64(*(uint32_t*)src); \
++    v1 = _mm_cvtsi32_si64(*(uint32_t*)(src + 1)); \
++    v0 = _mm_unpacklo_pi8(v0, v1); src += stride;
 +
-+#define CHROMA_MC8_E2K_CORE() \
-+    v1 = _mm_add_epi16(_mm_maddubs_epi16(v0, vA), bias); \
-+    v1 = _mm_add_epi16(_mm_maddubs_epi16(v2, vB), v1); \
-+    v1 = _mm_srai_epi16(v1, 6); \
-+    v1 = _mm_packus_epi16(v1, v1); \
-+    OP_U8_E2K(v1, v1, VEC_LD8(dst)); \
-+    VEC_STL(dst, v1); dst += stride; \
++#define CHROMA_MC4_CORE2() \
++    v1 = _mm_add_pi16(_mm_maddubs_pi16(v0, vA), bias); \
++    v1 = _mm_add_pi16(_mm_maddubs_pi16(v2, vB), v1); \
++    v1 = _mm_srai_pi16(v1, 6); \
++    v1 = _mm_packs_pu16(v1, v1); \
++    OP8_E2K(v1, v1, _mm_cvtsi32_si64(*(uint32_t*)dst)); \
++    *(uint32_t*)dst = _mm_cvtsi64_si32(v1); \
++    dst += stride; \
 +    v0 = v2;
 +
-+#define CHROMA_MC8_E2K_CORE_SIMPLE(v1) \
-+    v1 = _mm_add_epi16(_mm_maddubs_epi16(v1, vA), bias); \
-+    v1 = _mm_srai_epi16(v1, 6); \
-+    v1 = _mm_packus_epi16(v1, v1); \
-+    OP_U8_E2K(v1, v1, VEC_LD8(dst)); \
-+    VEC_STL(dst, v1); dst += stride;
++#define CHROMA_MC4_CORE1(v1) \
++    v1 = _mm_add_pi16(_mm_maddubs_pi16(v1, vA), bias); \
++    v1 = _mm_srai_pi16(v1, 6); \
++    v1 = _mm_packs_pu16(v1, v1); \
++    OP8_E2K(v1, v1, _mm_cvtsi32_si64(*(uint32_t*)dst)); \
++    *(uint32_t*)dst = _mm_cvtsi64_si32(v1); \
++    dst += stride;
++
++#ifdef PREFIX_h264_chroma_mc4_e2k
++static void PREFIX_h264_chroma_mc4_e2k(uint8_t *dst, uint8_t *src,
++                                       ptrdiff_t stride, int h,
++                                       int x, int y)
++{
++    int xm = (8 - x) | x << 8;
++    __m64 vA, vB, bias = _mm_set1_pi16(32);
++    __m64 v0, v1, v2, v3;
++
++    if (y) {
++        if (x) {
++            vA = _mm_set1_pi16(xm * (8 - y));
++            vB = _mm_set1_pi16(xm * y);
++            GET_VSRC2(v0, v1)
++            PRAGMA_E2K("ivdep")
++            do {
++                GET_VSRC2(v2, v3)
++                CHROMA_MC4_CORE2()
++            } while (--h > 0);
++        } else {
++            vA = _mm_set1_pi16(((8 - y) | y << 8) * 8);
++            GET_VSRC1(v0)
++            PRAGMA_E2K("ivdep")
++            do {
++                GET_VSRC1(v2)
++                v1 = _mm_unpacklo_pi8(v0, v2);
++                CHROMA_MC4_CORE1(v1)
++                v0 = v2;
++            } while (--h > 0);
++        }
++    } else {
++        if (x) {
++            vA = _mm_set1_pi16(xm * 8);
++            PRAGMA_E2K("ivdep")
++            do {
++                GET_VSRC2(v0, v1)
++                CHROMA_MC4_CORE1(v0)
++            } while (--h > 0);
++        } else {
++            PRAGMA_E2K("ivdep")
++            do {
++                v0 = _mm_cvtsi32_si64(*(uint32_t*)src);
++                v1 = _mm_cvtsi32_si64(*(uint32_t*)(src + stride));
++                src += stride << 1;
++                OP8_E2K(v0, v0, _mm_cvtsi32_si64(*(uint32_t*)dst));
++                OP8_E2K(v1, v1, _mm_cvtsi32_si64(*(uint32_t*)(dst + stride)));
++                *(uint32_t*)dst = _mm_cvtsi64_si32(v0);
++                *(uint32_t*)(dst + stride) = _mm_cvtsi64_si32(v1);
++                dst += stride << 1;
++            } while ((h -= 2) > 0);
++        }
++    }
++}
++#undef PREFIX_h264_chroma_mc4_e2k
++#endif
++
++#undef GET_VSRC1
++#undef GET_VSRC2
 +
 +#define GET_VSRC1(v0) v0 = VEC_LD8(src); src += stride;
 +#define GET_VSRC2(v0, v1) \
-+    v0 = VEC_LD8(src); \
-+    v1 = VEC_LD8(src + 1); \
++    v0 = VEC_LD8(src); v1 = VEC_LD8(src + 1); \
 +    v0 = _mm_unpacklo_epi8(v0, v1); src += stride;
++
++#define CHROMA_MC8_CORE2() \
++    v1 = _mm_add_epi16(_mm_maddubs_epi16(v0, vA), bias); \
++    v1 = _mm_add_epi16(_mm_maddubs_epi16(v2, vB), v1); \
++    v1 = _mm_srai_epi16(v1, 6); \
++    h0 = _mm_movepi64_pi64(_mm_packus_epi16(v1, v1)); \
++    OP8_E2K(h0, h0, *(__m64*)dst); \
++    *(__m64*)dst = h0; dst += stride; \
++    v0 = v2;
++
++#define CHROMA_MC8_CORE1(v1) \
++    v1 = _mm_add_epi16(_mm_maddubs_epi16(v1, vA), bias); \
++    v1 = _mm_srai_epi16(v1, 6); \
++    h0 = _mm_movepi64_pi64(_mm_packus_epi16(v1, v1)); \
++    OP8_E2K(h0, h0, *(__m64*)dst); \
++    *(__m64*)dst = h0; dst += stride;
 +
 +#ifdef PREFIX_h264_chroma_mc8_e2k
 +static void PREFIX_h264_chroma_mc8_e2k(uint8_t *dst, uint8_t *src,
 +                                       ptrdiff_t stride, int h,
 +                                       int x, int y)
 +{
-+    int i, xm = (8 - x) | x << 8;
++    int xm = (8 - x) | x << 8;
 +    __m128i vA, vB, bias = _mm_set1_epi16(32);
-+    __m128i v0, v1, v2, v3;
++    __m128i v0, v1, v2, v3; __m64 h0, h1;
 +
 +    if (y) {
 +        if (x) {
 +            vA = _mm_set1_epi16(xm * (8 - y));
 +            vB = _mm_set1_epi16(xm * y);
-+            GET_VSRC2(v0, v1);
++            GET_VSRC2(v0, v1)
 +            PRAGMA_E2K("ivdep")
-+            PRAGMA_E2K("unroll(2)")
-+            for (i = 0; i < h; i++) {
-+                GET_VSRC2(v2, v3);
-+                CHROMA_MC8_E2K_CORE();
-+            }
++            do {
++                GET_VSRC2(v2, v3)
++                CHROMA_MC8_CORE2()
++            } while (--h > 0);
 +        } else {
 +            vA = _mm_set1_epi16(((8 - y) | y << 8) * 8);
-+            GET_VSRC1(v0);
++            GET_VSRC1(v0)
 +            PRAGMA_E2K("ivdep")
-+            PRAGMA_E2K("unroll(2)")
-+            for (i = 0; i < h; i++) {
-+                GET_VSRC1(v2);
++            do {
++                GET_VSRC1(v2)
 +                v1 = _mm_unpacklo_epi8(v0, v2);
-+                CHROMA_MC8_E2K_CORE_SIMPLE(v1);
++                CHROMA_MC8_CORE1(v1)
 +                v0 = v2;
-+            }
++            } while (--h > 0);
 +        }
 +    } else {
-+        vA = _mm_set1_epi16(xm * 8);
-+        PRAGMA_E2K("ivdep")
-+        PRAGMA_E2K("unroll(2)")
-+        for (i = 0; i < h; i++) {
-+            GET_VSRC2(v0, v1);
-+            CHROMA_MC8_E2K_CORE_SIMPLE(v0);
++        if (x) {
++            vA = _mm_set1_epi16(xm * 8);
++            PRAGMA_E2K("ivdep")
++            do {
++                GET_VSRC2(v0, v1)
++                CHROMA_MC8_CORE1(v0)
++            } while (--h > 0);
++        } else {
++            PRAGMA_E2K("ivdep")
++            do {
++                h0 = *(__m64*)src;
++                h1 = *(__m64*)(src + stride);
++                src += stride << 1;
++                OP8_E2K(h0, h0, *(__m64*)dst);
++                OP8_E2K(h1, h1, *(__m64*)(dst + stride));
++                *(__m64*)dst = h0;
++                *(__m64*)(dst + stride) = h1;
++                dst += stride << 1;
++            } while ((h -= 2) > 0);
 +        }
 +    }
 +}
++#undef PREFIX_h264_chroma_mc8_e2k
 +#endif
 +
 +#ifdef PREFIX_no_rnd_vc1_chroma_mc8_e2k
@@ -2392,24 +2477,29 @@ index 0000000..623e0b2
 +    __m128i vA = _mm_set1_epi16(xm * (8 - y));
 +    __m128i vB = _mm_set1_epi16(xm * y);
 +    __m128i bias = _mm_set1_epi16(28);
-+    __m128i v0, v1, v2, v3;
++    __m128i v0, v1, v2, v3; __m64 h0;
 +
-+    GET_VSRC2(v0, v1);
++    GET_VSRC2(v0, v1)
 +    PRAGMA_E2K("ivdep")
-+    PRAGMA_E2K("unroll(2)")
 +    for (i = 0; i < h; i++) {
 +         GET_VSRC2(v2, v3);
-+         CHROMA_MC8_E2K_CORE();
++         CHROMA_MC8_CORE2()
 +    }
 +}
++#undef PREFIX_no_rnd_vc1_chroma_mc8_e2k
 +#endif
++
++#undef GET_VSRC1
++#undef GET_VSRC2
++#undef OP8_E2K
++#undef OP16_E2K
 +
 diff --git a/libavcodec/e2k/h264dsp.c b/libavcodec/e2k/h264dsp.c
 new file mode 100644
-index 0000000..ff7be7d
+index 0000000..e90b0af
 --- /dev/null
 +++ b/libavcodec/e2k/h264dsp.c
-@@ -0,0 +1,820 @@
+@@ -0,0 +1,1012 @@
 +/*
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
 + * Copyright (c) 2004 Romain Dolbeau <romain@dolbeau.org>
@@ -2752,32 +2842,6 @@ index 0000000..ff7be7d
 +    }
 +}
 +
-+#define transpose4x16(r0, r1, r2, r3) {             \
-+    vec_u8 r4, r5, r6, r7;                          \
-+                                                    \
-+    r4 = _mm_unpacklo_epi8(r0, r2);  /*0, 2 set 0*/ \
-+    r5 = _mm_unpackhi_epi8(r0, r2);  /*0, 2 set 1*/ \
-+    r6 = _mm_unpacklo_epi8(r1, r3);  /*1, 3 set 0*/ \
-+    r7 = _mm_unpackhi_epi8(r1, r3);  /*1, 3 set 1*/ \
-+                                                    \
-+    r0 = _mm_unpacklo_epi8(r4, r6);  /*all set 0*/  \
-+    r1 = _mm_unpackhi_epi8(r4, r6);  /*all set 1*/  \
-+    r2 = _mm_unpacklo_epi8(r5, r7);  /*all set 2*/  \
-+    r3 = _mm_unpackhi_epi8(r5, r7);  /*all set 3*/  \
-+}
-+
-+#define WRITE4(i, j) ((uint32_t*)dst)[(i * 4 + j) * (dst_stride >> 2)] = _mm_extract_epi32(r##i, j);
-+
-+static av_always_inline void write16x4(uint8_t *dst, int dst_stride,
-+                                       vec_u8 r0, vec_u8 r1,
-+                                       vec_u8 r2, vec_u8 r3) {
-+
-+    WRITE4(0, 0) WRITE4(0, 1) WRITE4(0, 2) WRITE4(0, 3)
-+    WRITE4(1, 0) WRITE4(1, 1) WRITE4(1, 2) WRITE4(1, 3)
-+    WRITE4(2, 0) WRITE4(2, 1) WRITE4(2, 2) WRITE4(2, 3)
-+    WRITE4(3, 0) WRITE4(3, 1) WRITE4(3, 2) WRITE4(3, 3)
-+}
-+
 +/* performs a 6x16 transpose of data in src, and stores it to dst */
 +#define read_and_transpose16x6(src, st, r8, r9, r10, r11, r12, r13) { \
 +    vec_u8 r0, r1, r2, r3, r4, r5, r6, r7, r14, r15;                  \
@@ -2837,6 +2901,66 @@ index 0000000..ff7be7d
 +    /* Don't need to compute 14 and 15*/                              \
 +}
 +
++#define read_and_transpose16x8(src, st, r8, r9, r10, r11, r12, r13, r14, r15) { \
++    vec_u8 r0, r1, r2, r3, r4, r5, r6, r7;                            \
++    r0 = VEC_LD8(src);                                                \
++    r1 = VEC_LD8(src + st);                                           \
++    r2 = VEC_LD8(src + st * 2);                                       \
++    r3 = VEC_LD8(src + st * 3);                                       \
++    r4 = VEC_LD8(src + st * 4);                                       \
++    r5 = VEC_LD8(src + st * 5);                                       \
++    r6 = VEC_LD8(src + st * 6);                                       \
++    r7 = VEC_LD8(src + st * 7);                                       \
++    r8 = VEC_LD8(src + st * 8);                                       \
++    r9 = VEC_LD8(src + st * 9);                                       \
++    r10 = VEC_LD8(src + st * 10);                                     \
++    r11 = VEC_LD8(src + st * 11);                                     \
++    r12 = VEC_LD8(src + st * 12);                                     \
++    r13 = VEC_LD8(src + st * 13);                                     \
++    r14 = VEC_LD8(src + st * 14);                                     \
++    r15 = VEC_LD8(src + st * 15);                                     \
++                                                                      \
++    /* Merge first pairs */                                           \
++    r0 = _mm_unpacklo_epi8(r0, r4);    /*  0, 4 */                    \
++    r1 = _mm_unpacklo_epi8(r1, r5);    /*  1, 5 */                    \
++    r2 = _mm_unpacklo_epi8(r2, r6);    /*  2, 6 */                    \
++    r3 = _mm_unpacklo_epi8(r3, r7);    /*  3, 7 */                    \
++    r4 = _mm_unpacklo_epi8(r8, r12);   /*  8,12 */                    \
++    r5 = _mm_unpacklo_epi8(r9, r13);   /*  9,13 */                    \
++    r6 = _mm_unpacklo_epi8(r10, r14);  /* 10,14 */                    \
++    r7 = _mm_unpacklo_epi8(r11, r15);  /* 11,15 */                    \
++                                                                      \
++    /* Merge second pairs */                                          \
++    r8  = _mm_unpacklo_epi8(r0, r2);   /* 0, 2, 4, 6 set 0 */         \
++    r9  = _mm_unpackhi_epi8(r0, r2);   /* 0, 2, 4, 6 set 1 */         \
++    r10 = _mm_unpacklo_epi8(r1, r3);   /* 1, 3, 5, 7 set 0 */         \
++    r11 = _mm_unpackhi_epi8(r1, r3);   /* 1, 3, 5, 7 set 1 */         \
++    r12 = _mm_unpacklo_epi8(r4, r6);   /* 8,10,12,14 set 0 */         \
++    r13 = _mm_unpackhi_epi8(r4, r6);   /* 8,10,12,14 set 1 */         \
++    r14 = _mm_unpacklo_epi8(r5, r7);   /* 9,11,13,15 set 0 */         \
++    r15 = _mm_unpackhi_epi8(r5, r7);   /* 9,11,13,15 set 1 */         \
++                                                                      \
++    /* Third merge */                                                 \
++    r0 = _mm_unpacklo_epi8(r8, r10);   /* 0..7 set 0  */              \
++    r1 = _mm_unpackhi_epi8(r8, r10);   /* 0..7 set 1  */              \
++    r2 = _mm_unpacklo_epi8(r9, r11);   /* 0..7 set 2  */              \
++    r3 = _mm_unpackhi_epi8(r9, r11);   /* 0..7 set 3  */              \
++    r4 = _mm_unpacklo_epi8(r12, r14);  /* 8..15 set 0 */              \
++    r5 = _mm_unpackhi_epi8(r12, r14);  /* 8..15 set 1 */              \
++    r6 = _mm_unpacklo_epi8(r13, r15);  /* 8..15 set 2 */              \
++    r7 = _mm_unpackhi_epi8(r13, r15);  /* 8..15 set 3 */              \
++                                                                      \
++    /* Final merge */                                                 \
++    r8  = _mm_unpacklo_epi64(r0, r4);   /* all set 0 */               \
++    r9  = _mm_unpackhi_epi64(r0, r4);   /* all set 1 */               \
++    r10 = _mm_unpacklo_epi64(r1, r5);   /* all set 2 */               \
++    r11 = _mm_unpackhi_epi64(r1, r5);   /* all set 3 */               \
++    r12 = _mm_unpacklo_epi64(r2, r6);   /* all set 4 */               \
++    r13 = _mm_unpackhi_epi64(r2, r6);   /* all set 5 */               \
++    r14 = _mm_unpacklo_epi64(r3, r7);   /* all set 6 */               \
++    r15 = _mm_unpackhi_epi64(r3, r7);   /* all set 7 */               \
++}
++
 +#define read_and_transpose8x4(src, st, r8, r9, r10, r11) {            \
 +    __m64 r0, r1, r2, r3, r4, r5, r6, r7;                             \
 +    r0 = _mm_cvtsi32_si64(*(uint32_t*)(src));                         \
@@ -2864,40 +2988,37 @@ index 0000000..ff7be7d
 +    r11 = _mm_unpackhi_pi8(r5, r7);                                   \
 +}
 +
-+#define DEF_HELPERS(n, vec, p, si) \
++#define DEF_HELPERS(vec, p, si) \
 +/* out: o = |x-y| < a */ \
-+static av_always_inline vec diff_lt##n(vec x, vec y, vec a) { \
++static av_always_inline vec diff_lt_##si(vec x, vec y, vec a) { \
 +    vec o = _mm_or_##si(_mm_subs_##p##u8(x, y), _mm_subs_##p##u8(y, x)); /* |x-y| */ \
 +    return _mm_cmpgt_##p##i8(a, _mm_xor_##si(o, _mm_set1_##p##i8(-128))); \
 +} \
-+static av_always_inline vec deblock_mask##n(vec p0, vec p1, vec q0, \
++static av_always_inline vec deblock_mask_##si(vec p0, vec p1, vec q0, \
 +                                            vec q1, vec alpha, vec beta) { \
 +    vec mask, tempmask; \
-+    mask = diff_lt##n(p0, q0, alpha); \
-+    tempmask = diff_lt##n(p1, p0, beta); \
++    mask = diff_lt_##si(p0, q0, alpha); \
++    tempmask = diff_lt_##si(p1, p0, beta); \
 +    mask = _mm_and_##si(mask, tempmask); \
-+    tempmask = diff_lt##n(q1, q0, beta); \
++    tempmask = diff_lt_##si(q1, q0, beta); \
 +    return _mm_and_##si(mask, tempmask); \
 +}
 +
-+DEF_HELPERS(16, __m128i, ep, si128)
-+DEF_HELPERS(8, __m64, p, si64)
++DEF_HELPERS(__m128i, ep, si128)
++DEF_HELPERS(__m64, p, si64)
 +
 +// out: newp1 = clip((p2 + ((p0 + q0 + 1) >> 1)) >> 1, p1-tc0, p1+tc0)
-+static av_always_inline vec_u8 h264_deblock_q1(vec_u8 p0, vec_u8 p1, vec_u8 p2,
-+                                               vec_u8 q0, vec_u8 tc0) {
++static av_always_inline __m128i h264_deblock_q1(__m128i p0_q0, __m128i p1,
++                                                __m128i p2, __m128i tc0) {
++    __m128i t0, t1, t2, c1 = _mm_set1_epi8(1);
 +
-+    vec_u8 average = _mm_avg_epu8(p0, q0);
-+    vec_u8 temp, uncliped;
-+    vec_u8 ones = _mm_set1_epi8(1), maxv, minv;
-+
-+    temp = _mm_xor_si128(average, p2);
-+    average = _mm_avg_epu8(average, p2);     /* avg(p2, avg(p0, q0))   */
-+    temp = _mm_and_si128(temp, ones);        /* (p2^avg(p0, q0)) & 1   */
-+    uncliped = _mm_subs_epu8(average, temp); /* (p2+((p0+q0+1)>>1))>>1 */
-+    maxv = _mm_adds_epu8(p1, tc0);
-+    minv = _mm_subs_epu8(p1, tc0);
-+    return _mm_min_epu8(maxv, _mm_max_epu8(minv, uncliped));
++    t0 = _mm_xor_si128(p0_q0, p2);
++    t1 = _mm_avg_epu8(p0_q0, p2);   /* avg(p2, avg(p0, q0)) */
++    t0 = _mm_and_si128(t0, c1);     /* (p2 ^ avg(p0, q0)) & 1 */
++    t1 = _mm_subs_epu8(t1, t0);     /* (p2 + ((p0 + q0 + 1) >> 1)) >> 1 */
++    t0 = _mm_subs_epu8(p1, tc0);
++    t2 = _mm_adds_epu8(p1, tc0);
++    return _mm_min_epu8(t2, _mm_max_epu8(t0, t1));
 +}
 +
 +#define h264_deblock_p0_q0(p0, p1, q0, q1, tc0masked, vec, x, si) {                                 \
@@ -2906,11 +3027,11 @@ index 0000000..ff7be7d
 +    vec vec160 = _mm_set1_##x##i8(160), delta, deltaneg, notv = _mm_set1_##x##i8(-1);               \
 +                                                                                                    \
 +    q1minus = _mm_xor_##si(q1, notv);            /* 255 - q1 */                                     \
-+    stage1 = _mm_avg_##x##u8(p1, q1minus);       /* (p1 - q1 + 256)>>1 */                           \
++    stage1 = _mm_avg_##x##u8(p1, q1minus);       /* (p1 - q1 + 256) >> 1 */                         \
 +    stage2 = _mm_srli_##x##i16(stage1, 1);                                                          \
-+    stage2 = _mm_and_##si(stage2, c127);         /* (p1 - q1 + 256)>>2 = 64 + (p1 - q1) >> 2 */     \
++    stage2 = _mm_and_##si(stage2, c127);         /* (p1 - q1 + 256) >> 2 = 64 + (p1 - q1) >> 2 */   \
 +    p0minus = _mm_xor_##si(p0, notv);            /* 255 - p0 */                                     \
-+    stage1 = _mm_avg_##x##u8(q0, p0minus);       /* (q0 - p0 + 256)>>1 */                           \
++    stage1 = _mm_avg_##x##u8(q0, p0minus);       /* (q0 - p0 + 256) >> 1 */                         \
 +    pq0bit = _mm_and_##si(pq0bit, _mm_set1_##x##i8(1));                                             \
 +    stage2 = _mm_avg_##x##u8(stage2, pq0bit);    /* 32 + ((q0 - p0)&1 + (p1 - q1) >> 2 + 1) >> 1 */ \
 +    stage2 = _mm_adds_##x##u8(stage2, stage1);   /* 160 + ((p0 - q0) + (p1 - q1) >> 2 + 1) >> 1 */  \
@@ -2924,86 +3045,93 @@ index 0000000..ff7be7d
 +    q0 = _mm_adds_##x##u8(q0, deltaneg);                                                            \
 +}
 +
-+#define h264_loop_filter_luma_e2k(p2, p1, p0, q0, q1, q2, alpha, beta, tc0) {                \
-+    vec_u8 alphavec, betavec, mask, p1mask, q1mask;                                          \
-+    vec_s8 tc0vec;                                                                           \
-+    vec_u8 finaltc0, tc0masked, newp1, newq1;                                                \
-+                                                                                             \
-+    betavec = _mm_set1_epi8(beta - 128);                                                     \
-+    alphavec = _mm_set1_epi8(alpha - 128);                                                   \
-+    mask = deblock_mask16(p0, p1, q0, q1, alphavec, betavec); /* if in block */              \
-+                                                                                             \
-+    tc0vec = _mm_cvtsi32_si128(*(uint32_t*)tc0);                                             \
-+    tc0vec = _mm_unpacklo_epi8(tc0vec, tc0vec);                                              \
-+    tc0vec = _mm_unpacklo_epi8(tc0vec, tc0vec);                                              \
-+    mask = _mm_blendv_epi8(mask, _mm_setzero_si128(), tc0vec);                               \
-+    finaltc0 = _mm_and_si128(tc0vec, mask);                /* if (tc0[i] >= 0) tc = tc0 */   \
-+                                                                                             \
-+    p1mask = diff_lt16(p2, p0, betavec);                                                     \
-+    p1mask = _mm_and_si128(p1mask, mask);                       /* if(|p2 - p0| < beta) */   \
-+    tc0masked = _mm_and_si128(p1mask, tc0vec);                                               \
-+    finaltc0 = _mm_sub_epi8(finaltc0, p1mask);                  /* tc++ */                   \
-+    newp1 = h264_deblock_q1(p0, p1, p2, q0, tc0masked);                                      \
-+    /*end if*/                                                                               \
-+                                                                                             \
-+    q1mask = diff_lt16(q2, q0, betavec);                                                     \
-+    q1mask = _mm_and_si128(q1mask, mask);                       /* if(|q2 - q0| < beta) */   \
-+    tc0masked = _mm_and_si128(q1mask, tc0vec);                                               \
-+    finaltc0 = _mm_sub_epi8(finaltc0, q1mask);                  /* tc++ */                   \
-+    newq1 = h264_deblock_q1(p0, q1, q2, q0, tc0masked);                                      \
-+    /*end if*/                                                                               \
-+                                                                                             \
-+    h264_deblock_p0_q0(p0, p1, q0, q1, finaltc0, __m128i, ep, si128);                        \
-+    p1 = newp1;                                                                              \
-+    q1 = newq1;                                                                              \
-+}
-+
-+#define h264_loop_filter_chroma2_e2k(p1, p0, q0, q1, alpha, beta, tc0) {                     \
-+    __m64 alphavec, betavec, mask, tc0vec, finaltc0;                                         \
-+                                                                                             \
-+    betavec = _mm_set1_pi8(beta - 128);                                                      \
-+    alphavec = _mm_set1_pi8(alpha - 128);                                                    \
-+    mask = deblock_mask8(p0, p1, q0, q1, alphavec, betavec); /* if in block */               \
-+                                                                                             \
-+    tc0vec = _mm_cvtsi32_si64(*(uint32_t*)tc0);                                              \
-+    tc0vec = _mm_unpacklo_pi8(tc0vec, tc0vec);                                               \
-+    mask = _mm_blendv_pi8(mask, _mm_setzero_si64(), tc0vec);                                 \
-+    finaltc0 = _mm_and_si64(tc0vec, mask);                /* if (tc0[i] >= 0) tc = tc0 */    \
-+                                                                                             \
-+    h264_deblock_p0_q0(p0, p1, q0, q1, finaltc0, __m64, p, si64);                            \
-+}
-+
-+#define h264_loop_filter_chroma4_e2k(p1, p0, q0, q1, alpha, beta, tc0) {                     \
-+    __m128i alphavec, betavec, mask, tc0vec, finaltc0;                                       \
-+                                                                                             \
-+    betavec = _mm_set1_epi8(beta - 128);                                                     \
-+    alphavec = _mm_set1_epi8(alpha - 128);                                                   \
-+    mask = deblock_mask16(p0, p1, q0, q1, alphavec, betavec); /* if in block */              \
-+                                                                                             \
-+    tc0vec = _mm_cvtsi32_si128(*(uint32_t*)tc0);                                             \
-+    tc0vec = _mm_unpacklo_epi8(tc0vec, tc0vec);                                              \
-+    tc0vec = _mm_unpacklo_epi8(tc0vec, tc0vec);                                              \
-+    mask = _mm_blendv_epi8(mask, _mm_setzero_si128(), tc0vec);                               \
-+    finaltc0 = _mm_and_si128(tc0vec, mask);                /* if (tc0[i] >= 0) tc = tc0 */   \
-+                                                                                             \
-+    h264_deblock_p0_q0(p0, p1, q0, q1, finaltc0, __m128i, ep, si128);                        \
++#define LOOP_FILTER_LUMA { \
++    __m128i alphavec, betavec, m0, m1, m2, m3, m4, newp1, newq1; \
++    betavec = _mm_set1_epi8(beta - 128); \
++    alphavec = _mm_set1_epi8(alpha - 128); \
++    m0 = deblock_mask_si128(p0, p1, q0, q1, alphavec, betavec); \
++    \
++    m4 = _mm_cvtsi32_si128(*(uint32_t*)tc0); \
++    m4 = _mm_unpacklo_epi8(m4, m4); \
++    m4 = _mm_unpacklo_epi8(m4, m4); \
++    m0 = _mm_blendv_epi8(m0, _mm_setzero_si128(), m4); \
++    m3 = _mm_and_si128(m4, m0); \
++    \
++    m1 = diff_lt_si128(p2, p0, betavec); \
++    m2 = diff_lt_si128(q2, q0, betavec); \
++    m1 = _mm_and_si128(m1, m0); \
++    m2 = _mm_and_si128(m2, m0); \
++    m3 = _mm_sub_epi8(m3, m1); \
++    m1 = _mm_and_si128(m1, m4); \
++    m3 = _mm_sub_epi8(m3, m2); \
++    m2 = _mm_and_si128(m2, m4); \
++    m0 = _mm_avg_epu8(p0, q0); \
++    newp1 = h264_deblock_q1(m0, p1, p2, m1); \
++    newq1 = h264_deblock_q1(m0, q1, q2, m2); \
++    h264_deblock_p0_q0(p0, p1, q0, q1, m3, __m128i, ep, si128); \
++    p1 = newp1; \
++    q1 = newq1; \
 +}
 +
 +static void h264_v_loop_filter_luma_e2k(uint8_t *pix, ptrdiff_t stride, int alpha, int beta, int8_t *tc0) {
 +    if ((tc0[0] & tc0[1] & tc0[2] & tc0[3]) >= 0) {
-+        vec_u8 p2, p1, p0, q0, q1, q2;
++        __m128i p2, p1, p0, q0, q1, q2;
 +        p2 = VEC_LD(pix - 3 * stride);
 +        p1 = VEC_LD(pix - 2 * stride);
 +        p0 = VEC_LD(pix - stride);
 +        q0 = VEC_LD(pix);
 +        q1 = VEC_LD(pix + stride);
 +        q2 = VEC_LD(pix + 2 * stride);
-+        h264_loop_filter_luma_e2k(p2, p1, p0, q0, q1, q2, alpha, beta, tc0);
++        LOOP_FILTER_LUMA
 +        VEC_ST(pix - 2 * stride, p1);
-+        VEC_ST(pix - 1 * stride, p0);
++        VEC_ST(pix - stride, p0);
 +        VEC_ST(pix, q0);
 +        VEC_ST(pix + stride, q1);
 +    }
++}
++
++#define WRITE4(i, j) *(uint32_t*)&pix[(i * 4 + j) * stride] = _mm_extract_epi32(a##i, j);
++#define TR16X4_WR(i0, i1, i2, i3) { \
++    __m128i a0 = i0, a1 = i1, a2 = i2, a3 = i3; \
++    __m128i b0, b1, b2, b3; \
++    \
++    b0 = _mm_unpacklo_epi8(a0, a2); \
++    b1 = _mm_unpackhi_epi8(a0, a2); \
++    b2 = _mm_unpacklo_epi8(a1, a3); \
++    b3 = _mm_unpackhi_epi8(a1, a3); \
++    \
++    a0 = _mm_unpacklo_epi8(b0, b2); \
++    a1 = _mm_unpackhi_epi8(b0, b2); \
++    a2 = _mm_unpacklo_epi8(b1, b3); \
++    a3 = _mm_unpackhi_epi8(b1, b3); \
++    \
++    pix -= 2; \
++    WRITE4(0, 0) WRITE4(0, 1) WRITE4(0, 2) WRITE4(0, 3) \
++    WRITE4(1, 0) WRITE4(1, 1) WRITE4(1, 2) WRITE4(1, 3) \
++    WRITE4(2, 0) WRITE4(2, 1) WRITE4(2, 2) WRITE4(2, 3) \
++    WRITE4(3, 0) WRITE4(3, 1) WRITE4(3, 2) WRITE4(3, 3) \
++}
++
++static void h264_h_loop_filter_luma_e2k(uint8_t *pix, ptrdiff_t stride, int alpha, int beta, int8_t *tc0) {
++    __m128i p2, p1, p0, q0, q1, q2;
++    if ((tc0[0] & tc0[1] & tc0[2] & tc0[3]) < 0) return;
++    read_and_transpose16x6(pix - 3, stride, p2, p1, p0, q0, q1, q2);
++    LOOP_FILTER_LUMA
++    TR16X4_WR(p1, p0, q0, q1)
++}
++
++#define LOOP_FILTER_CHROMA(vec, x, si, n) { \
++    vec alphavec, betavec, m0, m1; \
++    betavec = _mm_set1_##x##i8(beta - 128); \
++    alphavec = _mm_set1_##x##i8(alpha - 128); \
++    m0 = deblock_mask_##si(p0, p1, q0, q1, alphavec, betavec); \
++    \
++    m1 = _mm_cvtsi32_##si(*(uint32_t*)tc0); \
++    m1 = _mm_unpacklo_##x##i8(m1, m1); \
++    if (n == 4) m1 = _mm_unpacklo_##x##i8(m1, m1); \
++    m0 = _mm_blendv_##x##i8(m0, _mm_setzero_##si(), m1); \
++    m0 = _mm_and_##si(m0, m1); \
++    h264_deblock_p0_q0(p0, p1, q0, q1, m0, vec, x, si) \
 +}
 +
 +static void h264_v_loop_filter_chroma_e2k(uint8_t *pix, ptrdiff_t stride, int alpha, int beta, int8_t *tc0) {
@@ -3013,39 +3141,24 @@ index 0000000..ff7be7d
 +        p0 = *(__m64*)(pix - stride);
 +        q0 = *(__m64*)pix;
 +        q1 = *(__m64*)(pix + stride);
-+        h264_loop_filter_chroma2_e2k(p1, p0, q0, q1, alpha, beta, tc0);
-+        *(__m64*)(pix - 1 * stride) = p0;
++        LOOP_FILTER_CHROMA(__m64, p, si64, 2)
++        *(__m64*)(pix - stride) = p0;
 +        *(__m64*)pix = q0;
 +    }
-+}
-+
-+static void h264_h_loop_filter_luma_e2k(uint8_t *pix, ptrdiff_t stride, int alpha, int beta, int8_t *tc0) {
-+    vec_u8 p2, p1, p0, q0, q1, q2;
-+    if ((tc0[0] & tc0[1] & tc0[2] & tc0[3]) < 0) return;
-+    read_and_transpose16x6(pix - 3, stride, p2, p1, p0, q0, q1, q2);
-+    h264_loop_filter_luma_e2k(p2, p1, p0, q0, q1, q2, alpha, beta, tc0);
-+    transpose4x16(p1, p0, q0, q1);
-+    write16x4(pix - 2, stride, p1, p0, q0, q1);
 +}
 +
 +static void h264_h_loop_filter_chroma_e2k(uint8_t *pix, ptrdiff_t stride, int alpha, int beta, int8_t *tc0) {
 +    __m64 p1, p0, q0, q1;
 +    if ((tc0[0] & tc0[1] & tc0[2] & tc0[3]) < 0) return;
 +    read_and_transpose8x4(pix - 2, stride, p1, p0, q0, q1);
-+    h264_loop_filter_chroma2_e2k(p1, p0, q0, q1, alpha, beta, tc0);
++    LOOP_FILTER_CHROMA(__m64, p, si64, 2)
 +    p1 = _mm_unpacklo_pi8(p0, q0);
 +    q1 = _mm_unpackhi_pi8(p0, q0);
 +#define WRITE2(v, i) *(uint16_t*)(pix + i * stride) = _mm_extract_pi16(v, i);
 +    pix--;
-+    WRITE2(p1, 0)
-+    WRITE2(p1, 1)
-+    WRITE2(p1, 2)
-+    WRITE2(p1, 3)
++    WRITE2(p1, 0) WRITE2(p1, 1) WRITE2(p1, 2) WRITE2(p1, 3)
 +    pix += stride * 4;
-+    WRITE2(q1, 0)
-+    WRITE2(q1, 1)
-+    WRITE2(q1, 2)
-+    WRITE2(q1, 3)
++    WRITE2(q1, 0) WRITE2(q1, 1) WRITE2(q1, 2) WRITE2(q1, 3)
 +#undef WRITE2
 +}
 +
@@ -3059,30 +3172,201 @@ index 0000000..ff7be7d
 +    p0 = _mm_unpacklo_epi64(_mm_movpi64_epi64(p0l), _mm_movpi64_epi64(p0h));
 +    q0 = _mm_unpacklo_epi64(_mm_movpi64_epi64(q0l), _mm_movpi64_epi64(q0h));
 +    q1 = _mm_unpacklo_epi64(_mm_movpi64_epi64(q1l), _mm_movpi64_epi64(q1h));
-+    h264_loop_filter_chroma4_e2k(p1, p0, q0, q1, alpha, beta, tc0);
-+    transpose4x16(p1, p0, q0, q1);
-+    write16x4(pix - 2, stride, p1, p0, q0, q1);
++    LOOP_FILTER_CHROMA(__m128i, ep, si128, 4)
++    p1 = _mm_unpacklo_epi8(p0, q0);
++    q1 = _mm_unpackhi_epi8(p0, q0);
++#define WRITE2(v, i) *(uint16_t*)(pix + i * stride) = _mm_extract_epi16(v, i);
++    pix--;
++    WRITE2(p1, 0) WRITE2(p1, 1) WRITE2(p1, 2) WRITE2(p1, 3)
++    WRITE2(p1, 4) WRITE2(p1, 5) WRITE2(p1, 6) WRITE2(p1, 7)
++    pix += stride * 8;
++    WRITE2(q1, 0) WRITE2(q1, 1) WRITE2(q1, 2) WRITE2(q1, 3)
++    WRITE2(q1, 4) WRITE2(q1, 5) WRITE2(q1, 6) WRITE2(q1, 7)
++#undef WRITE2
++}
++
++#define LOOP_FILTER_LUMA_INTRA_HALF(lo, a0, a1, a2, a3, b0, b1, b2, b3) \
++    a0 = _mm_unpack##lo##_epi8(p0, c0); \
++    a1 = _mm_unpack##lo##_epi8(p1, c0); \
++    a2 = _mm_unpack##lo##_epi8(p2, c0); \
++    a3 = _mm_unpack##lo##_epi8(p3, c0); \
++    b0 = _mm_unpack##lo##_epi8(q0, c0); \
++    b1 = _mm_unpack##lo##_epi8(q1, c0); \
++    b2 = _mm_unpack##lo##_epi8(q2, c0); \
++    b3 = _mm_unpack##lo##_epi8(q3, c0); \
++    t0 = _mm_add_epi16(a0, b1); \
++    t1 = _mm_add_epi16(a1, b0); \
++    t2 = _mm_add_epi16(t1, _mm_add_epi16(a0, a2)); \
++    t3 = _mm_add_epi16(t0, _mm_add_epi16(b0, b2)); \
++    t4 = _mm_add_epi16(_mm_add_epi16(t0, t1), c4); \
++    a3 = _mm_add_epi16(_mm_add_epi16(a2, a3), c2); \
++    b3 = _mm_add_epi16(_mm_add_epi16(b2, b3), c2); \
++    a0 = _mm_avg_epu16(a1, _mm_srai_epi16(t0, 1)); /* p0 if m3 */ \
++    b0 = _mm_avg_epu16(b1, _mm_srai_epi16(t1, 1)); /* q0 if m3 */ \
++    a1 = _mm_srai_epi16(_mm_add_epi16(t2, t4), 3); /* p0 if m1 */ \
++    b1 = _mm_srai_epi16(_mm_add_epi16(t3, t4), 3); /* q0 if m2 */ \
++    t2 = _mm_srai_epi16(t2, 1); a2 = _mm_avg_epu16(t2, c0); /* p1 if m1 */ \
++    t3 = _mm_srai_epi16(t3, 1); b2 = _mm_avg_epu16(t3, c0); /* q1 if m2 */ \
++    a3 = _mm_srai_epi16(_mm_add_epi16(a3, t2), 2); /* p2 if m1 */ \
++    b3 = _mm_srai_epi16(_mm_add_epi16(b3, t3), 2); /* q2 if m2 */
++
++#define LOOP_FILTER_LUMA_INTRA { \
++    __m128i alphavec, betavec, m0, m1, m2, m3, c0 = _mm_setzero_si128(); \
++    __m128i c2 = _mm_set1_epi16(2), c4 = _mm_set1_epi16(4); \
++    __m128i a0, a1, a2, a3, b0, b1, b2, b3, t0, t1, t2, t3, t4; \
++    __m128i x0, x1, x2, x3, y0, y1, y2, y3; \
++    \
++    betavec = _mm_set1_epi8(beta - 128); \
++    alphavec = _mm_set1_epi8(alpha - 128); \
++    m3 = deblock_mask_si128(p0, p1, q0, q1, alphavec, betavec); \
++    alphavec = _mm_set1_epi8((alpha >> 2) + 2 - 128); \
++    m0 = diff_lt_si128(p0, q0, alphavec); m0 = _mm_and_si128(m0, m3); \
++    m1 = diff_lt_si128(p2, p0, betavec); m1 = _mm_and_si128(m1, m0); \
++    m2 = diff_lt_si128(q2, q0, betavec); m2 = _mm_and_si128(m2, m0); \
++    LOOP_FILTER_LUMA_INTRA_HALF(lo, a0, a1, a2, a3, b0, b1, b2, b3) \
++    LOOP_FILTER_LUMA_INTRA_HALF(hi, x0, x1, x2, x3, y0, y1, y2, y3) \
++    p0 = _mm_blendv_epi8(p0, _mm_packus_epi16(a0, x0), m3); \
++    q0 = _mm_blendv_epi8(q0, _mm_packus_epi16(b0, y0), m3); \
++    p0 = _mm_blendv_epi8(p0, _mm_packus_epi16(a1, x1), m1); \
++    q0 = _mm_blendv_epi8(q0, _mm_packus_epi16(b1, y1), m2); \
++    p1 = _mm_blendv_epi8(p1, _mm_packus_epi16(a2, x2), m1); \
++    q1 = _mm_blendv_epi8(q1, _mm_packus_epi16(b2, y2), m2); \
++    p2 = _mm_blendv_epi8(p2, _mm_packus_epi16(a3, x3), m1); \
++    q2 = _mm_blendv_epi8(q2, _mm_packus_epi16(b3, y3), m2); \
++}
++
++static void h264_v_loop_filter_luma_intra_e2k(uint8_t *pix, ptrdiff_t stride, int alpha, int beta) {
++    __m128i p3, p2, p1, p0, q0, q1, q2, q3;
++    p3 = VEC_LD(pix - 4 * stride);
++    p2 = VEC_LD(pix - 3 * stride);
++    p1 = VEC_LD(pix - 2 * stride);
++    p0 = VEC_LD(pix - stride);
++    q0 = VEC_LD(pix);
++    q1 = VEC_LD(pix + stride);
++    q2 = VEC_LD(pix + 2 * stride);
++    q3 = VEC_LD(pix + 3 * stride);
++
++    LOOP_FILTER_LUMA_INTRA
++
++    VEC_ST(pix - 3 * stride, p2);
++    VEC_ST(pix - 2 * stride, p1);
++    VEC_ST(pix - stride, p0);
++    VEC_ST(pix, q0);
++    VEC_ST(pix + stride, q1);
++    VEC_ST(pix + stride * 2, q2);
++}
++
++#define TR8_ROUND(a, b) \
++    b##0 = _mm_unpacklo_epi8(a##0, a##4); \
++    b##1 = _mm_unpackhi_epi8(a##0, a##4); \
++    b##2 = _mm_unpacklo_epi8(a##1, a##5); \
++    b##3 = _mm_unpackhi_epi8(a##1, a##5); \
++    b##4 = _mm_unpacklo_epi8(a##2, a##6); \
++    b##5 = _mm_unpackhi_epi8(a##2, a##6); \
++    b##6 = _mm_unpacklo_epi8(a##3, a##7); \
++    b##7 = _mm_unpackhi_epi8(a##3, a##7);
++
++#define WRITE8X2(v0, i) VEC_STL(pix + i * stride, v0); VEC_STH(pix + (i + 1) * stride, v0);
++#define TR16X8_WR(i0, i1, i2, i3, i4, i5, i6, i7) { \
++    __m128i a0 = i0, a1 = i1, a2 = i2, a3 = i3; \
++    __m128i a4 = i4, a5 = i5, a6 = i6, a7 = i7; \
++    __m128i b0, b1, b2, b3, b4, b5, b6, b7; \
++    TR8_ROUND(a, b) TR8_ROUND(b, a) TR8_ROUND(a, b) \
++    pix -= 4; \
++    WRITE8X2(b0, 0) WRITE8X2(b1, 2) WRITE8X2(b2, 4) WRITE8X2(b3, 6) \
++    WRITE8X2(b4, 8) WRITE8X2(b5, 10) WRITE8X2(b6, 12) WRITE8X2(b7, 14) \
++}
++
++static void h264_h_loop_filter_luma_intra_e2k(uint8_t *pix, ptrdiff_t stride, int alpha, int beta) {
++    __m128i p3, p2, p1, p0, q0, q1, q2, q3;
++    read_and_transpose16x8(pix - 4, stride, p3, p2, p1, p0, q0, q1, q2, q3);
++    LOOP_FILTER_LUMA_INTRA
++    TR16X8_WR(p3, p2, p1, p0, q0, q1, q2, q3)
++}
++
++#define LOOP_FILTER_CHROMA_INTRA(vec, x, si) { \
++    vec alphavec, betavec, m0, t0, t1; \
++    betavec = _mm_set1_##x##i8(beta - 128); \
++    alphavec = _mm_set1_##x##i8(alpha - 128); \
++    m0 = deblock_mask_##si(p0, p1, q0, q1, alphavec, betavec); \
++    \
++    t1 = _mm_set1_##x##i8(-2); \
++    t0 = _mm_and_##si(_mm_xor_##si(p0, q1), t1); \
++    t1 = _mm_and_##si(_mm_xor_##si(q0, p1), t1); \
++    t0 = _mm_srli_##x##i16(t0, 1); \
++    t1 = _mm_srli_##x##i16(t1, 1); \
++    t0 = _mm_add_##x##i8(t0, _mm_and_##si(p0, q1)); \
++    t1 = _mm_add_##x##i8(t1, _mm_and_##si(q0, p1)); \
++    p0 = _mm_blendv_##x##i8(p0, _mm_avg_##x##u8(t0, p1), m0); \
++    q0 = _mm_blendv_##x##i8(q0, _mm_avg_##x##u8(t1, q1), m0); \
++}
++
++static void h264_v_loop_filter_chroma_intra_e2k(uint8_t *pix, ptrdiff_t stride, int alpha, int beta) {
++    __m64 p1, p0, q0, q1;
++    p1 = *(__m64*)(pix - 2 * stride);
++    p0 = *(__m64*)(pix - stride);
++    q0 = *(__m64*)pix;
++    q1 = *(__m64*)(pix + stride);
++
++    LOOP_FILTER_CHROMA_INTRA(__m64, p, si64)
++
++    *(__m64*)(pix - stride) = p0;
++    *(__m64*)pix = q0;
++}
++
++static void h264_h_loop_filter_chroma_intra_e2k(uint8_t *pix, ptrdiff_t stride, int alpha, int beta) {
++    __m64 p1, p0, q0, q1;
++    read_and_transpose8x4(pix - 2, stride, p1, p0, q0, q1);
++    LOOP_FILTER_CHROMA_INTRA(__m64, p, si64)
++    p1 = _mm_unpacklo_pi8(p0, q0);
++    q1 = _mm_unpackhi_pi8(p0, q0);
++#define WRITE2(v, i) *(uint16_t*)(pix + i * stride) = _mm_extract_pi16(v, i);
++    pix--;
++    WRITE2(p1, 0) WRITE2(p1, 1) WRITE2(p1, 2) WRITE2(p1, 3)
++    pix += stride * 4;
++    WRITE2(q1, 0) WRITE2(q1, 1) WRITE2(q1, 2) WRITE2(q1, 3)
++#undef WRITE2
++}
++
++static void h264_h_loop_filter_chroma422_intra_e2k(uint8_t *pix, ptrdiff_t stride, int alpha, int beta) {
++    __m128i p1, p0, q0, q1;
++    __m64 p1l, p0l, q0l, q1l, p1h, p0h, q0h, q1h;
++    read_and_transpose8x4(pix - 2, stride, p1l, p0l, q0l, q1l);
++    read_and_transpose8x4(pix - 2 + stride * 8, stride, p1h, p0h, q0h, q1h);
++    p1 = _mm_unpacklo_epi64(_mm_movpi64_epi64(p1l), _mm_movpi64_epi64(p1h));
++    p0 = _mm_unpacklo_epi64(_mm_movpi64_epi64(p0l), _mm_movpi64_epi64(p0h));
++    q0 = _mm_unpacklo_epi64(_mm_movpi64_epi64(q0l), _mm_movpi64_epi64(q0h));
++    q1 = _mm_unpacklo_epi64(_mm_movpi64_epi64(q1l), _mm_movpi64_epi64(q1h));
++    LOOP_FILTER_CHROMA_INTRA(__m128i, ep, si128)
++    p1 = _mm_unpacklo_epi8(p0, q0);
++    q1 = _mm_unpackhi_epi8(p0, q0);
++#define WRITE2(v, i) *(uint16_t*)(pix + i * stride) = _mm_extract_epi16(v, i);
++    pix--;
++    WRITE2(p1, 0) WRITE2(p1, 1) WRITE2(p1, 2) WRITE2(p1, 3)
++    WRITE2(p1, 4) WRITE2(p1, 5) WRITE2(p1, 6) WRITE2(p1, 7)
++    pix += stride * 8;
++    WRITE2(q1, 0) WRITE2(q1, 1) WRITE2(q1, 2) WRITE2(q1, 3)
++    WRITE2(q1, 4) WRITE2(q1, 5) WRITE2(q1, 6) WRITE2(q1, 7)
++#undef WRITE2
 +}
 +
 +static void weight_h264_pixels16_e2k(uint8_t *block, ptrdiff_t stride, int height,
 +                                     int log2_denom, int weight, int offset)
 +{
-+    int y;
-+    vec_u8 vblock;
-+    vec_s16 vweight, voffset, v0, v1;
-+    LOAD_ZERO;
++    int y; __m128i vweight, voffset, v0, v1; LOAD_ZERO;
 +
 +    offset <<= log2_denom;
-+    if (log2_denom) offset += 1 << (log2_denom - 1);
++    offset += (1 << log2_denom) >> 1;
 +
 +    vweight = _mm_set1_epi16(weight);
 +    voffset = _mm_set1_epi16(offset);
 +
 +    PRAGMA_E2K("ivdep")
++    PRAGMA_E2K("unroll(2)")
 +    for (y = 0; y < height; y++) {
-+        vblock = VEC_LD(block);
-+        v0 = _mm_unpacklo_epi8(vblock, zerov);
-+        v1 = _mm_unpackhi_epi8(vblock, zerov);
++        v1 = VEC_LD(block);
++        v0 = _mm_unpacklo_epi8(v1, zerov);
++        v1 = _mm_unpackhi_epi8(v1, zerov);
 +
 +        v0 = _mm_mullo_epi16(v0, vweight);
 +        v1 = _mm_mullo_epi16(v1, vweight);
@@ -3091,8 +3375,8 @@ index 0000000..ff7be7d
 +        v0 = _mm_srai_epi16(v0, log2_denom);
 +        v1 = _mm_srai_epi16(v1, log2_denom);
 +
-+        vblock = _mm_packus_epi16(v0, v1);
-+        VEC_ST(block, vblock);
++        v0 = _mm_packus_epi16(v0, v1);
++        VEC_ST(block, v0);
 +        block += stride;
 +    }
 +}
@@ -3100,67 +3384,65 @@ index 0000000..ff7be7d
 +static void weight_h264_pixels8_e2k(uint8_t *block, ptrdiff_t stride, int height,
 +                                    int log2_denom, int weight, int offset)
 +{
-+    int y;
-+    vec_u8 vblock;
-+    vec_s16 vweight, voffset, v0;
-+    LOAD_ZERO;
++    int y; __m128i vweight, voffset, v0; LOAD_ZERO;
 +
 +    offset <<= log2_denom;
-+    if (log2_denom) offset += 1 << (log2_denom - 1);
++    offset += (1 << log2_denom) >> 1;
 +
 +    vweight = _mm_set1_epi16(weight);
 +    voffset = _mm_set1_epi16(offset);
 +
 +    PRAGMA_E2K("ivdep")
++    PRAGMA_E2K("unroll(2)")
 +    for (y = 0; y < height; y++) {
-+        vblock = VEC_LD8(block);
-+        v0 = _mm_unpacklo_epi8(vblock, zerov);
++        v0 = VEC_LD8(block);
++        v0 = _mm_unpacklo_epi8(v0, zerov);
 +
 +        v0 = _mm_mullo_epi16(v0, vweight);
 +        v0 = _mm_adds_epi16(v0, voffset);
 +        v0 = _mm_srai_epi16(v0, log2_denom);
 +
-+        vblock = _mm_packus_epi16(v0, v0);
-+        VEC_STL(block, vblock);
++        v0 = _mm_packus_epi16(v0, v0);
++        VEC_STL(block, v0);
 +        block += stride;
 +    }
 +}
 +
++#define BIWEIGHT_INIT(vec, x) \
++    int y; vec vweight, voffset, v0, v1, v2, v3; \
++    \
++    offset = (offset + 1) | 1; \
++    log2_denom++; \
++    if (weights == 128 || weightd == 128) { \
++        weightd >>= 1; weights >>= 1; \
++        offset >>= 1; log2_denom -= 1; \
++    } \
++    offset = (offset << log2_denom) >> 1; \
++    vweight = _mm_set1_##x##i16(weightd << 8 | (weights & 255)); \
++    voffset = _mm_set1_##x##i16(offset);
++
 +static void biweight_h264_pixels16_e2k(uint8_t *dst, uint8_t *src, ptrdiff_t stride, int height,
 +                                       int log2_denom, int weightd, int weights, int offset)
 +{
-+    int y;
-+    vec_u8 vsrc, vdst;
-+    vec_s16 vweights, vweightd, voffset, v0, v1, v2, v3;
-+    LOAD_ZERO;
-+
-+    offset = ((offset + 1) | 1) << log2_denom;
-+    vweights = _mm_set1_epi16(weights);
-+    vweightd = _mm_set1_epi16(weightd);
-+    voffset = _mm_set1_epi16(offset);
++    BIWEIGHT_INIT(__m128i, ep)
 +
 +    PRAGMA_E2K("ivdep")
++    PRAGMA_E2K("unroll(2)")
 +    for (y = 0; y < height; y++) {
-+        vdst = VEC_LD(dst);
-+        vsrc = VEC_LD(src);
-+        v0 = _mm_unpacklo_epi8(vdst, zerov);
-+        v1 = _mm_unpackhi_epi8(vdst, zerov);
-+        v2 = _mm_unpacklo_epi8(vsrc, zerov);
-+        v3 = _mm_unpackhi_epi8(vsrc, zerov);
++        v2 = VEC_LD(src);
++        v3 = VEC_LD(dst);
++        v0 = _mm_unpacklo_epi8(v2, v3);
++        v1 = _mm_unpackhi_epi8(v2, v3);
 +
-+        v0 = _mm_mullo_epi16(v0, vweightd);
-+        v1 = _mm_mullo_epi16(v1, vweightd);
-+        v2 = _mm_mullo_epi16(v2, vweights);
-+        v3 = _mm_mullo_epi16(v3, vweights);
++        v0 = _mm_maddubs_epi16(v0, vweight);
++        v1 = _mm_maddubs_epi16(v1, vweight);
 +        v0 = _mm_adds_epi16(v0, voffset);
 +        v1 = _mm_adds_epi16(v1, voffset);
-+        v0 = _mm_adds_epi16(v0, v2);
-+        v1 = _mm_adds_epi16(v1, v3);
-+        v0 = _mm_srai_epi16(v0, log2_denom + 1);
-+        v1 = _mm_srai_epi16(v1, log2_denom + 1);
++        v0 = _mm_srai_epi16(v0, log2_denom);
++        v1 = _mm_srai_epi16(v1, log2_denom);
 +
-+        vdst = _mm_packus_epi16(v0, v1);
-+        VEC_ST(dst, vdst);
++        v0 = _mm_packus_epi16(v0, v1);
++        VEC_ST(dst, v0);
 +        dst += stride;
 +        src += stride;
 +    }
@@ -3169,31 +3451,25 @@ index 0000000..ff7be7d
 +static void biweight_h264_pixels8_e2k(uint8_t *dst, uint8_t *src, ptrdiff_t stride, int height,
 +                                      int log2_denom, int weightd, int weights, int offset)
 +{
-+    int y;
-+    vec_u8 vsrc, vdst;
-+    vec_s16 vweights, vweightd, voffset, v0, v2;
-+    LOAD_ZERO;
-+
-+    offset = ((offset + 1) | 1) << log2_denom;
-+    vweights = _mm_set1_epi16(weights);
-+    vweightd = _mm_set1_epi16(weightd);
-+    voffset = _mm_set1_epi16(offset);
++    BIWEIGHT_INIT(__m64, p)
 +
 +    PRAGMA_E2K("ivdep")
++    PRAGMA_E2K("unroll(2)")
 +    for (y = 0; y < height; y++) {
-+        vdst = VEC_LD8(dst);
-+        vsrc = VEC_LD8(src);
-+        v0 = _mm_unpacklo_epi8(vdst, zerov);
-+        v2 = _mm_unpacklo_epi8(vsrc, zerov);
++        v2 = *(__m64*)src;
++        v3 = *(__m64*)dst;
++        v0 = _mm_unpacklo_pi8(v2, v3);
++        v1 = _mm_unpackhi_pi8(v2, v3);
 +
-+        v0 = _mm_mullo_epi16(v0, vweightd);
-+        v2 = _mm_mullo_epi16(v2, vweights);
-+        v0 = _mm_adds_epi16(v0, voffset);
-+        v0 = _mm_adds_epi16(v0, v2);
-+        v0 = _mm_srai_epi16(v0, log2_denom + 1);
++        v0 = _mm_maddubs_pi16(v0, vweight);
++        v1 = _mm_maddubs_pi16(v1, vweight);
++        v0 = _mm_adds_pi16(v0, voffset);
++        v1 = _mm_adds_pi16(v1, voffset);
++        v0 = _mm_srai_pi16(v0, log2_denom);
++        v1 = _mm_srai_pi16(v1, log2_denom);
 +
-+        vdst = _mm_packus_epi16(v0, v0);
-+        VEC_STL(dst, vdst);
++        v0 = _mm_packs_pu16(v0, v1);
++        *(__m64*)dst = v0;
 +        dst += stride;
 +        src += stride;
 +    }
@@ -3218,11 +3494,17 @@ index 0000000..ff7be7d
 +        c->h264_idct8_add4      = h264_idct8_add4_e2k;
 +        c->h264_v_loop_filter_luma = h264_v_loop_filter_luma_e2k;
 +        c->h264_h_loop_filter_luma = h264_h_loop_filter_luma_e2k;
++        c->h264_v_loop_filter_luma_intra = h264_v_loop_filter_luma_intra_e2k;
++        c->h264_h_loop_filter_luma_intra = h264_h_loop_filter_luma_intra_e2k;
++
 +        c->h264_v_loop_filter_chroma = h264_v_loop_filter_chroma_e2k;
++        c->h264_v_loop_filter_chroma_intra = h264_v_loop_filter_chroma_intra_e2k;
 +        if (chroma_format_idc <= 1) {
 +            c->h264_h_loop_filter_chroma = h264_h_loop_filter_chroma_e2k;
++            c->h264_h_loop_filter_chroma_intra = h264_h_loop_filter_chroma_intra_e2k;
 +        } else {
 +            c->h264_h_loop_filter_chroma = h264_h_loop_filter_chroma422_e2k;
++            c->h264_h_loop_filter_chroma_intra = h264_h_loop_filter_chroma422_intra_e2k;
 +        }
 +        c->weight_h264_pixels_tab[0]   = weight_h264_pixels16_e2k;   // !checkasm
 +        c->weight_h264_pixels_tab[1]   = weight_h264_pixels8_e2k;    // !checkasm
@@ -3232,13 +3514,12 @@ index 0000000..ff7be7d
 +}
 diff --git a/libavcodec/e2k/h264qpel.c b/libavcodec/e2k/h264qpel.c
 new file mode 100644
-index 0000000..f8fe094
+index 0000000..b5e7497
 --- /dev/null
 +++ b/libavcodec/e2k/h264qpel.c
-@@ -0,0 +1,255 @@
+@@ -0,0 +1,83 @@
 +/*
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
-+ * Copyright (c) 2004 Romain Dolbeau <romain@dolbeau.org>
 + *
 + * This file is part of FFmpeg.
 + *
@@ -3259,206 +3540,32 @@ index 0000000..f8fe094
 +
 +#include "config.h"
 +
++#include "libavutil/mem.h"
 +#include "libavutil/attributes.h"
 +#include "libavutil/cpu.h"
-+#include "libavutil/intreadwrite.h"
 +#include "libavutil/e2k/cpu.h"
 +#include "libavutil/e2k/util_e2k.h"
 +
 +#include "libavcodec/h264qpel.h"
 +
-+#include "hpeldsp.h"
++#define PREF_NAME1(p, name) p##_h264_qpel##name##_e2k
++#define PREF_NAME(p, name) PREF_NAME1(p, name)
++#define FUNC(p, name) \
++static void PREF_NAME(p, name)(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)
 +
-+#define PUT_OP_U8_E2K(d, s, dst) d = s
-+#define AVG_OP_U8_E2K(d, s, dst) d = _mm_avg_epu8(dst, s)
-+
-+#define OP_U8_E2K                          PUT_OP_U8_E2K
-+#define PREFIX_h264_qpel16_h_lowpass_e2k   put_h264_qpel16_h_lowpass_e2k
-+#define PREFIX_h264_qpel16_v_lowpass_e2k   put_h264_qpel16_v_lowpass_e2k
-+#define PREFIX_h264_qpel16_hv_lowpass_e2k  put_h264_qpel16_hv_lowpass_e2k
++#define OP8_E2K(v0) *(__m64*)dst = v0; dst += stride;
++#define OP16_E2K(v0) VEC_ST(dst, v0); dst += stride;
++#define PREFIX put
 +#include "h264qpel_template.c"
-+#undef OP_U8_E2K
-+#undef PREFIX_h264_qpel16_h_lowpass_e2k
-+#undef PREFIX_h264_qpel16_v_lowpass_e2k
-+#undef PREFIX_h264_qpel16_hv_lowpass_e2k
 +
-+#define OP_U8_E2K                          AVG_OP_U8_E2K
-+#define PREFIX_h264_qpel16_h_lowpass_e2k   avg_h264_qpel16_h_lowpass_e2k
-+#define PREFIX_h264_qpel16_v_lowpass_e2k   avg_h264_qpel16_v_lowpass_e2k
-+#define PREFIX_h264_qpel16_hv_lowpass_e2k  avg_h264_qpel16_hv_lowpass_e2k
++#define OP8_E2K(v0) v0 = _mm_avg_pu8(v0, *(__m64*)dst); \
++    *(__m64*)dst = v0; dst += stride;
++#define OP16_E2K(v0) v0 = _mm_avg_epu8(v0, VEC_LD(dst)); \
++    VEC_ST(dst, v0); dst += stride;
++#define PREFIX avg
 +#include "h264qpel_template.c"
-+#undef OP_U8_E2K
-+#undef PREFIX_h264_qpel16_h_lowpass_e2k
-+#undef PREFIX_h264_qpel16_v_lowpass_e2k
-+#undef PREFIX_h264_qpel16_hv_lowpass_e2k
 +
-+#define H264_MC(OPNAME, SIZE, CODETYPE) \
-+static void OPNAME##h264_qpel##SIZE##_mc00_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    ff_##OPNAME##pixels##SIZE##_##CODETYPE(dst, src, stride, SIZE);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc10_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{ \
-+    DECLARE_ALIGNED(16, uint8_t, half)[SIZE*SIZE];\
-+    put_h264_qpel##SIZE##_h_lowpass_##CODETYPE(half, src, SIZE, stride);\
-+    OPNAME##pixels##SIZE##_l2_##CODETYPE(dst, src, half, stride, stride, SIZE);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc20_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    OPNAME##h264_qpel##SIZE##_h_lowpass_##CODETYPE(dst, src, stride, stride);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc30_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    DECLARE_ALIGNED(16, uint8_t, half)[SIZE*SIZE];\
-+    put_h264_qpel##SIZE##_h_lowpass_##CODETYPE(half, src, SIZE, stride);\
-+    OPNAME##pixels##SIZE##_l2_##CODETYPE(dst, src+1, half, stride, stride, SIZE);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc01_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    DECLARE_ALIGNED(16, uint8_t, half)[SIZE*SIZE];\
-+    put_h264_qpel##SIZE##_v_lowpass_##CODETYPE(half, src, SIZE, stride);\
-+    OPNAME##pixels##SIZE##_l2_##CODETYPE(dst, src, half, stride, stride, SIZE);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc02_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    OPNAME##h264_qpel##SIZE##_v_lowpass_##CODETYPE(dst, src, stride, stride);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc03_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    DECLARE_ALIGNED(16, uint8_t, half)[SIZE*SIZE];\
-+    put_h264_qpel##SIZE##_v_lowpass_##CODETYPE(half, src, SIZE, stride);\
-+    OPNAME##pixels##SIZE##_l2_##CODETYPE(dst, src+stride, half, stride, stride, SIZE);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc11_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    DECLARE_ALIGNED(16, uint8_t, halfH)[SIZE*SIZE];\
-+    DECLARE_ALIGNED(16, uint8_t, halfV)[SIZE*SIZE];\
-+    put_h264_qpel##SIZE##_h_lowpass_##CODETYPE(halfH, src, SIZE, stride);\
-+    put_h264_qpel##SIZE##_v_lowpass_##CODETYPE(halfV, src, SIZE, stride);\
-+    OPNAME##pixels##SIZE##_l2_##CODETYPE(dst, halfH, halfV, stride, SIZE, SIZE);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc31_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    DECLARE_ALIGNED(16, uint8_t, halfH)[SIZE*SIZE];\
-+    DECLARE_ALIGNED(16, uint8_t, halfV)[SIZE*SIZE];\
-+    put_h264_qpel##SIZE##_h_lowpass_##CODETYPE(halfH, src, SIZE, stride);\
-+    put_h264_qpel##SIZE##_v_lowpass_##CODETYPE(halfV, src+1, SIZE, stride);\
-+    OPNAME##pixels##SIZE##_l2_##CODETYPE(dst, halfH, halfV, stride, SIZE, SIZE);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc13_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    DECLARE_ALIGNED(16, uint8_t, halfH)[SIZE*SIZE];\
-+    DECLARE_ALIGNED(16, uint8_t, halfV)[SIZE*SIZE];\
-+    put_h264_qpel##SIZE##_h_lowpass_##CODETYPE(halfH, src + stride, SIZE, stride);\
-+    put_h264_qpel##SIZE##_v_lowpass_##CODETYPE(halfV, src, SIZE, stride);\
-+    OPNAME##pixels##SIZE##_l2_##CODETYPE(dst, halfH, halfV, stride, SIZE, SIZE);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc33_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    DECLARE_ALIGNED(16, uint8_t, halfH)[SIZE*SIZE];\
-+    DECLARE_ALIGNED(16, uint8_t, halfV)[SIZE*SIZE];\
-+    put_h264_qpel##SIZE##_h_lowpass_##CODETYPE(halfH, src + stride, SIZE, stride);\
-+    put_h264_qpel##SIZE##_v_lowpass_##CODETYPE(halfV, src+1, SIZE, stride);\
-+    OPNAME##pixels##SIZE##_l2_##CODETYPE(dst, halfH, halfV, stride, SIZE, SIZE);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc22_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    DECLARE_ALIGNED(16, int16_t, tmp)[SIZE*(SIZE+8)];\
-+    OPNAME##h264_qpel##SIZE##_hv_lowpass_##CODETYPE(dst, tmp, src, stride, SIZE, stride);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc21_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    DECLARE_ALIGNED(16, uint8_t, halfH)[SIZE*SIZE];\
-+    DECLARE_ALIGNED(16, uint8_t, halfHV)[SIZE*SIZE];\
-+    DECLARE_ALIGNED(16, int16_t, tmp)[SIZE*(SIZE+8)];\
-+    put_h264_qpel##SIZE##_h_lowpass_##CODETYPE(halfH, src, SIZE, stride);\
-+    put_h264_qpel##SIZE##_hv_lowpass_##CODETYPE(halfHV, tmp, src, SIZE, SIZE, stride);\
-+    OPNAME##pixels##SIZE##_l2_##CODETYPE(dst, halfH, halfHV, stride, SIZE, SIZE);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc23_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    DECLARE_ALIGNED(16, uint8_t, halfH)[SIZE*SIZE];\
-+    DECLARE_ALIGNED(16, uint8_t, halfHV)[SIZE*SIZE];\
-+    DECLARE_ALIGNED(16, int16_t, tmp)[SIZE*(SIZE+8)];\
-+    put_h264_qpel##SIZE##_h_lowpass_##CODETYPE(halfH, src + stride, SIZE, stride);\
-+    put_h264_qpel##SIZE##_hv_lowpass_##CODETYPE(halfHV, tmp, src, SIZE, SIZE, stride);\
-+    OPNAME##pixels##SIZE##_l2_##CODETYPE(dst, halfH, halfHV, stride, SIZE, SIZE);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc12_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    DECLARE_ALIGNED(16, uint8_t, halfV)[SIZE*SIZE];\
-+    DECLARE_ALIGNED(16, uint8_t, halfHV)[SIZE*SIZE];\
-+    DECLARE_ALIGNED(16, int16_t, tmp)[SIZE*(SIZE+8)];\
-+    put_h264_qpel##SIZE##_v_lowpass_##CODETYPE(halfV, src, SIZE, stride);\
-+    put_h264_qpel##SIZE##_hv_lowpass_##CODETYPE(halfHV, tmp, src, SIZE, SIZE, stride);\
-+    OPNAME##pixels##SIZE##_l2_##CODETYPE(dst, halfV, halfHV, stride, SIZE, SIZE);\
-+}\
-+\
-+static void OPNAME##h264_qpel##SIZE##_mc32_##CODETYPE(uint8_t *dst, const uint8_t *src, ptrdiff_t stride)\
-+{\
-+    DECLARE_ALIGNED(16, uint8_t, halfV)[SIZE*SIZE];\
-+    DECLARE_ALIGNED(16, uint8_t, halfHV)[SIZE*SIZE];\
-+    DECLARE_ALIGNED(16, int16_t, tmp)[SIZE*(SIZE+8)];\
-+    put_h264_qpel##SIZE##_v_lowpass_##CODETYPE(halfV, src+1, SIZE, stride);\
-+    put_h264_qpel##SIZE##_hv_lowpass_##CODETYPE(halfHV, tmp, src, SIZE, SIZE, stride);\
-+    OPNAME##pixels##SIZE##_l2_##CODETYPE(dst, halfV, halfHV, stride, SIZE, SIZE);\
-+}\
-+
-+#if 1
-+static av_always_inline void put_pixels16_l2_e2k(uint8_t *dst, const uint8_t *src1,
-+                                                 const uint8_t *src2, int dst_stride,
-+                                                 int src_stride1, int h)
-+{
-+    int i;
-+    vec_u8 a, b, d;
-+
-+    for (i = 0; i < h; i++) {
-+        a = VEC_LD(src1 + i * src_stride1);
-+        b = VEC_LD(src2 + i * 16);
-+        d = _mm_avg_epu8(a, b);
-+        VEC_ST(dst, d);
-+        dst += dst_stride;
-+    }
-+}
-+
-+static av_always_inline void avg_pixels16_l2_e2k(uint8_t *dst, const uint8_t *src1,
-+                                                 const uint8_t *src2, int dst_stride,
-+                                                 int src_stride1, int h)
-+{
-+    int i;
-+    vec_u8 a, b, d;
-+
-+    for (i = 0; i < h; i++) {
-+        a = VEC_LD(src1 + i * src_stride1);
-+        b = VEC_LD(src2 + i * 16);
-+        d = _mm_avg_epu8(a, b);
-+        a = _mm_avg_epu8(VEC_LD(dst), d);
-+        VEC_ST(dst, a);
-+        dst += dst_stride;
-+    }
-+}
-+
-+#else // Implemented but could be faster
-+#define put_pixels16_l2_e2k(d,s1,s2,ds,s1s,h) put_pixels16_l2(d,s1,s2,ds,s1s,16,h)
-+#define avg_pixels16_l2_e2k(d,s1,s2,ds,s1s,h) avg_pixels16_l2(d,s1,s2,ds,s1s,16,h)
-+#endif
-+
-+H264_MC(put_, 16, e2k)
-+H264_MC(avg_, 16, e2k)
++#undef FUNC
 +
 +av_cold void ff_h264qpel_init_e2k(H264QpelContext *c, int bit_depth)
 +{
@@ -3468,6 +3575,7 @@ index 0000000..f8fe094
 +        return;
 +
 +    if (!high_bit_depth) {
++
 +#define dspfunc(PFX, IDX, NUM) \
 +        c->PFX##_pixels_tab[IDX][ 0] = PFX##NUM##_mc00_e2k; \
 +        c->PFX##_pixels_tab[IDX][ 1] = PFX##NUM##_mc10_e2k; \
@@ -3488,18 +3596,19 @@ index 0000000..f8fe094
 +
 +        dspfunc(put_h264_qpel, 0, 16);
 +        dspfunc(avg_h264_qpel, 0, 16);
++        dspfunc(put_h264_qpel, 1, 8);
++        dspfunc(avg_h264_qpel, 1, 8);
 +#undef dspfunc
 +    }
 +}
 diff --git a/libavcodec/e2k/h264qpel_template.c b/libavcodec/e2k/h264qpel_template.c
 new file mode 100644
-index 0000000..bbd6516
+index 0000000..42989f3
 --- /dev/null
 +++ b/libavcodec/e2k/h264qpel_template.c
-@@ -0,0 +1,354 @@
+@@ -0,0 +1,504 @@
 +/*
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
-+ * Copyright (c) 2004 Romain Dolbeau <romain@dolbeau.org>
 + *
 + * This file is part of FFmpeg.
 + *
@@ -3518,339 +3627,490 @@ index 0000000..bbd6516
 + * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 + */
 +
-+#include "config.h"
-+#if HAVE_UNISTD_H
-+#include <unistd.h>
-+#endif
++#define QPEL16_INIT \
++    int i; LOAD_ZERO; \
++    __m128i c20m5 = _mm_set1_epi16(20 | -5 << 8); \
++    __m128i srcM2, srcM1, srcP0, srcP1, srcP2, srcP3; \
++    __m128i v0, v1, v2, v3, v4, v5;
 +
-+#include "libavutil/avassert.h"
-+#include "libavutil/mem.h"
-+#include "libavutil/e2k/util_e2k.h"
-+
-+#define load_alignment() { \
++#define QPEL16_LOAD_H \
 +    srcM2 = VEC_LD(src - 2); \
 +    srcM1 = VEC_LD(src - 1); \
 +    srcP0 = VEC_LD(src); \
 +    srcP1 = VEC_LD(src + 1); \
 +    srcP2 = VEC_LD(src + 2); \
-+    srcP3 = VEC_LD(src + 3); \
-+}
++    srcP3 = VEC_LD(src + 3);
 +
-+/* this code assume stride % 16 == 0 */
-+#ifdef PREFIX_h264_qpel16_h_lowpass_e2k
-+static void PREFIX_h264_qpel16_h_lowpass_e2k(uint8_t *dst,
-+                                             const uint8_t *src,
-+                                             int dstStride, int srcStride)
++#define QPEL16_1(src) \
++    v0 = _mm_unpacklo_epi8(src##P0, src##M1); \
++    v1 = _mm_unpackhi_epi8(src##P0, src##M1); \
++    v2 = _mm_unpacklo_epi8(src##P1, src##P2); \
++    v3 = _mm_unpackhi_epi8(src##P1, src##P2); \
++    v4 = _mm_unpacklo_epi8(src##M2, zerov); \
++    v5 = _mm_unpackhi_epi8(src##M2, zerov); \
++    v4 = _mm_add_epi16(v4, _mm_unpacklo_epi8(src##P3, zerov)); \
++    v5 = _mm_add_epi16(v5, _mm_unpackhi_epi8(src##P3, zerov)); \
++    v0 = _mm_maddubs_epi16(v0, c20m5); \
++    v1 = _mm_maddubs_epi16(v1, c20m5); \
++    v2 = _mm_maddubs_epi16(v2, c20m5); \
++    v3 = _mm_maddubs_epi16(v3, c20m5);
++
++#define QPEL16_2 \
++    v4 = _mm_add_epi16(v4, c16); \
++    v5 = _mm_add_epi16(v5, c16); \
++    v0 = _mm_add_epi16(v4, _mm_add_epi16(v0, v2)); \
++    v1 = _mm_add_epi16(v5, _mm_add_epi16(v1, v3)); \
++    v0 = _mm_srai_epi16(v0, 5); \
++    v1 = _mm_srai_epi16(v1, 5); \
++    v0 = _mm_packus_epi16(v0, v1);
++
++FUNC(PREFIX, 16_mc00)
 +{
-+    int i;
-+
-+    LOAD_ZERO;
-+    const vec_s16 v5ss = _mm_set1_epi16(5);
-+    const vec_s16 v20ss = _mm_set1_epi16(20);
-+    const vec_s16 v16ss = _mm_set1_epi16(16);
-+
-+    vec_u8 srcM2, srcM1, srcP0, srcP1, srcP2, srcP3;
-+    vec_s16 srcP0A, srcP0B, srcP1A, srcP1B,
-+              srcP2A, srcP2B, srcP3A, srcP3B,
-+              srcM1A, srcM1B, srcM2A, srcM2B,
-+              sum1A, sum1B, sum2A, sum2B, sum3A, sum3B,
-+              pp1A, pp1B, pp2A, pp2B, pp3A, pp3B,
-+              sumA, sumB;
-+    vec_u8 sum, fsum;
++    int i; __m128i v0, v1;
 +
 +    PRAGMA_E2K("ivdep")
-+    for (i = 0; i < 16; i++) {
-+        load_alignment();
-+
-+        srcP0A = _mm_unpacklo_epi8(srcP0, zerov);
-+        srcP0B = _mm_unpackhi_epi8(srcP0, zerov);
-+        srcP1A = _mm_unpacklo_epi8(srcP1, zerov);
-+        srcP1B = _mm_unpackhi_epi8(srcP1, zerov);
-+
-+        srcP2A = _mm_unpacklo_epi8(srcP2, zerov);
-+        srcP2B = _mm_unpackhi_epi8(srcP2, zerov);
-+        srcP3A = _mm_unpacklo_epi8(srcP3, zerov);
-+        srcP3B = _mm_unpackhi_epi8(srcP3, zerov);
-+
-+        srcM1A = _mm_unpacklo_epi8(srcM1, zerov);
-+        srcM1B = _mm_unpackhi_epi8(srcM1, zerov);
-+        srcM2A = _mm_unpacklo_epi8(srcM2, zerov);
-+        srcM2B = _mm_unpackhi_epi8(srcM2, zerov);
-+
-+        sum1A = _mm_adds_epi16(srcP0A, srcP1A);
-+        sum1B = _mm_adds_epi16(srcP0B, srcP1B);
-+        sum2A = _mm_adds_epi16(srcM1A, srcP2A);
-+        sum2B = _mm_adds_epi16(srcM1B, srcP2B);
-+        sum3A = _mm_adds_epi16(srcM2A, srcP3A);
-+        sum3B = _mm_adds_epi16(srcM2B, srcP3B);
-+
-+        pp1A = _mm_add_epi16(_mm_mullo_epi16(sum1A, v20ss), v16ss);
-+        pp1B = _mm_add_epi16(_mm_mullo_epi16(sum1B, v20ss), v16ss);
-+        pp2A = _mm_mullo_epi16(sum2A, v5ss);
-+        pp2B = _mm_mullo_epi16(sum2B, v5ss);
-+        pp3A = _mm_add_epi16(sum3A, pp1A);
-+        pp3B = _mm_add_epi16(sum3B, pp1B);
-+        sumA = _mm_sub_epi16(pp3A, pp2A);
-+        sumB = _mm_sub_epi16(pp3B, pp2B);
-+        sumA = _mm_srai_epi16(sumA, 5);
-+        sumB = _mm_srai_epi16(sumB, 5);
-+        sum = _mm_packus_epi16(sumA, sumB);
-+
-+        OP_U8_E2K(fsum, sum, VEC_LD(dst));
-+        VEC_ST(dst, fsum);
-+
-+        src += srcStride;
-+        dst += dstStride;
++    PRAGMA_E2K("unroll(8)")
++    for (i = 0; i < 16; i += 2) {
++        v0 = VEC_LD(src);
++        v1 = VEC_LD(src + stride);
++        OP16_E2K(v0)
++        OP16_E2K(v1)
++        src += stride << 1;
 +    }
 +}
-+#endif /* PREFIX_h264_qpel16_h_lowpass_e2k */
 +
-+/* this code assume stride % 16 == 0 */
-+#ifdef PREFIX_h264_qpel16_v_lowpass_e2k
-+static void PREFIX_h264_qpel16_v_lowpass_e2k(uint8_t *dst,
-+                                             const uint8_t *src,
-+                                             int dstStride, int srcStride)
++#define QPEL16_AVG_PX
++#define QPEL16_AVG_P0 v0 = _mm_avg_epu8(v0, srcP0);
++#define QPEL16_AVG_P1 v0 = _mm_avg_epu8(v0, srcP1);
++
++#define QPEL16_H_FUNC(name, PX) \
++FUNC(PREFIX, name) \
++{ \
++    __m128i c16 = _mm_set1_epi16(16); \
++    QPEL16_INIT \
++    \
++    PRAGMA_E2K("ivdep") \
++    for (i = 0; i < 16; i++) { \
++        QPEL16_LOAD_H \
++        QPEL16_1(src) \
++        QPEL16_2 \
++        QPEL16_AVG_##PX \
++        \
++        OP16_E2K(v0) \
++        src += stride; \
++    } \
++}
++
++#define QPEL16_V_FUNC(name, PX) \
++FUNC(PREFIX, name) \
++{ \
++    __m128i c16 = _mm_set1_epi16(16); \
++    QPEL16_INIT \
++    \
++    srcM2 = VEC_LD(src - stride * 2); \
++    srcM1 = VEC_LD(src - stride); \
++    srcP0 = VEC_LD(src); \
++    srcP1 = VEC_LD(src + stride); \
++    srcP2 = VEC_LD(src + stride * 2); \
++    src += stride * 3; \
++    \
++    PRAGMA_E2K("ivdep") \
++    for (i = 0; i < 16; i++) { \
++        srcP3 = VEC_LD(src); \
++        QPEL16_1(src) \
++        QPEL16_2 \
++        QPEL16_AVG_##PX \
++        \
++        OP16_E2K(v0) \
++        src += stride; \
++        \
++        srcM2 = srcM1; srcM1 = srcP0; srcP0 = srcP1; \
++        srcP1 = srcP2; srcP2 = srcP3; \
++    } \
++}
++
++static void PREF_NAME(PREFIX, 16_h_v)(uint8_t *dst, const uint8_t *src, ptrdiff_t stride, const uint8_t *srcv)
 +{
-+    int i;
++    __m128i c16 = _mm_set1_epi16(16);
++    __m128i tM1, tM2, tP0, tP1, tP2, tP3;
++    QPEL16_INIT
 +
-+    LOAD_ZERO;
-+    const vec_s16 v20ss = _mm_set1_epi16(20);
-+    const vec_s16 v5ss = _mm_set1_epi16(5);
-+    const vec_s16 v16ss = _mm_set1_epi16(16);
++    tM2 = VEC_LD(srcv - stride * 2);
++    tM1 = VEC_LD(srcv - stride);
++    tP0 = VEC_LD(srcv);
++    tP1 = VEC_LD(srcv + stride);
++    tP2 = VEC_LD(srcv + stride * 2);
++    srcv += stride * 3;
 +
-+    const vec_u8 srcM2 = VEC_LD(src - srcStride * 2);
-+    const vec_u8 srcM1 = VEC_LD(src - srcStride);
-+    const vec_u8 srcP0 = VEC_LD(src);
-+    const vec_u8 srcP1 = VEC_LD(src + srcStride);
-+    const vec_u8 srcP2 = VEC_LD(src + srcStride * 2);
-+
-+    vec_s16 srcM2ssA = _mm_unpacklo_epi8(srcM2, zerov);
-+    vec_s16 srcM2ssB = _mm_unpackhi_epi8(srcM2, zerov);
-+    vec_s16 srcM1ssA = _mm_unpacklo_epi8(srcM1, zerov);
-+    vec_s16 srcM1ssB = _mm_unpackhi_epi8(srcM1, zerov);
-+    vec_s16 srcP0ssA = _mm_unpacklo_epi8(srcP0, zerov);
-+    vec_s16 srcP0ssB = _mm_unpackhi_epi8(srcP0, zerov);
-+    vec_s16 srcP1ssA = _mm_unpacklo_epi8(srcP1, zerov);
-+    vec_s16 srcP1ssB = _mm_unpackhi_epi8(srcP1, zerov);
-+    vec_s16 srcP2ssA = _mm_unpacklo_epi8(srcP2, zerov);
-+    vec_s16 srcP2ssB = _mm_unpackhi_epi8(srcP2, zerov);
-+
-+    vec_s16 pp1A, pp1B, pp2A, pp2B, pp3A, pp3B,
-+              sumA, sumB, srcP3ssA, srcP3ssB,
-+              sum1A, sum1B, sum2A, sum2B, sum3A, sum3B;
-+    vec_u8 sum, fsum, srcP3;
-+
-+    src += srcStride * 3;
-+    PRAGMA_E2K("ivdep")
++    // PRAGMA_E2K("ivdep")
 +    for (i = 0; i < 16; i++) {
-+        srcP3 = VEC_LD(src);
-+        src += srcStride;
++        QPEL16_LOAD_H
++        QPEL16_1(src)
++        QPEL16_2
++        srcP0 = v0;
++        src += stride;
 +
-+        srcP3ssA = _mm_unpacklo_epi8(srcP3, zerov);
-+        srcP3ssB = _mm_unpackhi_epi8(srcP3, zerov);
++        tP3 = VEC_LD(srcv);
++        QPEL16_1(t)
++        QPEL16_2
++        srcv += stride;
 +
-+        sum1A = _mm_adds_epi16(srcP0ssA, srcP1ssA);
-+        sum1B = _mm_adds_epi16(srcP0ssB, srcP1ssB);
-+        sum2A = _mm_adds_epi16(srcM1ssA, srcP2ssA);
-+        sum2B = _mm_adds_epi16(srcM1ssB, srcP2ssB);
-+        sum3A = _mm_adds_epi16(srcM2ssA, srcP3ssA);
-+        sum3B = _mm_adds_epi16(srcM2ssB, srcP3ssB);
++        v0 = _mm_avg_epu8(v0, srcP0);
++        OP16_E2K(v0)
 +
-+        srcM2ssA = srcM1ssA;
-+        srcM2ssB = srcM1ssB;
-+        srcM1ssA = srcP0ssA;
-+        srcM1ssB = srcP0ssB;
-+        srcP0ssA = srcP1ssA;
-+        srcP0ssB = srcP1ssB;
-+        srcP1ssA = srcP2ssA;
-+        srcP1ssB = srcP2ssB;
-+        srcP2ssA = srcP3ssA;
-+        srcP2ssB = srcP3ssB;
-+
-+        pp1A = _mm_add_epi16(_mm_mullo_epi16(sum1A, v20ss), v16ss);
-+        pp1B = _mm_add_epi16(_mm_mullo_epi16(sum1B, v20ss), v16ss);
-+        pp2A = _mm_mullo_epi16(sum2A, v5ss);
-+        pp2B = _mm_mullo_epi16(sum2B, v5ss);
-+        pp3A = _mm_add_epi16(sum3A, pp1A);
-+        pp3B = _mm_add_epi16(sum3B, pp1B);
-+        sumA = _mm_sub_epi16(pp3A, pp2A);
-+        sumB = _mm_sub_epi16(pp3B, pp2B);
-+        sumA = _mm_srai_epi16(sumA, 5);
-+        sumB = _mm_srai_epi16(sumB, 5);
-+        sum = _mm_packus_epi16(sumA, sumB);
-+
-+        OP_U8_E2K(fsum, sum, VEC_LD(dst));
-+        VEC_ST(dst, fsum);
-+        dst += dstStride;
++        tM2 = tM1; tM1 = tP0; tP0 = tP1; tP1 = tP2; tP2 = tP3;
 +    }
 +}
-+#endif /* PREFIX_h264_qpel16_v_lowpass_e2k */
 +
-+/* this code assume stride % 16 == 0 *and* tmp is properly aligned */
-+#ifdef PREFIX_h264_qpel16_hv_lowpass_e2k
-+static void PREFIX_h264_qpel16_hv_lowpass_e2k(uint8_t *dst, int16_t *tmp,
-+                                              const uint8_t *src,
-+                                              int dstStride, int tmpStride,
-+                                              int srcStride)
++#define QPEL16_H_V_FUNC(name, vx, hy) \
++FUNC(PREFIX, name) \
++{ \
++    PREF_NAME(PREFIX, 16_h_v)(dst, src + stride * hy, stride, src + vx); \
++}
++
++QPEL16_H_FUNC(16_mc10, P0)
++QPEL16_H_FUNC(16_mc20, PX)
++QPEL16_H_FUNC(16_mc30, P1)
++QPEL16_V_FUNC(16_mc01, P0)
++QPEL16_V_FUNC(16_mc02, PX)
++QPEL16_V_FUNC(16_mc03, P1)
++QPEL16_H_V_FUNC(16_mc11, 0, 0)
++QPEL16_H_V_FUNC(16_mc31, 1, 0)
++QPEL16_H_V_FUNC(16_mc13, 0, 1)
++QPEL16_H_V_FUNC(16_mc33, 1, 1)
++
++#define QPEL16_HV_INIT0
++#define QPEL16_HV_INIT1 __m128i c16 = _mm_set1_epi16(16);
++#define QPEL16_HV_INIT2 QPEL16_HV_INIT1 \
++    __m128i tM1, tM2, tP0, tP1, tP2, tP3;
++
++#define QPEL16_HVV1(PX) tM2 = tM1; tM1 = tP0; tP0 = tP1; tP1 = tP2; tP2 = src##PX;
++#define QPEL16_HVV2(PX) \
++    tP3A = v0; \
++    tP3 = src##PX; \
++    QPEL16_1(t) \
++    QPEL16_2 \
++    tM2 = tM1; tM1 = tP0; tP0 = tP1; tP1 = tP2; tP2 = tP3; \
++    v0 = _mm_avg_epu8(v0, tP3A);
++
++#define QPEL16_HHV(PX) \
++    v2 = _mm_srai_epi16(_mm_add_epi16(t##PX##A, c16), 5); \
++    v3 = _mm_srai_epi16(_mm_add_epi16(t##PX##B, c16), 5); \
++    v2 = _mm_packus_epi16(v2, v3); \
++    v0 = _mm_avg_epu8(v0, v2);
++
++#define QPEL16_HVV1_PX
++#define QPEL16_HVV1_P0 QPEL16_HVV1(P0)
++#define QPEL16_HVV1_P1 QPEL16_HVV1(P1)
++
++#define QPEL16_HVV2_PX
++#define QPEL16_HVV2_P0 QPEL16_HVV2(P0)
++#define QPEL16_HVV2_P1 QPEL16_HVV2(P1)
++
++#define QPEL16_HHV_PX
++#define QPEL16_HHV_P0 QPEL16_HHV(M1)
++#define QPEL16_HHV_P1 QPEL16_HHV(P0)
++
++#define QPEL16_HV_FUNC(name, init, PX, PY) \
++FUNC(PREFIX, name) \
++{ \
++    QPEL16_HV_INIT##init \
++    __m128i c32 = _mm_set1_epi16(32); \
++    QPEL16_INIT \
++    __m128i tM1A, tM2A, tP0A, tP1A, tP2A, tP3A; \
++    __m128i tM1B, tM2B, tP0B, tP1B, tP2B, tP3B; \
++    src -= 2 * stride; \
++    for (i = 0; i < 5; i++) { \
++        QPEL16_LOAD_H \
++        QPEL16_1(src) \
++        src += stride; \
++        tM2A = tM1A; tM2B = tM1B; \
++        tM1A = tP0A; tM1B = tP0B; \
++        tP0A = tP1A; tP0B = tP1B; \
++        tP1A = tP2A; tP1B = tP2B; \
++        tP2A = _mm_add_epi16(v4, _mm_add_epi16(v0, v2)); \
++        tP2B = _mm_add_epi16(v5, _mm_add_epi16(v1, v3)); \
++        QPEL16_HVV1_##PY \
++    } \
++    PRAGMA_E2K("ivdep") \
++    for (i = 0; i < 16; i++) { \
++        QPEL16_LOAD_H \
++        QPEL16_1(src) \
++        src += stride; \
++        tP3A = _mm_add_epi16(v4, _mm_add_epi16(v0, v2)); \
++        tP3B = _mm_add_epi16(v5, _mm_add_epi16(v1, v3)); \
++        \
++        v0 = _mm_add_epi16(tP0A, tP1A); \
++        v1 = _mm_add_epi16(tP0B, tP1B); \
++        v2 = _mm_add_epi16(tM1A, tP2A); \
++        v3 = _mm_add_epi16(tM1B, tP2B); \
++        v4 = _mm_add_epi16(tM2A, tP3A); \
++        v5 = _mm_add_epi16(tM2B, tP3B); \
++        \
++        tM2A = tM1A; tM2B = tM1B; \
++        tM1A = tP0A; tM1B = tP0B; \
++        tP0A = tP1A; tP0B = tP1B; \
++        tP1A = tP2A; tP1B = tP2B; \
++        tP2A = tP3A; tP2B = tP3B; \
++        \
++        v4 = _mm_srai_epi16(_mm_sub_epi16(v4, v2), 2); \
++        v5 = _mm_srai_epi16(_mm_sub_epi16(v5, v3), 2); \
++        v2 = _mm_sub_epi16(v0, v2); \
++        v3 = _mm_sub_epi16(v1, v3); \
++        v4 = _mm_srai_epi16(_mm_add_epi16(v4, v2), 2); \
++        v5 = _mm_srai_epi16(_mm_add_epi16(v5, v3), 2); \
++        v4 = _mm_add_epi16(v4, _mm_add_epi16(v0, c32)); \
++        v5 = _mm_add_epi16(v5, _mm_add_epi16(v1, c32)); \
++        v4 = _mm_srai_epi16(v4, 6); \
++        v5 = _mm_srai_epi16(v5, 6); \
++        v0 = _mm_packus_epi16(v4, v5); \
++        \
++        QPEL16_HHV_##PX \
++        QPEL16_HVV2_##PY \
++        OP16_E2K(v0) \
++    } \
++}
++
++QPEL16_HV_FUNC(16_mc21, 1, P0, PX)
++QPEL16_HV_FUNC(16_mc22, 0, PX, PX)
++QPEL16_HV_FUNC(16_mc23, 1, P1, PX)
++QPEL16_HV_FUNC(16_mc12, 2, PX, P0)
++QPEL16_HV_FUNC(16_mc32, 2, PX, P1)
++
++#define QPEL8_INIT \
++    int i; LOAD_ZERO; \
++    __m128i c20m5 = _mm_set1_epi16(20 | -5 << 8); \
++    __m128i srcM2, srcM1, srcP0, srcP1, srcP2, srcP3; \
++    __m128i v0, v2, v4; __m64 h0;
++
++#define QPEL8_LOAD_H \
++    srcM2 = VEC_LD8(src - 2); \
++    srcM1 = VEC_LD8(src - 1); \
++    srcP0 = VEC_LD8(src); \
++    srcP1 = VEC_LD8(src + 1); \
++    srcP2 = VEC_LD8(src + 2); \
++    srcP3 = VEC_LD8(src + 3);
++
++#define QPEL8_1(src) \
++    v0 = _mm_unpacklo_epi8(src##P0, src##M1); \
++    v2 = _mm_unpacklo_epi8(src##P1, src##P2); \
++    v4 = _mm_unpacklo_epi8(src##M2, zerov); \
++    v4 = _mm_add_epi16(v4, _mm_unpacklo_epi8(src##P3, zerov)); \
++    v0 = _mm_maddubs_epi16(v0, c20m5); \
++    v2 = _mm_maddubs_epi16(v2, c20m5);
++
++#define QPEL8_2 \
++    v4 = _mm_add_epi16(v4, c16); \
++    v0 = _mm_add_epi16(v4, _mm_add_epi16(v0, v2)); \
++    v0 = _mm_srai_epi16(v0, 5); \
++    h0 = _mm_movepi64_pi64(_mm_packus_epi16(v0, v0));
++
++FUNC(PREFIX, 8_mc00)
 +{
-+    int i;
-+    LOAD_ZERO;
-+    const vec_s16 v20ss = _mm_set1_epi16(20);
-+    const vec_s16 v5ss = _mm_set1_epi16(5);
-+    const vec_s32 v512si = _mm_set1_epi32(512);
-+
-+    vec_s16 srcP0A, srcP0B, srcP1A, srcP1B,
-+              srcP2A, srcP2B, srcP3A, srcP3B,
-+              srcM1A, srcM1B, srcM2A, srcM2B,
-+              sum1A, sum1B, sum2A, sum2B, sum3A, sum3B,
-+              pp1A, pp1B, pp2A, pp2B, sumA, sumB;
-+    int16_t *tmpbis = tmp;
-+
-+    vec_s16 tmpM1ssA, tmpM1ssB, tmpM2ssA, tmpM2ssB,
-+              tmpP0ssA, tmpP0ssB, tmpP1ssA, tmpP1ssB,
-+              tmpP2ssA, tmpP2ssB;
-+
-+    vec_s32 pp1Al, pp1Ah, pp1Bl, pp1Bh, pp2Al, pp2Ah, pp2Bl, pp2Bh,
-+              pp3Al, pp3Ah, pp3Bl, pp3Bh, sumAl, sumAh, sumBl, sumBh;
-+    vec_u8 fsum, sum;
-+
-+    src -= 2 * srcStride;
-+    PRAGMA_E2K("ivdep")
-+    for (i = 0; i < 21; i ++) {
-+        vec_u8 srcM2, srcM1, srcP0, srcP1, srcP2, srcP3;
-+
-+        load_alignment();
-+
-+        srcP0A = _mm_unpacklo_epi8(srcP0, zerov);
-+        srcP0B = _mm_unpackhi_epi8(srcP0, zerov);
-+        srcP1A = _mm_unpacklo_epi8(srcP1, zerov);
-+        srcP1B = _mm_unpackhi_epi8(srcP1, zerov);
-+
-+        srcP2A = _mm_unpacklo_epi8(srcP2, zerov);
-+        srcP2B = _mm_unpackhi_epi8(srcP2, zerov);
-+        srcP3A = _mm_unpacklo_epi8(srcP3, zerov);
-+        srcP3B = _mm_unpackhi_epi8(srcP3, zerov);
-+
-+        srcM1A = _mm_unpacklo_epi8(srcM1, zerov);
-+        srcM1B = _mm_unpackhi_epi8(srcM1, zerov);
-+        srcM2A = _mm_unpacklo_epi8(srcM2, zerov);
-+        srcM2B = _mm_unpackhi_epi8(srcM2, zerov);
-+
-+        sum1A = _mm_adds_epi16(srcP0A, srcP1A);
-+        sum1B = _mm_adds_epi16(srcP0B, srcP1B);
-+        sum2A = _mm_adds_epi16(srcM1A, srcP2A);
-+        sum2B = _mm_adds_epi16(srcM1B, srcP2B);
-+        sum3A = _mm_adds_epi16(srcM2A, srcP3A);
-+        sum3B = _mm_adds_epi16(srcM2B, srcP3B);
-+
-+        pp1A = _mm_add_epi16(_mm_mullo_epi16(sum1A, v20ss), sum3A);
-+        pp1B = _mm_add_epi16(_mm_mullo_epi16(sum1B, v20ss), sum3B);
-+        pp2A = _mm_mullo_epi16(sum2A, v5ss);
-+        pp2B = _mm_mullo_epi16(sum2B, v5ss);
-+        sumA = _mm_sub_epi16(pp1A, pp2A);
-+        sumB = _mm_sub_epi16(pp1B, pp2B);
-+
-+        VEC_ST(tmp, sumA);
-+        VEC_ST(tmp + 8, sumB);
-+
-+        src += srcStride;
-+        tmp += tmpStride; /* int16_t*, and stride is 16, so it's OK here */
-+    }
-+
-+    tmpM2ssA = VEC_LD(tmpbis);
-+    tmpM2ssB = VEC_LD(tmpbis + 8);
-+    tmpbis += tmpStride;
-+    tmpM1ssA = VEC_LD(tmpbis);
-+    tmpM1ssB = VEC_LD(tmpbis + 8);
-+    tmpbis += tmpStride;
-+    tmpP0ssA = VEC_LD(tmpbis);
-+    tmpP0ssB = VEC_LD(tmpbis + 8);
-+    tmpbis += tmpStride;
-+    tmpP1ssA = VEC_LD(tmpbis);
-+    tmpP1ssB = VEC_LD(tmpbis + 8);
-+    tmpbis += tmpStride;
-+    tmpP2ssA = VEC_LD(tmpbis);
-+    tmpP2ssB = VEC_LD(tmpbis + 8);
-+    tmpbis += tmpStride;
++    int i; __m64 h0, h1;
 +
 +    PRAGMA_E2K("ivdep")
-+    for (i = 0; i < 16; i++) {
-+        vec_s16 tmp0, tmp1;
-+        const vec_s16 tmpP3ssA = VEC_LD(tmpbis);
-+        const vec_s16 tmpP3ssB = VEC_LD(tmpbis + 8);
-+
-+        const vec_s16 sum1A = _mm_adds_epi16(tmpP0ssA, tmpP1ssA);
-+        const vec_s16 sum1B = _mm_adds_epi16(tmpP0ssB, tmpP1ssB);
-+        const vec_s16 sum2A = _mm_adds_epi16(tmpM1ssA, tmpP2ssA);
-+        const vec_s16 sum2B = _mm_adds_epi16(tmpM1ssB, tmpP2ssB);
-+        vec_s16 sum3A = _mm_adds_epi16(tmpM2ssA, tmpP3ssA);
-+        vec_s16 sum3B = _mm_adds_epi16(tmpM2ssB, tmpP3ssB);
-+
-+        tmpbis += tmpStride;
-+
-+        tmpM2ssA = tmpM1ssA;
-+        tmpM2ssB = tmpM1ssB;
-+        tmpM1ssA = tmpP0ssA;
-+        tmpM1ssB = tmpP0ssB;
-+        tmpP0ssA = tmpP1ssA;
-+        tmpP0ssB = tmpP1ssB;
-+        tmpP1ssA = tmpP2ssA;
-+        tmpP1ssB = tmpP2ssB;
-+        tmpP2ssA = tmpP3ssA;
-+        tmpP2ssB = tmpP3ssB;
-+
-+        tmp0 = _mm_mullo_epi16(sum1A, v20ss);
-+        tmp1 = _mm_mulhi_epi16(sum1A, v20ss);
-+        pp1Al = _mm_unpacklo_epi16(tmp0, tmp1);
-+        pp1Ah = _mm_unpackhi_epi16(tmp0, tmp1);
-+        tmp0 = _mm_mullo_epi16(sum1B, v20ss);
-+        tmp1 = _mm_mulhi_epi16(sum1B, v20ss);
-+        pp1Bl = _mm_unpacklo_epi16(tmp0, tmp1);
-+        pp1Bh = _mm_unpackhi_epi16(tmp0, tmp1);
-+
-+        pp1Al = _mm_add_epi32(pp1Al, v512si);
-+        pp1Ah = _mm_add_epi32(pp1Ah, v512si);
-+        pp1Bl = _mm_add_epi32(pp1Bl, v512si);
-+        pp1Bh = _mm_add_epi32(pp1Bh, v512si);
-+
-+        tmp0 = _mm_mullo_epi16(sum2A, v5ss);
-+        tmp1 = _mm_mulhi_epi16(sum2A, v5ss);
-+        pp2Al = _mm_unpacklo_epi16(tmp0, tmp1);
-+        pp2Ah = _mm_unpackhi_epi16(tmp0, tmp1);
-+        tmp0 = _mm_mullo_epi16(sum2B, v5ss);
-+        tmp1 = _mm_mulhi_epi16(sum2B, v5ss);
-+        pp2Bl = _mm_unpacklo_epi16(tmp0, tmp1);
-+        pp2Bh = _mm_unpackhi_epi16(tmp0, tmp1);
-+
-+        tmp0 = _mm_srai_epi32(_mm_unpacklo_epi16(sum3A, sum3A), 16);
-+        tmp1 = _mm_srai_epi32(_mm_unpackhi_epi16(sum3A, sum3A), 16);
-+        pp3Al = _mm_add_epi32(tmp0, pp1Al);
-+        pp3Ah = _mm_add_epi32(tmp1, pp1Ah);
-+        tmp0 = _mm_srai_epi32(_mm_unpacklo_epi16(sum3B, sum3B), 16);
-+        tmp1 = _mm_srai_epi32(_mm_unpackhi_epi16(sum3B, sum3B), 16);
-+        pp3Bl = _mm_add_epi32(tmp0, pp1Bl);
-+        pp3Bh = _mm_add_epi32(tmp1, pp1Bh);
-+
-+        sumAl = _mm_sub_epi32(pp3Al, pp2Al);
-+        sumAh = _mm_sub_epi32(pp3Ah, pp2Ah);
-+        sumBl = _mm_sub_epi32(pp3Bl, pp2Bl);
-+        sumBh = _mm_sub_epi32(pp3Bh, pp2Bh);
-+
-+        sumAl = _mm_srai_epi32(sumAl, 10);
-+        sumAh = _mm_srai_epi32(sumAh, 10);
-+        sumBl = _mm_srai_epi32(sumBl, 10);
-+        sumBh = _mm_srai_epi32(sumBh, 10);
-+
-+        sumA = _mm_packs_epi32(sumAl, sumAh);
-+        sumB = _mm_packs_epi32(sumBl, sumBh);
-+        sum = _mm_packus_epi16(sumA, sumB);
-+
-+        OP_U8_E2K(fsum, sum, VEC_LD(dst));
-+        VEC_ST(dst, fsum);
-+        dst += dstStride;
++    PRAGMA_E2K("unroll(4)")
++    for (i = 0; i < 8; i += 2) {
++        h0 = *(__m64*)src;
++        h1 = *(__m64*)(src + stride);
++        OP8_E2K(h0)
++        OP8_E2K(h1)
++        src += stride << 1;
 +    }
 +}
-+#endif /* PREFIX_h264_qpel16_hv_lowpass_e2k */
++
++#define QPEL8_AVG_PX
++#define QPEL8_AVG_P0 h0 = _mm_avg_pu8(h0, _mm_movepi64_pi64(srcP0));
++#define QPEL8_AVG_P1 h0 = _mm_avg_pu8(h0, _mm_movepi64_pi64(srcP1));
++
++#define QPEL8_H_FUNC(name, PX) \
++FUNC(PREFIX, name) \
++{ \
++    __m128i c16 = _mm_set1_epi16(16); \
++    QPEL8_INIT \
++    \
++    PRAGMA_E2K("ivdep") \
++    for (i = 0; i < 8; i++) { \
++        QPEL8_LOAD_H \
++        QPEL8_1(src) \
++        QPEL8_2 \
++        QPEL8_AVG_##PX \
++        \
++        OP8_E2K(h0) \
++        src += stride; \
++    } \
++}
++
++#define QPEL8_V_FUNC(name, PX) \
++FUNC(PREFIX, name) \
++{ \
++    __m128i c16 = _mm_set1_epi16(16); \
++    QPEL8_INIT \
++    \
++    srcM2 = VEC_LD8(src - stride * 2); \
++    srcM1 = VEC_LD8(src - stride); \
++    srcP0 = VEC_LD8(src); \
++    srcP1 = VEC_LD8(src + stride); \
++    srcP2 = VEC_LD8(src + stride * 2); \
++    src += stride * 3; \
++    \
++    PRAGMA_E2K("ivdep") \
++    for (i = 0; i < 8; i++) { \
++        srcP3 = VEC_LD8(src); \
++        QPEL8_1(src) \
++        QPEL8_2 \
++        QPEL8_AVG_##PX \
++        \
++        OP8_E2K(h0) \
++        src += stride; \
++        \
++        srcM2 = srcM1; srcM1 = srcP0; srcP0 = srcP1; \
++        srcP1 = srcP2; srcP2 = srcP3; \
++    } \
++}
++
++static void PREF_NAME(PREFIX, 8_h_v)(uint8_t *dst, const uint8_t *src, ptrdiff_t stride, const uint8_t *srcv)
++{
++    __m128i c16 = _mm_set1_epi16(16);
++    __m128i tM1, tM2, tP0, tP1, tP2, tP3;
++    __m64 h1;
++    QPEL8_INIT
++
++    tM2 = VEC_LD8(srcv - stride * 2);
++    tM1 = VEC_LD8(srcv - stride);
++    tP0 = VEC_LD8(srcv);
++    tP1 = VEC_LD8(srcv + stride);
++    tP2 = VEC_LD8(srcv + stride * 2);
++    srcv += stride * 3;
++
++    // PRAGMA_E2K("ivdep")
++    for (i = 0; i < 8; i++) {
++        QPEL8_LOAD_H
++        QPEL8_1(src)
++        QPEL8_2
++        h1 = h0;
++        src += stride;
++
++        tP3 = VEC_LD8(srcv);
++        QPEL8_1(t)
++        QPEL8_2
++        srcv += stride;
++
++        h0 = _mm_avg_pu8(h0, h1);
++        OP8_E2K(h0)
++
++        tM2 = tM1; tM1 = tP0; tP0 = tP1; tP1 = tP2; tP2 = tP3;
++    }
++}
++
++#define QPEL8_H_V_FUNC(name, vx, hy) \
++FUNC(PREFIX, name) \
++{ \
++    PREF_NAME(PREFIX, 8_h_v)(dst, src + stride * hy, stride, src + vx); \
++}
++
++QPEL8_H_FUNC(8_mc10, P0)
++QPEL8_H_FUNC(8_mc20, PX)
++QPEL8_H_FUNC(8_mc30, P1)
++QPEL8_V_FUNC(8_mc01, P0)
++QPEL8_V_FUNC(8_mc02, PX)
++QPEL8_V_FUNC(8_mc03, P1)
++QPEL8_H_V_FUNC(8_mc11, 0, 0)
++QPEL8_H_V_FUNC(8_mc31, 1, 0)
++QPEL8_H_V_FUNC(8_mc13, 0, 1)
++QPEL8_H_V_FUNC(8_mc33, 1, 1)
++
++#define QPEL8_HV_INIT0
++#define QPEL8_HV_INIT1 __m128i c16 = _mm_set1_epi16(16);
++#define QPEL8_HV_INIT2 QPEL8_HV_INIT1 \
++    __m128i tM1, tM2, tP0, tP1, tP2, tP3; __m64 h1;
++
++#define QPEL8_HVV1(PX) tM2 = tM1; tM1 = tP0; tP0 = tP1; tP1 = tP2; tP2 = src##PX;
++#define QPEL8_HVV2(PX) \
++    h1 = h0; \
++    tP3 = src##PX; \
++    QPEL8_1(t) \
++    QPEL8_2 \
++    tM2 = tM1; tM1 = tP0; tP0 = tP1; tP1 = tP2; tP2 = tP3; \
++    h0 = _mm_avg_pu8(h0, h1);
++
++#define QPEL8_HHV(PX) \
++    v2 = _mm_srai_epi16(_mm_add_epi16(t##PX##A, c16), 5); \
++    v2 = _mm_packus_epi16(v2, v2); \
++    h0 = _mm_avg_pu8(h0, _mm_movepi64_pi64(v2));
++
++#define QPEL8_HVV1_PX
++#define QPEL8_HVV1_P0 QPEL8_HVV1(P0)
++#define QPEL8_HVV1_P1 QPEL8_HVV1(P1)
++
++#define QPEL8_HVV2_PX
++#define QPEL8_HVV2_P0 QPEL8_HVV2(P0)
++#define QPEL8_HVV2_P1 QPEL8_HVV2(P1)
++
++#define QPEL8_HHV_PX
++#define QPEL8_HHV_P0 QPEL8_HHV(M1)
++#define QPEL8_HHV_P1 QPEL8_HHV(P0)
++
++#define QPEL8_HV_FUNC(name, init, PX, PY) \
++FUNC(PREFIX, name) \
++{ \
++    QPEL8_HV_INIT##init \
++    __m128i c32 = _mm_set1_epi16(32); \
++    QPEL8_INIT \
++    __m128i tM1A, tM2A, tP0A, tP1A, tP2A, tP3A; \
++    src -= 2 * stride; \
++    for (i = 0; i < 5; i++) { \
++        QPEL8_LOAD_H \
++        QPEL8_1(src) \
++        src += stride; \
++        tM2A = tM1A; \
++        tM1A = tP0A; \
++        tP0A = tP1A; \
++        tP1A = tP2A; \
++        tP2A = _mm_add_epi16(v4, _mm_add_epi16(v0, v2)); \
++        QPEL8_HVV1_##PY \
++    } \
++    PRAGMA_E2K("ivdep") \
++    for (i = 0; i < 8; i++) { \
++        QPEL8_LOAD_H \
++        QPEL8_1(src) \
++        src += stride; \
++        tP3A = _mm_add_epi16(v4, _mm_add_epi16(v0, v2)); \
++        \
++        v0 = _mm_add_epi16(tP0A, tP1A); \
++        v2 = _mm_add_epi16(tM1A, tP2A); \
++        v4 = _mm_add_epi16(tM2A, tP3A); \
++        \
++        tM2A = tM1A; \
++        tM1A = tP0A; \
++        tP0A = tP1A; \
++        tP1A = tP2A; \
++        tP2A = tP3A; \
++        \
++        v4 = _mm_srai_epi16(_mm_sub_epi16(v4, v2), 2); \
++        v2 = _mm_sub_epi16(v0, v2); \
++        v4 = _mm_srai_epi16(_mm_add_epi16(v4, v2), 2); \
++        v4 = _mm_add_epi16(v4, _mm_add_epi16(v0, c32)); \
++        v4 = _mm_srai_epi16(v4, 6); \
++        h0 = _mm_movepi64_pi64(_mm_packus_epi16(v4, v4)); \
++        \
++        QPEL8_HHV_##PX \
++        QPEL8_HVV2_##PY \
++        OP8_E2K(h0) \
++    } \
++}
++
++QPEL8_HV_FUNC(8_mc21, 1, P0, PX)
++QPEL8_HV_FUNC(8_mc22, 0, PX, PX)
++QPEL8_HV_FUNC(8_mc23, 1, P1, PX)
++QPEL8_HV_FUNC(8_mc12, 2, PX, P0)
++QPEL8_HV_FUNC(8_mc32, 2, PX, P1)
++
++#undef OP8_E2K
++#undef OP16_E2K
++#undef PREFIX
++
 diff --git a/libavcodec/e2k/hevcdsp.c b/libavcodec/e2k/hevcdsp.c
 new file mode 100644
 index 0000000..ba8bed1
@@ -9008,10 +9268,10 @@ index 0000000..263ac60
 +}
 diff --git a/libavcodec/e2k/vc1dsp.c b/libavcodec/e2k/vc1dsp.c
 new file mode 100644
-index 0000000..91307a9
+index 0000000..5e6d694
 --- /dev/null
 +++ b/libavcodec/e2k/vc1dsp.c
-@@ -0,0 +1,303 @@
+@@ -0,0 +1,298 @@
 +/*
 + * VC-1 and WMV3 decoder - DSP functions
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
@@ -9288,20 +9548,15 @@ index 0000000..91307a9
 +    ADD(dest, src3);
 +}
 +
-+#define PUT_OP_U8_E2K(d, s, dst) d = s
-+#define AVG_OP_U8_E2K(d, s, dst) d = _mm_avg_epu8(dst, s)
-+
-+#define OP_U8_E2K                          PUT_OP_U8_E2K
-+#define PREFIX_no_rnd_vc1_chroma_mc8_e2k   put_no_rnd_vc1_chroma_mc8_e2k
++#define OP8_E2K(d, s, dst) d = s
++#define OP16_E2K(d, s, dst) d = s
++#define PREFIX_no_rnd_vc1_chroma_mc8_e2k put_no_rnd_vc1_chroma_mc8_e2k
 +#include "h264chroma_template.c"
-+#undef OP_U8_E2K
-+#undef PREFIX_no_rnd_vc1_chroma_mc8_e2k
 +
-+#define OP_U8_E2K                          AVG_OP_U8_E2K
-+#define PREFIX_no_rnd_vc1_chroma_mc8_e2k   avg_no_rnd_vc1_chroma_mc8_e2k
++#define OP8_E2K(d, s, dst) d = _mm_avg_pu8(dst, s)
++#define OP16_E2K(d, s, dst) d = _mm_avg_epu8(dst, s)
++#define PREFIX_no_rnd_vc1_chroma_mc8_e2k avg_no_rnd_vc1_chroma_mc8_e2k
 +#include "h264chroma_template.c"
-+#undef OP_U8_E2K
-+#undef PREFIX_no_rnd_vc1_chroma_mc8_e2k
 +
 +av_cold void ff_vc1dsp_init_e2k(VC1DSPContext *dsp)
 +{
