@@ -1,6 +1,6 @@
-From 2b9fc74773e3ca192f13e7da995f01a5c8b4eae6 Mon Sep 17 00:00:00 2001
+From b3414b58ed59916ac0c194f1d78eec0fc4a67518 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Sat, 27 Feb 2021 14:54:06 +0700
+Date: Tue, 25 May 2021 13:13:52 +0700
 Subject: [PATCH] libjpeg-turbo-2.0.6 e2k support
 
 ---
@@ -24,9 +24,9 @@ Subject: [PATCH] libjpeg-turbo-2.0.6 e2k support
  simd/e2k/jquantf-e2k.c   | 121 +++++++
  simd/e2k/jquanti-e2k.c   | 178 ++++++++++
  simd/e2k/jsimd.c         | 739 +++++++++++++++++++++++++++++++++++++++
- simd/e2k/jsimd_api_e2k.h |  89 +++++
+ simd/e2k/jsimd_api_e2k.h |  87 +++++
  simd/e2k/jsimd_e2k.h     | 207 +++++++++++
- 22 files changed, 4518 insertions(+)
+ 22 files changed, 4516 insertions(+)
  create mode 100644 simd/e2k/jccolext-e2k.c
  create mode 100644 simd/e2k/jccolor-e2k.c
  create mode 100644 simd/e2k/jchuff-e2k.c
@@ -811,7 +811,7 @@ index 0000000..0750c20
 +}
 diff --git a/simd/e2k/jcsample-e2k.c b/simd/e2k/jcsample-e2k.c
 new file mode 100644
-index 0000000..03ddc2c
+index 0000000..cac8897
 --- /dev/null
 +++ b/simd/e2k/jcsample-e2k.c
 @@ -0,0 +1,203 @@
@@ -878,7 +878,7 @@ index 0000000..03ddc2c
 +#endif
 +    PRAGMA_E2K("ivdep")
 +    for (outcol = output_cols; outcol > 8;
-+         outcol -= 16, inptr += 32, outptr += 16) {
++         outcol -= 16, outptr += 16) {
 +
 +#ifdef NEED_ALIGN8
 +      ALIGN8_READ16(this0, src, 0)
@@ -956,7 +956,7 @@ index 0000000..03ddc2c
 +#endif
 +    PRAGMA_E2K("ivdep")
 +    for (outcol = output_cols; outcol > 8;
-+         outcol -= 16, inptr0 += 32, inptr1 += 32, outptr += 16) {
++         outcol -= 16, outptr += 16) {
 +
 +#ifdef NEED_ALIGN8
 +      ALIGN8_READ16(this0, src0, 0) src0_ptr += 2;
@@ -979,8 +979,8 @@ index 0000000..03ddc2c
 +      ALIGN8_READ16(next0, src0, 0) src0_ptr += 2;
 +      ALIGN8_READ16(next1, src1, 0) src1_ptr += 2;
 +#else
-+      next0 = VEC_LD(inptr0 + 16); inptr0 += 16;
-+      next1 = VEC_LD(inptr1 + 16); inptr1 += 16;
++      next0 = VEC_LD(inptr0); inptr0 += 16;
++      next1 = VEC_LD(inptr1); inptr1 += 16;
 +#endif
 +      next0e = _mm_and_si128(next0, even_mask);
 +      next1e = _mm_and_si128(next1, even_mask);
@@ -4409,10 +4409,10 @@ index 0000000..393416e
 +}
 diff --git a/simd/e2k/jsimd_api_e2k.h b/simd/e2k/jsimd_api_e2k.h
 new file mode 100644
-index 0000000..c6fa247
+index 0000000..89be3e0
 --- /dev/null
 +++ b/simd/e2k/jsimd_api_e2k.h
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,87 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
@@ -4499,8 +4499,6 @@ index 0000000..c6fa247
 +EXTERN(JOCTET *)jsimd_huff_encode_one_block_e2k
 +  (void *state, JOCTET *buffer, JCOEFPTR block,
 +   int last_dc_val, c_derived_tbl *dctbl, c_derived_tbl *actbl);
-+
-+extern int jsimd_use_eml;
 +
 diff --git a/simd/e2k/jsimd_e2k.h b/simd/e2k/jsimd_e2k.h
 new file mode 100644
