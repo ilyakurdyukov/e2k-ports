@@ -1,7 +1,7 @@
-From ad9f0da0b89ce3081c01f2de975c1a0973481285 Mon Sep 17 00:00:00 2001
+From ea7b7b4a469a7ea1d13a8f1bd0da8552f33cc211 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Wed, 12 May 2021 19:23:28 +0700
-Subject: [PATCH] ffmpeg-4.3.1 e2k support
+Date: Wed, 26 May 2021 16:08:59 +0700
+Subject: [PATCH] ffmpeg-4.4 e2k support
 
 ---
  configure                            |   22 +-
@@ -26,7 +26,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libavcodec/e2k/hevcdsp.c             | 2893 ++++++++++++++++++++++++++
  libavcodec/e2k/hpeldsp.c             |  490 +++++
  libavcodec/e2k/hpeldsp.h             |   30 +
- libavcodec/e2k/idctdsp.c             |  322 +++
+ libavcodec/e2k/idctdsp.c             |  324 +++
  libavcodec/e2k/lossless_audiodsp.c   |   75 +
  libavcodec/e2k/lossless_videodsp.c   |   59 +
  libavcodec/e2k/mdct15.c              |  187 ++
@@ -129,7 +129,7 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  libswscale/yuv2rgb.c                 |    2 +
  tests/checkasm/checkasm.c            |    2 +
  tests/checkasm/huffyuvdsp.c          |    8 +-
- 125 files changed, 15026 insertions(+), 6 deletions(-)
+ 125 files changed, 15028 insertions(+), 6 deletions(-)
  create mode 100644 libavcodec/e2k/Makefile
  create mode 100644 libavcodec/e2k/audiodsp.c
  create mode 100644 libavcodec/e2k/blockdsp.c
@@ -182,10 +182,10 @@ Subject: [PATCH] ffmpeg-4.3.1 e2k support
  create mode 100644 libswscale/e2k/yuv2yuv.c
 
 diff --git a/configure b/configure
-index 19c1865..03ce9d8 100755
+index 4a3fac8..96ca53e 100755
 --- a/configure
 +++ b/configure
-@@ -1989,6 +1989,7 @@ ARCH_LIST="
+@@ -1996,6 +1996,7 @@ ARCH_LIST="
      parisc
      ppc
      ppc64
@@ -193,7 +193,7 @@ index 19c1865..03ce9d8 100755
      s390
      sh4
      sparc
-@@ -2060,6 +2061,10 @@ ARCH_EXT_LIST_PPC="
+@@ -2067,6 +2068,10 @@ ARCH_EXT_LIST_PPC="
      vsx
  "
  
@@ -204,7 +204,7 @@ index 19c1865..03ce9d8 100755
  ARCH_EXT_LIST_X86="
      $ARCH_EXT_LIST_X86_SIMD
      cpunop
-@@ -2069,6 +2074,7 @@ ARCH_EXT_LIST_X86="
+@@ -2076,6 +2081,7 @@ ARCH_EXT_LIST_X86="
  ARCH_EXT_LIST="
      $ARCH_EXT_LIST_ARM
      $ARCH_EXT_LIST_PPC
@@ -212,7 +212,7 @@ index 19c1865..03ce9d8 100755
      $ARCH_EXT_LIST_X86
      $ARCH_EXT_LIST_MIPS
      $ARCH_EXT_LIST_LOONGSON
-@@ -2594,10 +2600,10 @@ for ext in $(filter_out mmx $ARCH_EXT_LIST_X86_SIMD); do
+@@ -2605,10 +2611,10 @@ for ext in $(filter_out mmx $ARCH_EXT_LIST_X86_SIMD); do
  done
  
  aligned_stack_if_any="aarch64 ppc x86"
@@ -227,7 +227,7 @@ index 19c1865..03ce9d8 100755
  simd_align_32_if_any="avx"
  simd_align_64_if_any="avx512"
  
-@@ -4889,6 +4895,9 @@ case "$arch" in
+@@ -4927,6 +4933,9 @@ case "$arch" in
      "Power Macintosh"|ppc*|powerpc*)
          arch="ppc"
      ;;
@@ -237,7 +237,7 @@ index 19c1865..03ce9d8 100755
      s390|s390x)
          arch="s390"
      ;;
-@@ -5177,6 +5186,11 @@ elif enabled ppc; then
+@@ -5214,6 +5223,11 @@ elif enabled ppc; then
          ;;
      esac
  
@@ -7544,10 +7544,10 @@ index 0000000..0ade264
 +#endif /* AVCODEC_E2K_HPELDSP_H */
 diff --git a/libavcodec/e2k/idctdsp.c b/libavcodec/e2k/idctdsp.c
 new file mode 100644
-index 0000000..90f94b1
+index 0000000..033db99
 --- /dev/null
 +++ b/libavcodec/e2k/idctdsp.c
-@@ -0,0 +1,322 @@
+@@ -0,0 +1,324 @@
 +/*
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
 + * Copyright (c) 2001 Michel Lespinasse
@@ -7851,7 +7851,9 @@ index 0000000..90f94b1
 +    // libavcodec/tests/dct -i
 +
 +    if (!high_bit_depth && avctx->lowres == 0) {
-+        if ((avctx->idct_algo == FF_IDCT_AUTO && !(avctx->flags & AV_CODEC_FLAG_BITEXACT)) ||
++        // FIXME: FATE tests fail because of a buggy "avidmeridianntsc.mov" test
++        // that incorrectly sets the -bitexact flag.
++        if (/*(avctx->idct_algo == FF_IDCT_AUTO && !(avctx->flags & AV_CODEC_FLAG_BITEXACT)) || */
 +            avctx->idct_algo == FF_IDCT_ALTIVEC) {
 +
 +            c->idct      = ff_fast_idct_e2k;
@@ -12266,29 +12268,29 @@ index 3e1f683..75407d4 100644
                           unsigned high_bit_depth);
  
 diff --git a/libavcodec/fft.h b/libavcodec/fft.h
-index c858570..6a30f7c 100644
+index e03ca01..3b91f98 100644
 --- a/libavcodec/fft.h
 +++ b/libavcodec/fft.h
-@@ -161,6 +161,7 @@ void ff_fft_init_x86(FFTContext *s);
+@@ -155,6 +155,7 @@ void ff_fft_init_x86(FFTContext *s);
  void ff_fft_init_arm(FFTContext *s);
  void ff_fft_init_mips(FFTContext *s);
  void ff_fft_init_ppc(FFTContext *s);
 +void ff_fft_init_e2k(FFTContext *s);
  
- void ff_fft_fixed_init_arm(FFTContext *s);
+ void ff_fft_end(FFTContext *s);
  
 diff --git a/libavcodec/fft_template.c b/libavcodec/fft_template.c
-index 20a62e4..d565a71 100644
+index 3012372..5bc0f4e 100644
 --- a/libavcodec/fft_template.c
 +++ b/libavcodec/fft_template.c
-@@ -245,6 +245,7 @@ av_cold int ff_fft_init(FFTContext *s, int nbits, int inverse)
+@@ -233,6 +233,7 @@ av_cold int ff_fft_init(FFTContext *s, int nbits, int inverse)
      if (ARCH_AARCH64) ff_fft_init_aarch64(s);
      if (ARCH_ARM)     ff_fft_init_arm(s);
      if (ARCH_PPC)     ff_fft_init_ppc(s);
 +    if (ARCH_E2K)     ff_fft_init_e2k(s);
      if (ARCH_X86)     ff_fft_init_x86(s);
-     if (CONFIG_MDCT)  s->mdct_calcw = s->mdct_calc;
      if (HAVE_MIPSFPU) ff_fft_init_mips(s);
+ #endif
 diff --git a/libavcodec/fmtconvert.c b/libavcodec/fmtconvert.c
 index 3b33af6..141ffc0 100644
 --- a/libavcodec/fmtconvert.c
@@ -12390,10 +12392,10 @@ index 7c57ad0..7880b86 100644
  void ff_h264qpel_init_mips(H264QpelContext *c, int bit_depth);
  
 diff --git a/libavcodec/hevcdsp.c b/libavcodec/hevcdsp.c
-index 957e40d..a7d0d5d 100644
+index fe272ac..a2e04f3 100644
 --- a/libavcodec/hevcdsp.c
 +++ b/libavcodec/hevcdsp.c
-@@ -261,6 +261,8 @@ int i = 0;
+@@ -263,6 +263,8 @@ int i = 0;
          ff_hevc_dsp_init_arm(hevcdsp, bit_depth);
      if (ARCH_PPC)
          ff_hevc_dsp_init_ppc(hevcdsp, bit_depth);
@@ -12403,11 +12405,11 @@ index 957e40d..a7d0d5d 100644
          ff_hevc_dsp_init_x86(hevcdsp, bit_depth);
      if (ARCH_MIPS)
 diff --git a/libavcodec/hevcdsp.h b/libavcodec/hevcdsp.h
-index 0ae67cb..3221a2a 100644
+index 0e013a8..2772261 100644
 --- a/libavcodec/hevcdsp.h
 +++ b/libavcodec/hevcdsp.h
-@@ -129,6 +129,7 @@ extern const int8_t ff_hevc_qpel_filters[3][16];
- 
+@@ -132,6 +132,7 @@ extern const int8_t ff_hevc_qpel_filters[3][16];
+ void ff_hevc_dsp_init_aarch64(HEVCDSPContext *c, const int bit_depth);
  void ff_hevc_dsp_init_arm(HEVCDSPContext *c, const int bit_depth);
  void ff_hevc_dsp_init_ppc(HEVCDSPContext *c, const int bit_depth);
 +void ff_hevc_dsp_init_e2k(HEVCDSPContext *c, const int bit_depth);
@@ -12528,10 +12530,10 @@ index 6f35059..bced874 100644
      *ps = s;
  
 diff --git a/libavcodec/mdct15.h b/libavcodec/mdct15.h
-index 42e60f3..c9d515b 100644
+index 035246f..3108aa3 100644
 --- a/libavcodec/mdct15.h
 +++ b/libavcodec/mdct15.h
-@@ -58,5 +58,6 @@ int ff_mdct15_init(MDCT15Context **ps, int inverse, int N, double scale);
+@@ -60,5 +60,6 @@ int ff_mdct15_init(MDCT15Context **ps, int inverse, int N, double scale);
  void ff_mdct15_uninit(MDCT15Context **ps);
  
  void ff_mdct15_init_x86(MDCT15Context *s);
@@ -12539,10 +12541,10 @@ index 42e60f3..c9d515b 100644
  
  #endif /* AVCODEC_MDCT15_H */
 diff --git a/libavcodec/me_cmp.c b/libavcodec/me_cmp.c
-index ae248c5..cb967a4 100644
+index 6054524..f4260e4 100644
 --- a/libavcodec/me_cmp.c
 +++ b/libavcodec/me_cmp.c
-@@ -1088,6 +1088,8 @@ av_cold void ff_me_cmp_init(MECmpContext *c, AVCodecContext *avctx)
+@@ -1066,6 +1066,8 @@ av_cold void ff_me_cmp_init(MECmpContext *c, AVCodecContext *avctx)
          ff_me_cmp_init_arm(c, avctx);
      if (ARCH_PPC)
          ff_me_cmp_init_ppc(c, avctx);
@@ -12552,10 +12554,10 @@ index ae248c5..cb967a4 100644
          ff_me_cmp_init_x86(c, avctx);
      if (ARCH_MIPS)
 diff --git a/libavcodec/me_cmp.h b/libavcodec/me_cmp.h
-index 0a589e3..8989a1c 100644
+index e9b5161..ee270ce 100644
 --- a/libavcodec/me_cmp.h
 +++ b/libavcodec/me_cmp.h
-@@ -85,6 +85,7 @@ void ff_me_cmp_init(MECmpContext *c, AVCodecContext *avctx);
+@@ -83,6 +83,7 @@ void ff_me_cmp_init(MECmpContext *c, AVCodecContext *avctx);
  void ff_me_cmp_init_alpha(MECmpContext *c, AVCodecContext *avctx);
  void ff_me_cmp_init_arm(MECmpContext *c, AVCodecContext *avctx);
  void ff_me_cmp_init_ppc(MECmpContext *c, AVCodecContext *avctx);
@@ -12564,10 +12566,10 @@ index 0a589e3..8989a1c 100644
  void ff_me_cmp_init_mips(MECmpContext *c, AVCodecContext *avctx);
  
 diff --git a/libavcodec/mpegaudiodsp.c b/libavcodec/mpegaudiodsp.c
-index 3cafca2..0514bd4 100644
+index f03e244..4e40f2c 100644
 --- a/libavcodec/mpegaudiodsp.c
 +++ b/libavcodec/mpegaudiodsp.c
-@@ -48,6 +48,7 @@ av_cold void ff_mpadsp_init(MPADSPContext *s)
+@@ -97,6 +97,7 @@ av_cold void ff_mpadsp_init(MPADSPContext *s)
      if (ARCH_AARCH64) ff_mpadsp_init_aarch64(s);
      if (ARCH_ARM)     ff_mpadsp_init_arm(s);
      if (ARCH_PPC)     ff_mpadsp_init_ppc(s);
@@ -12576,7 +12578,7 @@ index 3cafca2..0514bd4 100644
      if (HAVE_MIPSFPU)   ff_mpadsp_init_mipsfpu(s);
      if (HAVE_MIPSDSP) ff_mpadsp_init_mipsdsp(s);
 diff --git a/libavcodec/mpegaudiodsp.h b/libavcodec/mpegaudiodsp.h
-index 0e4352d..4514564 100644
+index 4577d51..b6a9f51 100644
 --- a/libavcodec/mpegaudiodsp.h
 +++ b/libavcodec/mpegaudiodsp.h
 @@ -62,6 +62,7 @@ void ff_mpa_synth_filter_float(MPADSPContext *s,
@@ -12585,13 +12587,13 @@ index 0e4352d..4514564 100644
  void ff_mpadsp_init_ppc(MPADSPContext *s);
 +void ff_mpadsp_init_e2k(MPADSPContext *s);
  void ff_mpadsp_init_x86(MPADSPContext *s);
+ void ff_mpadsp_init_x86_tabs(void);
  void ff_mpadsp_init_mipsfpu(MPADSPContext *s);
- void ff_mpadsp_init_mipsdsp(MPADSPContext *s);
 diff --git a/libavcodec/mpegvideo.c b/libavcodec/mpegvideo.c
-index 49fd1c9..49c4476 100644
+index 5de0719..23fb64f 100644
 --- a/libavcodec/mpegvideo.c
 +++ b/libavcodec/mpegvideo.c
-@@ -318,6 +318,8 @@ static av_cold int dct_init(MpegEncContext *s)
+@@ -320,6 +320,8 @@ static av_cold int dct_init(MpegEncContext *s)
          ff_mpv_common_init_arm(s);
      if (ARCH_PPC)
          ff_mpv_common_init_ppc(s);
@@ -12601,10 +12603,10 @@ index 49fd1c9..49c4476 100644
          ff_mpv_common_init_x86(s);
      if (ARCH_MIPS)
 diff --git a/libavcodec/mpegvideo.h b/libavcodec/mpegvideo.h
-index 29e692f..85fddd2 100644
+index 5a99c19..60f42f4 100644
 --- a/libavcodec/mpegvideo.h
 +++ b/libavcodec/mpegvideo.h
-@@ -685,6 +685,7 @@ void ff_mpv_common_init_arm(MpegEncContext *s);
+@@ -696,6 +696,7 @@ void ff_mpv_common_init_arm(MpegEncContext *s);
  void ff_mpv_common_init_axp(MpegEncContext *s);
  void ff_mpv_common_init_neon(MpegEncContext *s);
  void ff_mpv_common_init_ppc(MpegEncContext *s);
@@ -12690,10 +12692,10 @@ index 07c2ec4..49e2b25 100644
                               unsigned high_bit_depth);
  void ff_pixblockdsp_init_mips(PixblockDSPContext *c, AVCodecContext *avctx,
 diff --git a/libavcodec/svq1enc.c b/libavcodec/svq1enc.c
-index cb215c2..d55fcd3 100644
+index 4fac0c2..dfaa29b 100644
 --- a/libavcodec/svq1enc.c
 +++ b/libavcodec/svq1enc.c
-@@ -570,6 +570,8 @@ static av_cold int svq1_encode_init(AVCodecContext *avctx)
+@@ -567,6 +567,8 @@ static av_cold int svq1_encode_init(AVCodecContext *avctx)
  
      if (ARCH_PPC)
          ff_svq1enc_init_ppc(s);
@@ -12703,10 +12705,10 @@ index cb215c2..d55fcd3 100644
          ff_svq1enc_init_x86(s);
  
 diff --git a/libavcodec/svq1enc.h b/libavcodec/svq1enc.h
-index b4ef763..c070d80 100644
+index bb6af08..046c7d6 100644
 --- a/libavcodec/svq1enc.h
 +++ b/libavcodec/svq1enc.h
-@@ -80,6 +80,7 @@ typedef struct SVQ1EncContext {
+@@ -81,6 +81,7 @@ typedef struct SVQ1EncContext {
  } SVQ1EncContext;
  
  void ff_svq1enc_init_ppc(SVQ1EncContext *c);
@@ -12715,10 +12717,10 @@ index b4ef763..c070d80 100644
  
  #endif /* AVCODEC_SVQ1ENC_H */
 diff --git a/libavcodec/tests/dct.c b/libavcodec/tests/dct.c
-index 2ca8039..755734c 100644
+index eab39e9..05ed785 100644
 --- a/libavcodec/tests/dct.c
 +++ b/libavcodec/tests/dct.c
-@@ -100,6 +100,8 @@ static const struct algo idct_tab[] = {
+@@ -101,6 +101,8 @@ static const struct algo idct_tab[] = {
  #include "arm/dct.c"
  #elif ARCH_PPC
  #include "ppc/dct.c"
@@ -12841,7 +12843,7 @@ index 7abec4e..001151f 100644
  
  #endif /* AVCODEC_VORBISDSP_H */
 diff --git a/libavcodec/vp3dsp.c b/libavcodec/vp3dsp.c
-index f485fba..c2ce815 100644
+index ec859a6..c3f6d78 100644
 --- a/libavcodec/vp3dsp.c
 +++ b/libavcodec/vp3dsp.c
 @@ -456,6 +456,8 @@ av_cold void ff_vp3dsp_init(VP3DSPContext *c, int flags)
@@ -12891,10 +12893,10 @@ index cfe1524..be4f412 100644
  
  void ff_vp8dsp_init(VP8DSPContext *c);
 diff --git a/libavcodec/vp9dsp.c b/libavcodec/vp9dsp.c
-index f6d73f7..03df9c0 100644
+index 41b8ad1..9ad4fcb 100644
 --- a/libavcodec/vp9dsp.c
 +++ b/libavcodec/vp9dsp.c
-@@ -95,5 +95,6 @@ av_cold void ff_vp9dsp_init(VP9DSPContext *dsp, int bpp, int bitexact)
+@@ -97,5 +97,6 @@ av_cold void ff_vp9dsp_init(VP9DSPContext *dsp, int bpp, int bitexact)
      if (ARCH_AARCH64) ff_vp9dsp_init_aarch64(dsp, bpp);
      if (ARCH_ARM) ff_vp9dsp_init_arm(dsp, bpp);
      if (ARCH_X86) ff_vp9dsp_init_x86(dsp, bpp, bitexact);
@@ -12940,10 +12942,10 @@ index e0bc1a2..6e5ff91 100644
                              unsigned high_bit_depth);
  
 diff --git a/libavutil/cpu.c b/libavutil/cpu.c
-index 6548cc3..78e3f79 100644
+index 52f6b9a..ea309a8 100644
 --- a/libavutil/cpu.c
 +++ b/libavutil/cpu.c
-@@ -57,6 +57,8 @@ static int get_cpu_flags(void)
+@@ -59,6 +59,8 @@ static int get_cpu_flags(void)
          return ff_get_cpu_flags_arm();
      if (ARCH_PPC)
          return ff_get_cpu_flags_ppc();
@@ -12952,7 +12954,7 @@ index 6548cc3..78e3f79 100644
      if (ARCH_X86)
          return ff_get_cpu_flags_x86();
      return 0;
-@@ -132,6 +134,8 @@ int av_parse_cpu_flags(const char *s)
+@@ -134,6 +136,8 @@ int av_parse_cpu_flags(const char *s)
          { "flags"   , NULL, 0, AV_OPT_TYPE_FLAGS, { .i64 = 0 }, INT64_MIN, INT64_MAX, .unit = "flags" },
  #if   ARCH_PPC
          { "altivec" , NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_ALTIVEC  },    .unit = "flags" },
@@ -12961,7 +12963,7 @@ index 6548cc3..78e3f79 100644
  #elif ARCH_X86
          { "mmx"     , NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_MMX      },    .unit = "flags" },
          { "mmxext"  , NULL, 0, AV_OPT_TYPE_CONST, { .i64 = CPUFLAG_MMXEXT       },    .unit = "flags" },
-@@ -194,6 +198,8 @@ int av_parse_cpu_caps(unsigned *flags, const char *s)
+@@ -199,6 +203,8 @@ int av_parse_cpu_caps(unsigned *flags, const char *s)
          { "flags"   , NULL, 0, AV_OPT_TYPE_FLAGS, { .i64 = 0 }, INT64_MIN, INT64_MAX, .unit = "flags" },
  #if   ARCH_PPC
          { "altivec" , NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_ALTIVEC  },    .unit = "flags" },
@@ -12970,7 +12972,7 @@ index 6548cc3..78e3f79 100644
  #elif ARCH_X86
          { "mmx"     , NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_MMX      },    .unit = "flags" },
          { "mmx2"    , NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_MMX2     },    .unit = "flags" },
-@@ -314,6 +320,8 @@ size_t av_cpu_max_align(void)
+@@ -324,6 +330,8 @@ size_t av_cpu_max_align(void)
          return ff_get_cpu_max_align_arm();
      if (ARCH_PPC)
          return ff_get_cpu_max_align_ppc();
@@ -12980,7 +12982,7 @@ index 6548cc3..78e3f79 100644
          return ff_get_cpu_max_align_x86();
  
 diff --git a/libavutil/cpu.h b/libavutil/cpu.h
-index 8bb9eb6..537c6db 100644
+index 83099dd..428f288 100644
 --- a/libavutil/cpu.h
 +++ b/libavutil/cpu.h
 @@ -61,6 +61,8 @@
@@ -12993,16 +12995,17 @@ index 8bb9eb6..537c6db 100644
  #define AV_CPU_FLAG_ARMV6        (1 << 1)
  #define AV_CPU_FLAG_ARMV6T2      (1 << 2)
 diff --git a/libavutil/cpu_internal.h b/libavutil/cpu_internal.h
-index 37122d1..d40e28d 100644
+index 8897643..e3a2eb2 100644
 --- a/libavutil/cpu_internal.h
 +++ b/libavutil/cpu_internal.h
-@@ -44,11 +44,13 @@
+@@ -45,12 +45,14 @@ int ff_get_cpu_flags_mips(void);
  int ff_get_cpu_flags_aarch64(void);
  int ff_get_cpu_flags_arm(void);
  int ff_get_cpu_flags_ppc(void);
 +int ff_get_cpu_flags_e2k(void);
  int ff_get_cpu_flags_x86(void);
  
+ size_t ff_get_cpu_max_align_mips(void);
  size_t ff_get_cpu_max_align_aarch64(void);
  size_t ff_get_cpu_max_align_arm(void);
  size_t ff_get_cpu_max_align_ppc(void);
@@ -13584,7 +13587,7 @@ index 4c8413a..b8a698e 100644
  #   include "tomi/intreadwrite.h"
  #elif ARCH_X86
 diff --git a/libavutil/tests/cpu.c b/libavutil/tests/cpu.c
-index ce45b71..21c30cf 100644
+index c853371..85946a9 100644
 --- a/libavutil/tests/cpu.c
 +++ b/libavutil/tests/cpu.c
 @@ -49,6 +49,8 @@ static const struct {
@@ -13593,11 +13596,11 @@ index ce45b71..21c30cf 100644
      { AV_CPU_FLAG_ALTIVEC,   "altivec"    },
 +#elif ARCH_E2K
 +    { AV_CPU_FLAG_E2K,       "e2k"        },
- #elif ARCH_X86
-     { AV_CPU_FLAG_MMX,       "mmx"        },
-     { AV_CPU_FLAG_MMXEXT,    "mmxext"     },
+ #elif ARCH_MIPS
+     { AV_CPU_FLAG_MMI,       "mmi"        },
+     { AV_CPU_FLAG_MSA,       "msa"        },
 diff --git a/libavutil/timer.h b/libavutil/timer.h
-index 0bb353c..cc0c282 100644
+index 36f920e..a2dcf50 100644
 --- a/libavutil/timer.h
 +++ b/libavutil/timer.h
 @@ -54,6 +54,8 @@
@@ -13610,7 +13613,7 @@ index 0bb353c..cc0c282 100644
  #   include "x86/timer.h"
  #endif
 diff --git a/libswresample/audioconvert.c b/libswresample/audioconvert.c
-index d21fc8e..96cd701 100644
+index 500aa0e..a8b4e8b 100644
 --- a/libswresample/audioconvert.c
 +++ b/libswresample/audioconvert.c
 @@ -179,6 +179,7 @@ AudioConvert *swri_audio_convert_alloc(enum AVSampleFormat out_fmt,
@@ -16284,10 +16287,10 @@ index 0000000..7423fa8
 +    }
 +}
 diff --git a/libswscale/swscale.c b/libswscale/swscale.c
-index 9cb7e8f..7760885 100644
+index 12160a1..7b84d83 100644
 --- a/libswscale/swscale.c
 +++ b/libswscale/swscale.c
-@@ -586,6 +586,8 @@ SwsFunc ff_getSwsFunc(SwsContext *c)
+@@ -587,6 +587,8 @@ SwsFunc ff_getSwsFunc(SwsContext *c)
  
      if (ARCH_PPC)
          ff_sws_init_swscale_ppc(c);
@@ -16297,11 +16300,11 @@ index 9cb7e8f..7760885 100644
          ff_sws_init_swscale_x86(c);
      if (ARCH_AARCH64)
 diff --git a/libswscale/swscale_internal.h b/libswscale/swscale_internal.h
-index ee46092..8dcffb2 100644
+index a1de95c..acf4a7f 100644
 --- a/libswscale/swscale_internal.h
 +++ b/libswscale/swscale_internal.h
-@@ -31,7 +31,9 @@
- #include "libavutil/log.h"
+@@ -32,7 +32,9 @@
+ #include "libavutil/mem_internal.h"
  #include "libavutil/pixfmt.h"
  #include "libavutil/pixdesc.h"
 +#if HAVE_ALTIVEC
@@ -16310,7 +16313,7 @@ index ee46092..8dcffb2 100644
  
  #define STR(s) AV_TOSTRING(s) // AV_STRINGIFY is too long
  
-@@ -639,6 +641,7 @@ av_cold void ff_sws_init_range_convert(SwsContext *c);
+@@ -642,6 +644,7 @@ av_cold void ff_sws_init_range_convert(SwsContext *c);
  
  SwsFunc ff_yuv2rgb_init_x86(SwsContext *c);
  SwsFunc ff_yuv2rgb_init_ppc(SwsContext *c);
@@ -16318,7 +16321,7 @@ index ee46092..8dcffb2 100644
  
  static av_always_inline int is16BPS(enum AVPixelFormat pix_fmt)
  {
-@@ -853,6 +856,7 @@ extern const AVClass ff_sws_context_class;
+@@ -863,6 +866,7 @@ extern const AVClass ff_sws_context_class;
   */
  void ff_get_unscaled_swscale(SwsContext *c);
  void ff_get_unscaled_swscale_ppc(SwsContext *c);
@@ -16326,7 +16329,7 @@ index ee46092..8dcffb2 100644
  void ff_get_unscaled_swscale_arm(SwsContext *c);
  void ff_get_unscaled_swscale_aarch64(SwsContext *c);
  
-@@ -873,6 +877,7 @@ void ff_sws_init_output_funcs(SwsContext *c,
+@@ -883,6 +887,7 @@ void ff_sws_init_output_funcs(SwsContext *c,
                                yuv2anyX_fn *yuv2anyX);
  void ff_sws_init_swscale_ppc(SwsContext *c);
  void ff_sws_init_swscale_vsx(SwsContext *c);
@@ -16335,10 +16338,10 @@ index ee46092..8dcffb2 100644
  void ff_sws_init_swscale_aarch64(SwsContext *c);
  void ff_sws_init_swscale_arm(SwsContext *c);
 diff --git a/libswscale/swscale_unscaled.c b/libswscale/swscale_unscaled.c
-index 5fb572b..cacb11c 100644
+index c4dd8a4..418fa64 100644
 --- a/libswscale/swscale_unscaled.c
 +++ b/libswscale/swscale_unscaled.c
-@@ -2172,6 +2172,8 @@ void ff_get_unscaled_swscale(SwsContext *c)
+@@ -2222,6 +2222,8 @@ void ff_get_unscaled_swscale(SwsContext *c)
  
      if (ARCH_PPC)
          ff_get_unscaled_swscale_ppc(c);
@@ -16348,7 +16351,7 @@ index 5fb572b..cacb11c 100644
           ff_get_unscaled_swscale_arm(c);
      if (ARCH_AARCH64)
 diff --git a/libswscale/utils.c b/libswscale/utils.c
-index 111062e..db58be1 100644
+index 352a8ed..0fd4c75 100644
 --- a/libswscale/utils.c
 +++ b/libswscale/utils.c
 @@ -51,6 +51,7 @@
@@ -16359,7 +16362,7 @@ index 111062e..db58be1 100644
  #include "libavutil/x86/asm.h"
  #include "libavutil/x86/cpu.h"
  
-@@ -600,6 +601,14 @@ static av_cold int initFilter(int16_t **outFilter, int32_t **filterPos,
+@@ -601,6 +602,14 @@ static av_cold int initFilter(int16_t **outFilter, int32_t **filterPos,
              filterAlign = 1;
      }
  
@@ -16374,7 +16377,7 @@ index 111062e..db58be1 100644
      if (HAVE_MMX && cpu_flags & AV_CPU_FLAG_MMX) {
          // special case for unscaled vertical filtering
          if (minFilterSize == 1 && filterAlign == 2)
-@@ -1679,6 +1688,7 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
+@@ -1693,6 +1702,7 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
          {
              const int filterAlign = X86_MMX(cpu_flags)     ? 4 :
                                      PPC_ALTIVEC(cpu_flags) ? 8 :
@@ -16382,7 +16385,7 @@ index 111062e..db58be1 100644
                                      have_neon(cpu_flags)   ? 8 : 1;
  
              if ((ret = initFilter(&c->hLumFilter, &c->hLumFilterPos,
-@@ -1706,6 +1716,7 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
+@@ -1720,6 +1730,7 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
      {
          const int filterAlign = X86_MMX(cpu_flags)     ? 2 :
                                  PPC_ALTIVEC(cpu_flags) ? 8 :
@@ -16390,7 +16393,7 @@ index 111062e..db58be1 100644
                                  have_neon(cpu_flags)   ? 2 : 1;
  
          if ((ret = initFilter(&c->vLumFilter, &c->vLumFilterPos, &c->vLumFilterSize,
-@@ -1790,6 +1801,8 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
+@@ -1806,6 +1817,8 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
              cpucaps = "MMX";
          else if (PPC_ALTIVEC(cpu_flags))
              cpucaps = "AltiVec";
@@ -16400,7 +16403,7 @@ index 111062e..db58be1 100644
              cpucaps = "C";
  
 diff --git a/libswscale/yuv2rgb.c b/libswscale/yuv2rgb.c
-index 5884625..26d41fe 100644
+index 6a3956e..ffb4091 100644
 --- a/libswscale/yuv2rgb.c
 +++ b/libswscale/yuv2rgb.c
 @@ -682,6 +682,8 @@ SwsFunc ff_yuv2rgb_get_func_ptr(SwsContext *c)
@@ -16413,18 +16416,18 @@ index 5884625..26d41fe 100644
          t = ff_yuv2rgb_init_x86(c);
  
 diff --git a/tests/checkasm/checkasm.c b/tests/checkasm/checkasm.c
-index 899f68b..3768647 100644
+index 8338e8f..af6d590 100644
 --- a/tests/checkasm/checkasm.c
 +++ b/tests/checkasm/checkasm.c
-@@ -213,6 +213,8 @@ static const struct {
+@@ -223,6 +223,8 @@ static const struct {
      { "ALTIVEC",  "altivec",  AV_CPU_FLAG_ALTIVEC },
      { "VSX",      "vsx",      AV_CPU_FLAG_VSX },
      { "POWER8",   "power8",   AV_CPU_FLAG_POWER8 },
 +#elif ARCH_E2K
 +    { "E2K",      "e2k",      AV_CPU_FLAG_E2K },
- #elif ARCH_X86
-     { "MMX",      "mmx",      AV_CPU_FLAG_MMX|AV_CPU_FLAG_CMOV },
-     { "MMXEXT",   "mmxext",   AV_CPU_FLAG_MMXEXT },
+ #elif ARCH_MIPS
+     { "MMI",      "mmi",      AV_CPU_FLAG_MMI },
+     { "MSA",      "msa",      AV_CPU_FLAG_MSA },
 diff --git a/tests/checkasm/huffyuvdsp.c b/tests/checkasm/huffyuvdsp.c
 index 8392022..d5eba83 100644
 --- a/tests/checkasm/huffyuvdsp.c
