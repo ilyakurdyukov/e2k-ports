@@ -1,6 +1,6 @@
-From 6ac651bd8f5745704b6f2ae1be26a2040c8897b8 Mon Sep 17 00:00:00 2001
+From f6683d5cbaa6b7941e6463b146515d3ad60d51eb Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Fri, 28 May 2021 20:18:09 +0700
+Date: Mon, 31 May 2021 23:39:40 +0700
 Subject: [PATCH] libaom-3.0.0 e2k support
 
 ---
@@ -18,6 +18,7 @@ Subject: [PATCH] libaom-3.0.0 e2k support
  aom_dsp/e2k/sad_e2k.c                    |  265 ++++
  aom_dsp/e2k/subpel_variance_e2k.c        | 1761 ++++++++++++++++++++++
  aom_dsp/e2k/subtract_e2k.c               |  111 ++
+ aom_dsp/simd/v256_intrinsics_c.h         |    8 +
  aom_dsp/simd/v256_intrinsics_x86.h       |    2 +-
  aom_dsp/x86/aom_asm_stubs.c              |    2 +
  aom_dsp/x86/variance_sse2.c              |    4 +
@@ -30,7 +31,7 @@ Subject: [PATCH] libaom-3.0.0 e2k support
  build/cmake/cpu.cmake                    |   16 +
  build/cmake/rtcd.pl                      |   33 +
  test/variance_test.cc                    |    2 +
- 26 files changed, 4892 insertions(+), 2 deletions(-)
+ 27 files changed, 4900 insertions(+), 2 deletions(-)
  create mode 100644 aom_dsp/e2k/aom_high_subpixel_8t_e2k.c
  create mode 100644 aom_dsp/e2k/aom_subpixel_8t_e2k.c
  create mode 100644 aom_dsp/e2k/highbd_intrapred_e2k.c
@@ -4798,6 +4799,34 @@ index 0000000..53449fb
 +  }
 +}
 +
+diff --git a/aom_dsp/simd/v256_intrinsics_c.h b/aom_dsp/simd/v256_intrinsics_c.h
+index 8127ee3..6fcb55c 100644
+--- a/aom_dsp/simd/v256_intrinsics_c.h
++++ b/aom_dsp/simd/v256_intrinsics_c.h
+@@ -78,7 +78,11 @@ SIMD_INLINE c_v256 c_v256_load_unaligned(const void *p) {
+ }
+ 
+ SIMD_INLINE c_v256 c_v256_load_aligned(const void *p) {
++#ifdef __e2k__
++  if (SIMD_CHECK && (uintptr_t)p & 15) {
++#else
+   if (SIMD_CHECK && (uintptr_t)p & 31) {
++#endif
+     fprintf(stderr, "Error: unaligned v256 load at %p\n", p);
+     abort();
+   }
+@@ -93,7 +97,11 @@ SIMD_INLINE void c_v256_store_unaligned(void *p, c_v256 a) {
+ }
+ 
+ SIMD_INLINE void c_v256_store_aligned(void *p, c_v256 a) {
++#ifdef __e2k__
++  if (SIMD_CHECK && (uintptr_t)p & 15) {
++#else
+   if (SIMD_CHECK && (uintptr_t)p & 31) {
++#endif
+     fprintf(stderr, "Error: unaligned v256 store at %p\n", p);
+     abort();
+   }
 diff --git a/aom_dsp/simd/v256_intrinsics_x86.h b/aom_dsp/simd/v256_intrinsics_x86.h
 index 5983cb8..3262695 100644
 --- a/aom_dsp/simd/v256_intrinsics_x86.h

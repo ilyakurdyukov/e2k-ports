@@ -1,0 +1,170 @@
+From 9004bd41293d511d200ec2e9c6fb17f8a5e92681 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Thu, 3 Jun 2021 21:21:43 +0700
+Subject: [PATCH] libbotan-2.18.0 e2k support
+
+---
+ src/build-data/arch/e2k.txt    | 11 +++++++++
+ src/build-data/detect_arch.cpp |  3 +++
+ src/lib/filters/filter.h       |  4 ++++
+ src/lib/utils/cpuid/cpuid.cpp  |  7 ++++++
+ src/lib/utils/cpuid/cpuid.h    | 44 +++++++++++++++++++++++++++++++++-
+ src/lib/utils/os_utils.cpp     |  8 +++++++
+ 6 files changed, 76 insertions(+), 1 deletion(-)
+ create mode 100644 src/build-data/arch/e2k.txt
+
+diff --git a/src/build-data/arch/e2k.txt b/src/build-data/arch/e2k.txt
+new file mode 100644
+index 0000000..b2cafe7
+--- /dev/null
++++ b/src/build-data/arch/e2k.txt
+@@ -0,0 +1,11 @@
++endian little
++wordsize 64
++
++family e2k
++
++<isa_extensions>
++avx2
++sse2
++sse41
++ssse3
++</isa_extensions>
+diff --git a/src/build-data/detect_arch.cpp b/src/build-data/detect_arch.cpp
+index 4de5892..ad73c3a 100644
+--- a/src/build-data/detect_arch.cpp
++++ b/src/build-data/detect_arch.cpp
+@@ -70,6 +70,9 @@
+      RISCV32
+   #endif
+ 
++#elif defined(__e2k__)
++  E2K
++
+ #else
+   UNKNOWN
+ 
+diff --git a/src/lib/filters/filter.h b/src/lib/filters/filter.h
+index 94b9c6c..81d262b 100644
+--- a/src/lib/filters/filter.h
++++ b/src/lib/filters/filter.h
+@@ -155,7 +155,11 @@ class BOTAN_PUBLIC_API(2,0) Fanout_Filter : public Filter
+ 
+       void attach(Filter* f) { Filter::attach(f); }
+ 
++#ifdef __e2k__
++   public: /* LCC bug workaround */
++#else
+    private:
++#endif
+       friend class Threaded_Fork;
+       using Filter::m_write_queue;
+       using Filter::total_ports;
+diff --git a/src/lib/utils/cpuid/cpuid.cpp b/src/lib/utils/cpuid/cpuid.cpp
+index e76e12e..d98b60d 100644
+--- a/src/lib/utils/cpuid/cpuid.cpp
++++ b/src/lib/utils/cpuid/cpuid.cpp
+@@ -58,6 +58,13 @@ std::string CPUID::to_string()
+    CPUID_PRINT(avx512_clmul);
+ #endif
+ 
++#if defined(BOTAN_TARGET_CPU_IS_E2K_FAMILY)
++   CPUID_PRINT(sse2);
++   CPUID_PRINT(ssse3);
++   CPUID_PRINT(sse41);
++   CPUID_PRINT(avx2);
++#endif
++
+ #if defined(BOTAN_TARGET_CPU_IS_PPC_FAMILY)
+    CPUID_PRINT(altivec);
+    CPUID_PRINT(power_crypto);
+diff --git a/src/lib/utils/cpuid/cpuid.h b/src/lib/utils/cpuid/cpuid.h
+index 04d0bbd..effcd41 100644
+--- a/src/lib/utils/cpuid/cpuid.h
++++ b/src/lib/utils/cpuid/cpuid.h
+@@ -355,13 +355,55 @@ class BOTAN_PUBLIC_API(2,1) CPUID final
+          { return has_cpuid_bit(CPUID_RDSEED_BIT); }
+ #endif
+ 
++#if defined(BOTAN_TARGET_CPU_IS_E2K_FAMILY)
++      /**
++      * Check if the processor supports SSE2
++      */
++      static bool has_sse2()
++#ifdef __SSE2__
++         { return true; }
++#else
++         { return false; }
++#endif
++
++      /**
++      * Check if the processor supports SSSE3
++      */
++      static bool has_ssse3()
++#ifdef __SSSE3__
++         { return true; }
++#else
++         { return false; }
++#endif
++
++      /**
++      * Check if the processor supports SSE4.1
++      */
++      static bool has_sse41()
++#ifdef __SSE4_1__
++         { return true; }
++#else
++         { return false; }
++#endif
++
++      /**
++      * Check if the processor supports AVX2
++      */
++      static bool has_avx2()
++#ifdef __AVX2__
++         { return true; }
++#else
++         { return false; }
++#endif
++#endif
++
+       /**
+       * Check if the processor supports byte-level vector permutes
+       * (SSSE3, NEON, Altivec)
+       */
+       static bool has_vperm()
+          {
+-#if defined(BOTAN_TARGET_CPU_IS_X86_FAMILY)
++#if defined(BOTAN_TARGET_CPU_IS_X86_FAMILY) || defined(BOTAN_TARGET_CPU_IS_E2K_FAMILY)
+          return has_ssse3();
+ #elif defined(BOTAN_TARGET_CPU_IS_ARM_FAMILY)
+          return has_neon();
+diff --git a/src/lib/utils/os_utils.cpp b/src/lib/utils/os_utils.cpp
+index f5151da..f21aaf4 100644
+--- a/src/lib/utils/os_utils.cpp
++++ b/src/lib/utils/os_utils.cpp
+@@ -151,6 +151,10 @@ bool OS::running_in_privileged_state()
+ #endif
+    }
+ 
++#if defined(BOTAN_TARGET_CPU_IS_E2K_FAMILY)
++#include <x86intrin.h>
++#endif
++
+ uint64_t OS::get_cpu_cycle_counter()
+    {
+    uint64_t rtc = 0;
+@@ -160,6 +164,10 @@ uint64_t OS::get_cpu_cycle_counter()
+    ::QueryPerformanceCounter(&tv);
+    rtc = tv.QuadPart;
+ 
++#elif defined(BOTAN_TARGET_CPU_IS_E2K_FAMILY)
++   unsigned aux;
++   rtc = __rdtscp(&aux);
++
+ #elif defined(BOTAN_USE_GCC_INLINE_ASM)
+ 
+ #if defined(BOTAN_TARGET_CPU_IS_X86_FAMILY)
+-- 
+2.17.1
+
