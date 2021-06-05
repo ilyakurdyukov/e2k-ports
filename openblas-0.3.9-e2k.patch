@@ -1,0 +1,347 @@
+From 7963544ae62c1eee17589606f7451114d1f0bb1e Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Fri, 4 Jun 2021 23:16:30 +0700
+Subject: [PATCH] openblas-0.3.9 e2k support
+
+---
+ Makefile.e2k      |   1 +
+ c_check           |   7 +++
+ common.h          |   4 ++
+ common_e2k.h      |  63 ++++++++++++++++++++
+ common_macro.h    |   2 +-
+ ctest.c           |   4 ++
+ getarch.c         |  11 ++++
+ kernel/e2k/KERNEL | 149 ++++++++++++++++++++++++++++++++++++++++++++++
+ 8 files changed, 240 insertions(+), 1 deletion(-)
+ create mode 100644 Makefile.e2k
+ create mode 100644 common_e2k.h
+ create mode 100644 kernel/e2k/KERNEL
+
+diff --git a/Makefile.e2k b/Makefile.e2k
+new file mode 100644
+index 00000000..a5e50b1f
+--- /dev/null
++++ b/Makefile.e2k
+@@ -0,0 +1 @@
++COPT	= -Wall -O2 # -DGEMMTEST
+diff --git a/c_check b/c_check
+index 19f70326..908e3a93 100644
+--- a/c_check
++++ b/c_check
+@@ -91,6 +91,7 @@ $architecture = ia64   if ($data =~ /ARCH_IA64/);
+ $architecture = arm    if ($data =~ /ARCH_ARM/);
+ $architecture = arm64  if ($data =~ /ARCH_ARM64/);
+ $architecture = zarch  if ($data =~ /ARCH_ZARCH/);
++$architecture = e2k    if ($data =~ /ARCH_E2K/);
+ 
+ $defined = 0;
+ 
+@@ -120,6 +121,11 @@ if ($architecture eq "zarch") {
+     $binary = 64;
+ }
+ 
++if ($architecture eq "e2k") {
++    $defined = 1;
++    $binary = 64;
++}
++
+ if ($architecture eq "alpha") {
+     $defined = 1;
+     $binary = 64;
+@@ -219,6 +225,7 @@ $architecture = ia64   if ($data =~ /ARCH_IA64/);
+ $architecture = arm    if ($data =~ /ARCH_ARM/);
+ $architecture = arm64  if ($data =~ /ARCH_ARM64/);
+ $architecture = zarch  if ($data =~ /ARCH_ZARCH/);
++$architecture = e2k    if ($data =~ /ARCH_E2K/);
+ 
+ $binformat    = bin32;
+ $binformat    = bin64  if ($data =~ /BINARY_64/);
+diff --git a/common.h b/common.h
+index a9fe8d91..8310939f 100644
+--- a/common.h
++++ b/common.h
+@@ -441,6 +441,10 @@ please https://github.com/xianyi/OpenBLAS/issues/246
+ #include "common_zarch.h"
+ #endif
+ 
++#ifdef ARCH_E2K
++#include "common_e2k.h"
++#endif
++
+ #ifndef ASSEMBLER
+ #ifdef OS_WINDOWSSTORE
+ typedef char env_var_t[MAX_PATH];
+diff --git a/common_e2k.h b/common_e2k.h
+new file mode 100644
+index 00000000..48d212ca
+--- /dev/null
++++ b/common_e2k.h
+@@ -0,0 +1,63 @@
++/*****************************************************************************
++Copyright (c) 2011-2016, The OpenBLAS Project
++All rights reserved.
++
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are
++met:
++
++   1. Redistributions of source code must retain the above copyright
++      notice, this list of conditions and the following disclaimer.
++
++   2. Redistributions in binary form must reproduce the above copyright
++      notice, this list of conditions and the following disclaimer in
++      the documentation and/or other materials provided with the
++      distribution.
++   3. Neither the name of the OpenBLAS project nor the names of 
++      its contributors may be used to endorse or promote products 
++      derived from this software without specific prior written 
++      permission.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
++LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
++USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++**********************************************************************************/
++
++#ifndef COMMON_E2K
++#define COMMON_E2K
++
++#ifdef ASSEMBLER
++#error
++#endif
++
++#define MB do { __asm__ __volatile__("": : :"memory"); } while (0)
++#define WMB do { __asm__ __volatile__("": : :"memory"); } while (0)
++
++#define INLINE __attribute__((__always_inline__)) inline
++
++static inline int blas_quickdivide(blasint x, blasint y) {
++  return x / y;
++}
++
++#ifndef PAGESIZE
++#define PAGESIZE	( 4 << 10)
++#endif
++#define HUGE_PAGESIZE	( 2 << 20)
++
++#ifndef BUFFERSIZE
++#define BUFFER_SIZE	(32 << 20)
++#else
++#define BUFFER_SIZE	(32 << BUFFERSIZE)
++#endif
++
++#define SEEK_ADDRESS
++
++#endif
++
+diff --git a/common_macro.h b/common_macro.h
+index 13bb8579..7afab83b 100644
+--- a/common_macro.h
++++ b/common_macro.h
+@@ -2199,7 +2199,7 @@
+ #endif
+ 
+ #ifndef ASSEMBLER
+-#if defined(ARCH_X86) || defined(ARCH_X86_64) || defined(ARCH_IA64) || defined(ARCH_MIPS64) || defined(ARCH_ARM64)
++#if defined(ARCH_X86) || defined(ARCH_X86_64) || defined(ARCH_IA64) || defined(ARCH_MIPS64) || defined(ARCH_ARM64) || defined(ARCH_E2K)
+ extern BLASLONG gemm_offset_a;
+ extern BLASLONG gemm_offset_b;
+ extern BLASLONG sgemm_p;
+diff --git a/ctest.c b/ctest.c
+index 5e869b90..2de34414 100644
+--- a/ctest.c
++++ b/ctest.c
+@@ -153,3 +153,7 @@ ARCH_ARM
+ ARCH_ARM64
+ #endif
+ 
++#if defined(__e2k__)
++ARCH_E2K
++#endif
++
+diff --git a/getarch.c b/getarch.c
+index 30ca290e..89834a53 100644
+--- a/getarch.c
++++ b/getarch.c
+@@ -1158,6 +1158,17 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ #define CORENAME  "Z14"
+ #endif
+ 
++#if defined(FORCE_E2K) || defined(__e2k__)
++#define FORCE
++#define ARCHITECTURE "E2K"
++#define ARCHCONFIG   "-DGENERIC " \
++		     "-DL1_DATA_SIZE=16384 -DL1_DATA_LINESIZE=64 " \
++		     "-DL2_SIZE=524288 -DL2_LINESIZE=64 " \
++		     "-DDTB_DEFAULT_ENTRIES=64 -DDTB_SIZE=4096 -DL2_ASSOCIATIVE=8 "
++#define LIBNAME   "generic"
++#define CORENAME  "generic"
++#endif
++
+ #ifndef FORCE
+ 
+ #ifdef USER_TARGET
+diff --git a/kernel/e2k/KERNEL b/kernel/e2k/KERNEL
+new file mode 100644
+index 00000000..afa8a088
+--- /dev/null
++++ b/kernel/e2k/KERNEL
+@@ -0,0 +1,149 @@
++SAMAXKERNEL  = ../arm/amax.c
++DAMAXKERNEL  = ../arm/amax.c
++CAMAXKERNEL  = ../arm/zamax.c
++ZAMAXKERNEL  = ../arm/zamax.c
++
++SAMINKERNEL  = ../arm/amin.c
++DAMINKERNEL  = ../arm/amin.c
++CAMINKERNEL  = ../arm/zamin.c
++ZAMINKERNEL  = ../arm/zamin.c
++
++SMAXKERNEL   = ../arm/max.c
++DMAXKERNEL   = ../arm/max.c
++
++SMINKERNEL   = ../arm/min.c
++DMINKERNEL   = ../arm/min.c
++
++ISAMAXKERNEL = ../arm/iamax.c
++IDAMAXKERNEL = ../arm/iamax.c
++ICAMAXKERNEL = ../arm/izamax.c
++IZAMAXKERNEL = ../arm/izamax.c
++
++ISAMINKERNEL = ../arm/iamin.c
++IDAMINKERNEL = ../arm/iamin.c
++ICAMINKERNEL = ../arm/izamin.c
++IZAMINKERNEL = ../arm/izamin.c
++
++ISMAXKERNEL  = ../arm/imax.c
++IDMAXKERNEL  = ../arm/imax.c
++
++ISMINKERNEL  = ../arm/imin.c
++IDMINKERNEL  = ../arm/imin.c
++
++SASUMKERNEL  = ../arm/asum.c
++DASUMKERNEL  = ../arm/asum.c
++CASUMKERNEL  = ../arm/zasum.c
++ZASUMKERNEL  = ../arm/zasum.c
++
++SSUMKERNEL  = ../arm/sum.c
++DSUMKERNEL  = ../arm/sum.c
++CSUMKERNEL  = ../arm/zsum.c
++ZSUMKERNEL  = ../arm/zsum.c
++
++SAXPYKERNEL  = ../arm/axpy.c
++DAXPYKERNEL  = ../arm/axpy.c
++CAXPYKERNEL  = ../arm/zaxpy.c
++ZAXPYKERNEL  = ../arm/zaxpy.c
++
++SCOPYKERNEL  = ../arm/copy.c
++DCOPYKERNEL  = ../arm/copy.c
++CCOPYKERNEL  = ../arm/zcopy.c
++ZCOPYKERNEL  = ../arm/zcopy.c
++
++SDOTKERNEL   = ../arm/dot.c
++DDOTKERNEL   = ../arm/dot.c
++CDOTKERNEL   = ../arm/zdot.c
++ZDOTKERNEL   = ../arm/zdot.c
++DSDOTKERNEL  = ../generic/dot.c
++
++SNRM2KERNEL  = ../arm/nrm2.c
++DNRM2KERNEL  = ../arm/nrm2.c
++CNRM2KERNEL  = ../arm/znrm2.c
++ZNRM2KERNEL  = ../arm/znrm2.c
++
++SROTKERNEL   = ../arm/rot.c
++DROTKERNEL   = ../arm/rot.c
++CROTKERNEL   = ../arm/zrot.c
++ZROTKERNEL   = ../arm/zrot.c
++
++SSCALKERNEL  = ../arm/scal.c
++DSCALKERNEL  = ../arm/scal.c
++CSCALKERNEL  = ../arm/zscal.c
++ZSCALKERNEL  = ../arm/zscal.c
++
++SSWAPKERNEL  = ../arm/swap.c
++DSWAPKERNEL  = ../arm/swap.c
++CSWAPKERNEL  = ../arm/zswap.c
++ZSWAPKERNEL  = ../arm/zswap.c
++
++SGEMVNKERNEL = ../arm/gemv_n.c
++DGEMVNKERNEL = ../arm/gemv_n.c
++CGEMVNKERNEL = ../arm/zgemv_n.c
++ZGEMVNKERNEL = ../arm/zgemv_n.c
++
++SGEMVTKERNEL = ../arm/gemv_t.c
++DGEMVTKERNEL = ../arm/gemv_t.c
++CGEMVTKERNEL = ../arm/zgemv_t.c
++ZGEMVTKERNEL = ../arm/zgemv_t.c
++
++STRMMKERNEL	= ../generic/trmmkernel_2x2.c
++DTRMMKERNEL	= ../generic/trmmkernel_2x2.c
++CTRMMKERNEL	= ../generic/ztrmmkernel_2x2.c
++ZTRMMKERNEL	= ../generic/ztrmmkernel_2x2.c
++
++SGEMMKERNEL    =  ../generic/gemmkernel_2x2.c
++SGEMMONCOPY    =  ../generic/gemm_ncopy_2.c
++SGEMMOTCOPY    =  ../generic/gemm_tcopy_2.c
++SGEMMONCOPYOBJ =  sgemm_oncopy$(TSUFFIX).$(SUFFIX)
++SGEMMOTCOPYOBJ =  sgemm_otcopy$(TSUFFIX).$(SUFFIX)
++
++DGEMMKERNEL    =  ../generic/gemmkernel_2x2.c
++DGEMMONCOPY    = ../generic/gemm_ncopy_2.c
++DGEMMOTCOPY    = ../generic/gemm_tcopy_2.c
++DGEMMONCOPYOBJ = dgemm_oncopy$(TSUFFIX).$(SUFFIX)
++DGEMMOTCOPYOBJ = dgemm_otcopy$(TSUFFIX).$(SUFFIX)
++
++CGEMMKERNEL    = ../generic/zgemmkernel_2x2.c
++CGEMMONCOPY    = ../generic/zgemm_ncopy_2.c
++CGEMMOTCOPY    = ../generic/zgemm_tcopy_2.c
++CGEMMONCOPYOBJ =  cgemm_oncopy$(TSUFFIX).$(SUFFIX)
++CGEMMOTCOPYOBJ =  cgemm_otcopy$(TSUFFIX).$(SUFFIX)
++
++ZGEMMKERNEL    = ../generic/zgemmkernel_2x2.c
++ZGEMMONCOPY    = ../generic/zgemm_ncopy_2.c
++ZGEMMOTCOPY    = ../generic/zgemm_tcopy_2.c
++ZGEMMONCOPYOBJ =  zgemm_oncopy$(TSUFFIX).$(SUFFIX)
++ZGEMMOTCOPYOBJ =  zgemm_otcopy$(TSUFFIX).$(SUFFIX)
++
++STRSMKERNEL_LN	=  ../generic/trsm_kernel_LN.c
++STRSMKERNEL_LT	=  ../generic/trsm_kernel_LT.c
++STRSMKERNEL_RN	=  ../generic/trsm_kernel_RN.c
++STRSMKERNEL_RT	=  ../generic/trsm_kernel_RT.c
++
++DTRSMKERNEL_LN	= ../generic/trsm_kernel_LN.c
++DTRSMKERNEL_LT	= ../generic/trsm_kernel_LT.c
++DTRSMKERNEL_RN	= ../generic/trsm_kernel_RN.c
++DTRSMKERNEL_RT	= ../generic/trsm_kernel_RT.c
++
++CTRSMKERNEL_LN	= ../generic/trsm_kernel_LN.c
++CTRSMKERNEL_LT	= ../generic/trsm_kernel_LT.c
++CTRSMKERNEL_RN	= ../generic/trsm_kernel_RN.c
++CTRSMKERNEL_RT	= ../generic/trsm_kernel_RT.c
++
++ZTRSMKERNEL_LN	= ../generic/trsm_kernel_LN.c
++ZTRSMKERNEL_LT	= ../generic/trsm_kernel_LT.c
++ZTRSMKERNEL_RN	= ../generic/trsm_kernel_RN.c
++ZTRSMKERNEL_RT	= ../generic/trsm_kernel_RT.c
++
++
++SCABS_KERNEL	= ../generic/cabs.c
++DCABS_KERNEL	= ../generic/cabs.c
++QCABS_KERNEL	= ../generic/cabs.c
++LSAME_KERNEL	= ../generic/lsame.c
++
++SGEMM_BETA = ../generic/gemm_beta.c
++DGEMM_BETA = ../generic/gemm_beta.c
++CGEMM_BETA = ../generic/zgemm_beta.c
++ZGEMM_BETA = ../generic/zgemm_beta.c
++
++
+-- 
+2.17.1
+
