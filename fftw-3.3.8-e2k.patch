@@ -1,0 +1,154 @@
+From ac928830e6afec8c547a58ce39ac40472f87114f Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Tue, 8 Jun 2021 10:13:27 +0700
+Subject: [PATCH] fftw-3.3.8 e2k support
+
+---
+ kernel/cycle.h           | 19 +++++++++++++++++++
+ simd-support/avx.c       | 11 +++++++++++
+ simd-support/avx2.c      | 10 ++++++++++
+ simd-support/simd-avx.h  |  2 +-
+ simd-support/simd-avx2.h |  2 +-
+ simd-support/simd-sse2.h |  2 +-
+ simd-support/sse2.c      |  2 +-
+ 7 files changed, 44 insertions(+), 4 deletions(-)
+
+diff --git a/kernel/cycle.h b/kernel/cycle.h
+index fe3dd50..b20fb28 100644
+--- a/kernel/cycle.h
++++ b/kernel/cycle.h
+@@ -260,6 +260,25 @@ INLINE_ELAPSED(__inline)
+ #define TIME_MIN 5000.0
+ #endif
+ 
++/*----------------------------------------------------------------*/
++/*
++ * E2K cycle counter
++ */
++
++#ifdef __e2k__
++#include <stdint.h>
++#include <x86intrin.h>
++typedef uint64_t ticks;
++#define getticks __rdtsc
++
++static __attribute__((__always_inline__)) inline double elapsed(ticks t1, ticks t0)
++{
++     return t1 - t0;
++}
++
++#define HAVE_TICK_COUNTER
++#endif
++
+ /*----------------------------------------------------------------*/
+ /*
+  * IA64 cycle counter
+diff --git a/simd-support/avx.c b/simd-support/avx.c
+index 7e19be0..c29db77 100644
+--- a/simd-support/avx.c
++++ b/simd-support/avx.c
+@@ -23,6 +23,15 @@
+ 
+ #if HAVE_AVX
+ 
++#ifdef __e2k__
++
++int X(have_simd_avx)(void)
++{
++     return 1;
++}
++
++#else
++
+ #if defined(__x86_64__) || defined(_M_X64) || defined(_M_AMD64)
+ #    include "amd64-cpuid.h"
+ #else
+@@ -52,3 +61,5 @@ int X(have_simd_avx)(void)
+ 
+ #endif
+ 
++#endif
++
+diff --git a/simd-support/avx2.c b/simd-support/avx2.c
+index e240645..e9079c4 100644
+--- a/simd-support/avx2.c
++++ b/simd-support/avx2.c
+@@ -23,6 +23,15 @@
+ 
+ #if HAVE_AVX2
+ 
++#ifdef __e2k__
++
++int X(have_simd_avx2_128)(void)
++{
++     return 1;
++}
++
++#else
++
+ #if defined(__x86_64__) || defined(_M_X64) || defined(_M_AMD64)
+ #    include "amd64-cpuid.h"
+ #else
+@@ -53,6 +62,7 @@ int X(have_simd_avx2_128)(void)
+     }
+     return res;
+ }
++#endif
+ 
+ int X(have_simd_avx2)(void)
+ {
+diff --git a/simd-support/simd-avx.h b/simd-support/simd-avx.h
+index 7ca6363..9ec9bca 100644
+--- a/simd-support/simd-avx.h
++++ b/simd-support/simd-avx.h
+@@ -192,7 +192,7 @@ static inline __m128d VMOVAPD_LD(const R *x)
+ 
+ 	Force the use of vmovapd via asm until compilers stabilize.
+      */
+-#if defined(__GNUC__)
++#if defined(__GNUC__) && !defined(__e2k__)
+      __m128d var;
+      __asm__("vmovapd %1, %0\n" : "=x"(var) : "m"(x[0]));
+      return var;
+diff --git a/simd-support/simd-avx2.h b/simd-support/simd-avx2.h
+index 5217026..7897153 100644
+--- a/simd-support/simd-avx2.h
++++ b/simd-support/simd-avx2.h
+@@ -196,7 +196,7 @@ static inline __m128d VMOVAPD_LD(const R *x)
+ 
+ 	Force the use of vmovapd via asm until compilers stabilize.
+      */
+-#if defined(__GNUC__)
++#if defined(__GNUC__) && !defined(__e2k__)
+      __m128d var;
+      __asm__("vmovapd %1, %0\n" : "=x"(var) : "m"(x[0]));
+      return var;
+diff --git a/simd-support/simd-sse2.h b/simd-support/simd-sse2.h
+index 44b11b7..f7781db 100644
+--- a/simd-support/simd-sse2.h
++++ b/simd-support/simd-sse2.h
+@@ -140,7 +140,7 @@ static inline V LD(const R *x, INT ivs, const R *aligned_like)
+ {
+      V var;
+      (void)aligned_like; /* UNUSED */
+-#  ifdef __GNUC__
++#  if defined(__GNUC__) && !defined(__e2k__)
+      /* We use inline asm because gcc-3.x generates slow code for
+ 	_mm_loadh_pi().  gcc-3.x insists upon having an existing variable for
+ 	VAL, which is however never used.  Thus, it generates code to move
+diff --git a/simd-support/sse2.c b/simd-support/sse2.c
+index c52c852..971f291 100644
+--- a/simd-support/sse2.c
++++ b/simd-support/sse2.c
+@@ -29,7 +29,7 @@
+ 
+ #if HAVE_SSE2
+ 
+-# if defined(__x86_64__) || defined(_M_X64) || defined(_M_AMD64)
++# if defined(__x86_64__) || defined(_M_X64) || defined(_M_AMD64) || defined(__e2k__)
+ 
+   int X(have_simd_sse2)(void)
+   {
+-- 
+2.17.1
+
