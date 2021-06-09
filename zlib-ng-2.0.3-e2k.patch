@@ -1,0 +1,91 @@
+From 723688c5399ffaafff94acf37a894c1d9d6778e0 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Wed, 9 Jun 2021 18:40:13 +0700
+Subject: [PATCH] zlib-ng-2.0.3 e2k support
+
+---
+ CMakeLists.txt          |  6 ++++++
+ arch/x86/x86.c          |  4 ++++
+ arch/x86/x86.h          | 10 ++++++++++
+ cmake/detect-arch.cmake |  2 ++
+ 4 files changed, 22 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 42316c9..eb31c7b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -98,6 +98,12 @@ elseif(BASEARCH_PPC_FOUND)
+ elseif(BASEARCH_S360_FOUND)
+     add_option(WITH_DFLTCC_DEFLATE "Build with DFLTCC intrinsics for compression on IBM Z" OFF)
+     add_option(WITH_DFLTCC_INFLATE "Build with DFLTCC intrinsics for decompression on IBM Z" OFF)
++elseif(BASEARCH_X86_FOUND AND ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "e2k")
++    add_option(WITH_AVX2 "Build with AVX2" OFF)
++    add_option(WITH_SSE2 "Build with SSE2" ON)
++    add_option(WITH_SSSE3 "Build with SSSE3" ON)
++    add_option(WITH_SSE4 "Build with SSE4" OFF)
++    add_option(WITH_PCLMULQDQ "Build with PCLMULQDQ" OFF)
+ elseif(BASEARCH_X86_FOUND)
+     add_option(WITH_AVX2 "Build with AVX2" ON)
+     add_option(WITH_SSE2 "Build with SSE2" ON)
+diff --git a/arch/x86/x86.c b/arch/x86/x86.c
+index e782cb8..c354c32 100644
+--- a/arch/x86/x86.c
++++ b/arch/x86/x86.c
+@@ -10,6 +10,8 @@
+ 
+ #include "../../zutil.h"
+ 
++#ifndef __e2k__
++
+ #ifdef _MSC_VER
+ #  include <intrin.h>
+ #else
+@@ -78,3 +80,5 @@ void Z_INTERNAL x86_check_features(void) {
+         x86_cpu_has_avx2 = 0;
+     }
+ }
++
++#endif
+diff --git a/arch/x86/x86.h b/arch/x86/x86.h
+index 8471e15..357519d 100644
+--- a/arch/x86/x86.h
++++ b/arch/x86/x86.h
+@@ -6,6 +6,15 @@
+ #ifndef CPU_H_
+ #define CPU_H_
+ 
++#ifdef __e2k__
++#define x86_cpu_has_avx2       0
++#define x86_cpu_has_sse2       1
++#define x86_cpu_has_ssse3      1
++#define x86_cpu_has_sse42      0
++#define x86_cpu_has_pclmulqdq  0
++#define x86_cpu_has_tzcnt      1
++#define x86_check_features()
++#else
+ extern int x86_cpu_has_avx2;
+ extern int x86_cpu_has_sse2;
+ extern int x86_cpu_has_ssse3;
+@@ -14,5 +23,6 @@ extern int x86_cpu_has_pclmulqdq;
+ extern int x86_cpu_has_tzcnt;
+ 
+ void Z_INTERNAL x86_check_features(void);
++#endif
+ 
+ #endif /* CPU_H_ */
+diff --git a/cmake/detect-arch.cmake b/cmake/detect-arch.cmake
+index 76b52b9..5fd10e7 100644
+--- a/cmake/detect-arch.cmake
++++ b/cmake/detect-arch.cmake
+@@ -16,6 +16,8 @@ elseif(MSVC)
+     elseif ("${MSVC_C_ARCHITECTURE_ID}" STREQUAL "ARM64")
+         set(ARCH "aarch64")
+     endif()
++elseif(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "e2k")
++    set(ARCH "x86_64")
+ elseif(CMAKE_CROSSCOMPILING)
+     set(ARCH ${CMAKE_C_COMPILER_TARGET})
+ else()
+-- 
+2.17.1
+
