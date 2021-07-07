@@ -1,0 +1,191 @@
+From 6bfc4170eadb875d6875e400f169fc4d1fbe6a41 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Wed, 7 Jul 2021 17:59:09 +0700
+Subject: [PATCH] cppcrypto-0.17 e2k support
+
+---
+ cppcrypto/Makefile     |  8 ++++++++
+ cppcrypto/blake.cpp    |  2 +-
+ cppcrypto/cpuinfo.cpp  | 12 ++++++++++++
+ cppcrypto/groestl.cpp  |  4 ++++
+ cppcrypto/poly1305.cpp |  2 +-
+ cppcrypto/rijndael.cpp |  4 ++++
+ cppcrypto/sha1.cpp     |  2 +-
+ cppcrypto/sha256.cpp   |  2 +-
+ cppcrypto/sha512.cpp   |  2 +-
+ 9 files changed, 33 insertions(+), 5 deletions(-)
+
+diff --git a/cppcrypto/Makefile b/cppcrypto/Makefile
+index 921dd3c..d739bae 100644
+--- a/cppcrypto/Makefile
++++ b/cppcrypto/Makefile
+@@ -1,7 +1,9 @@
+ ifeq ($(OS),Windows_NT)
+   UNAME ?= Windows
++  ARCH ?= unknown
+ else
+   UNAME := $(shell uname -s)
++  ARCH := $(shell uname -m)
+ endif
+ 
+ VERSION=.0
+@@ -146,6 +148,11 @@ OBJS= blake.o groestl.o cpuinfo.o sha256.o sha512.o skein256.o skein512.o skein1
+       argon2.o thread_pool.o salsa20.o salsa20-xmm6int.o hc.o chacha.o chacha-xmm.o poly1305.o poly1305-impl-sse2.o \
+       simon.o speck.o KeccakP-1600-AVX2.o KeccakSpongeWidth1600.o KeccakHash.o sha3_impl_avx2.o
+ 
++ifeq ($(ARCH),e2k)
++CFLAGS := $(filter-out -O2,$(CFLAGS)) -O3 -D_M_X64 -DNO_ASM_VERSIONS
++CXXFLAGS := $(filter-out -O2,$(CXXFLAGS)) -O3 -D_M_X64 -DNO_ASM_VERSIONS
++OBJS := $(filter-out poly1305-impl-sse2.o %aesni.o %aesni-avx2.o,$(OBJS)) gost3411-2012-sse2.o
++else
+ OBJS32 = skein512mmx.o sha512-nayuki.o whirlpool-nayuki.o sha1-nayuki.o serpent-waite.o poly1305-32.o
+ OBJS64 = b256avxs.o sha256_sse4.o sha512_sse4.o sha256_avx2_rorx2.o sha512_avx2_rorx.o \
+          sha1_ssse3.o gost3411-2012-sse2.o poly1305-64.o
+@@ -163,6 +170,7 @@ ifeq ($(PLATFORM64BIT), 1)
+ else
+    OBJS += $(OBJS32)
+ endif
++endif
+ 
+ all: $(LIBPREFIX)cppcrypto$(SOVERSION)
+ 
+diff --git a/cppcrypto/blake.cpp b/cppcrypto/blake.cpp
+index 37aa89f..11f5fef 100644
+--- a/cppcrypto/blake.cpp
++++ b/cppcrypto/blake.cpp
+@@ -410,7 +410,7 @@ namespace cppcrypto
+ 			else 
+ 				u.H256[8] = u.H256[9] = u.H256[10] = u.H256[11] = 0;
+ #ifndef NO_OPTIMIZED_VERSIONS
+-#ifdef _M_X64
++#if defined(_M_X64) && !defined(NO_ASM_VERSIONS)
+ 			if (cpu_info::avx() && !saltlen && false)
+ 				transfunc = [this](bool padding) {
+ 				uint32_t t[2];
+diff --git a/cppcrypto/cpuinfo.cpp b/cppcrypto/cpuinfo.cpp
+index c3f9fd8..2cbd23f 100644
+--- a/cppcrypto/cpuinfo.cpp
++++ b/cppcrypto/cpuinfo.cpp
+@@ -6,11 +6,13 @@ This code is released under Simplified BSD License (see license.txt).
+ #include <array>
+ #include <string>
+ #include "cpuinfo.h"
++#ifndef __e2k__
+ #ifndef _MSC_VER
+ #include <cpuid.h>
+ #else
+ #include <intrin.h>
+ #endif
++#endif
+ 
+ namespace cppcrypto
+ {
+@@ -22,6 +24,15 @@ using namespace std;
+ cpu_info::cpu_info_impl::cpu_info_impl()
+ 	: ecx1_{ 0 }, edx1_{ 0 }, ebx7_{ 0 }, ecx7_{ 0 }, ecx81_{ 0 }, edx81_{ 0 }
+ {
++#ifdef __e2k__
++	edx1_[23] = 1; // mmx
++	edx1_[26] = 1; // sse2
++	ecx1_[9] = 1;  // ssse3
++	ecx1_[19] = 1; // sse41
++	ecx1_[28] = 0; // avx
++	ebx7_[5] = 0;  // avx2
++	ebx7_[8] = 1;  // bmi2
++#else
+ #ifdef _MSC_VER
+ 	std::array<int, 4> cpui;
+ #else
+@@ -74,6 +85,7 @@ cpu_info::cpu_info_impl::cpu_info_impl()
+ 		ecx81_ = cpui[2];
+ 		edx81_ = cpui[3];
+ 	}
++#endif
+ 
+ };
+ 
+diff --git a/cppcrypto/groestl.cpp b/cppcrypto/groestl.cpp
+index 57252ee..096a701 100644
+--- a/cppcrypto/groestl.cpp
++++ b/cppcrypto/groestl.cpp
+@@ -11,6 +11,10 @@ and released into public domain.
+ //#define CPPCRYPTO_DEBUG
+ //#define NO_OPTIMIZED_VERSIONS
+ 
++#if !defined(NO_OPTIMIZED_VERSIONS) && defined(__e2k__)
++#define NO_OPTIMIZED_VERSIONS
++#endif
++
+ namespace cppcrypto
+ {
+ 
+diff --git a/cppcrypto/poly1305.cpp b/cppcrypto/poly1305.cpp
+index 6dafe84..2c2f8f7 100644
+--- a/cppcrypto/poly1305.cpp
++++ b/cppcrypto/poly1305.cpp
+@@ -39,7 +39,7 @@ namespace cppcrypto
+ 		r_[12] &= 0xfc;
+ 		r_[16] = 0;
+ 
+-#ifndef NO_OPTIMIZED_VERSIONS
++#if !defined(NO_OPTIMIZED_VERSIONS) && !defined(NO_ASM_VERSIONS)
+ 		if (cpu_info::sse2())
+ 			impl_.create<detail::poly1305_impl_sse2>();
+ #endif
+diff --git a/cppcrypto/rijndael.cpp b/cppcrypto/rijndael.cpp
+index ca6b862..6c1576f 100644
+--- a/cppcrypto/rijndael.cpp
++++ b/cppcrypto/rijndael.cpp
+@@ -15,6 +15,10 @@ and released into public domain.
+ //#define CPPCRYPTO_DEBUG
+ //#define NO_OPTIMIZED_VERSIONS
+ 
++#if !defined(NO_OPTIMIZED_VERSIONS) && defined(__e2k__)
++#define NO_OPTIMIZED_VERSIONS
++#endif
++
+ namespace cppcrypto
+ {
+ 	static const uint32_t RC[] = 
+diff --git a/cppcrypto/sha1.cpp b/cppcrypto/sha1.cpp
+index d1b2ff3..29aa8fa 100644
+--- a/cppcrypto/sha1.cpp
++++ b/cppcrypto/sha1.cpp
+@@ -29,7 +29,7 @@ namespace cppcrypto
+ 
+ 	sha1::sha1()
+ 	{
+-#ifndef NO_OPTIMIZED_VERSIONS
++#if !defined(NO_OPTIMIZED_VERSIONS) && !defined(NO_ASM_VERSIONS)
+ #ifdef _M_X64
+ 		if (cpu_info::ssse3())
+ #ifdef NO_BIND_TO_FUNCTION
+diff --git a/cppcrypto/sha256.cpp b/cppcrypto/sha256.cpp
+index d1e728e..d4e6501 100644
+--- a/cppcrypto/sha256.cpp
++++ b/cppcrypto/sha256.cpp
+@@ -41,7 +41,7 @@ namespace cppcrypto
+ 
+ 	sha256::sha256()
+ 	{
+-#ifndef NO_OPTIMIZED_VERSIONS
++#if !defined(NO_OPTIMIZED_VERSIONS) && !defined(NO_ASM_VERSIONS)
+ #ifdef _M_X64
+ 		if (cpu_info::avx2() && cpu_info::bmi2())
+ 			transfunc = [this](void* m, uint64_t num_blks)
+diff --git a/cppcrypto/sha512.cpp b/cppcrypto/sha512.cpp
+index ff31193..c1a6718 100644
+--- a/cppcrypto/sha512.cpp
++++ b/cppcrypto/sha512.cpp
+@@ -34,7 +34,7 @@ namespace cppcrypto
+ 		: hs(hashsize)
+ 	{
+ 		validate_hash_size(hashsize, 512);
+-#ifndef NO_OPTIMIZED_VERSIONS
++#if !defined(NO_OPTIMIZED_VERSIONS) && !defined(NO_ASM_VERSIONS)
+ #ifdef _M_X64
+ 		if (cpu_info::avx2() && cpu_info::bmi2())
+ 			transfunc = [this](void* m, uint64_t num_blks)
+-- 
+2.17.1
+
