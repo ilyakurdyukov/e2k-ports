@@ -1,0 +1,307 @@
+From 497c5ba4159f30f719067907baeb355fa346924d Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Wed, 11 Aug 2021 17:32:22 +0700
+Subject: [PATCH] blender-2.93.2 e2k support
+
+---
+ .../btSequentialImpulseConstraintSolver.cpp               | 4 ++++
+ intern/cycles/util/util_defines.h                         | 2 +-
+ intern/cycles/util/util_math_float3.h                     | 6 +++---
+ intern/cycles/util/util_math_float4.h                     | 2 +-
+ intern/cycles/util/util_optimization.h                    | 8 ++++++++
+ intern/cycles/util/util_simd.h                            | 4 ++--
+ intern/cycles/util/util_ssef.h                            | 6 +++---
+ intern/cycles/util/util_system.cpp                        | 6 ++++++
+ intern/libmv/libmv/build/build_config.h                   | 8 ++++++++
+ .../libmv/libmv/simple_pipeline/camera_intrinsics_impl.h  | 6 ++++--
+ intern/numaapi/source/build_config.h                      | 8 ++++++++
+ source/blender/blenlib/BLI_hash.hh                        | 3 +++
+ source/blender/blenlib/BLI_utildefines.h                  | 2 +-
+ source/blender/simulation/intern/implicit_blender.c       | 4 ++--
+ 14 files changed, 54 insertions(+), 15 deletions(-)
+
+diff --git a/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp b/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
+index d2641c5..a0af3a4 100644
+--- a/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
++++ b/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
+@@ -115,7 +115,11 @@ static inline __m128 btSimdDot3(__m128 vec0, __m128 vec1)
+ 
+ #define USE_FMA 1
+ #define USE_FMA3_INSTEAD_FMA4 1
++#ifdef __e2k__
++#define USE_SSE4_DOT 0
++#else
+ #define USE_SSE4_DOT 1
++#endif
+ 
+ #define SSE4_DP(a, b) _mm_dp_ps(a, b, 0x7f)
+ #define SSE4_DP_FP(a, b) _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7f))
+diff --git a/intern/cycles/util/util_defines.h b/intern/cycles/util/util_defines.h
+index 0a239a9..9203151 100644
+--- a/intern/cycles/util/util_defines.h
++++ b/intern/cycles/util/util_defines.h
+@@ -26,7 +26,7 @@
+ /* Bitness */
+ 
+ #if defined(__ppc64__) || defined(__PPC64__) || defined(__x86_64__) || defined(__ia64__) || \
+-    defined(_M_X64) || defined(__aarch64__)
++    defined(_M_X64) || defined(__aarch64__) || defined(__e2k__)
+ #  define __KERNEL_64_BIT__
+ #endif
+ 
+diff --git a/intern/cycles/util/util_math_float3.h b/intern/cycles/util/util_math_float3.h
+index 9673c04..4aeb5f3 100644
+--- a/intern/cycles/util/util_math_float3.h
++++ b/intern/cycles/util/util_math_float3.h
+@@ -246,7 +246,7 @@ ccl_device_inline float distance(const float3 &a, const float3 &b)
+ 
+ ccl_device_inline float dot(const float3 &a, const float3 &b)
+ {
+-#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
++#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+   return _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7F));
+ #  else
+   return a.x * b.x + a.y * b.y + a.z * b.z;
+@@ -270,7 +270,7 @@ ccl_device_inline float3 cross(const float3 &a, const float3 &b)
+ 
+ ccl_device_inline float3 normalize(const float3 &a)
+ {
+-#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
++#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+   __m128 norm = _mm_sqrt_ps(_mm_dp_ps(a.m128, a.m128, 0x7F));
+   return float3(_mm_div_ps(a.m128, norm));
+ #  else
+@@ -370,7 +370,7 @@ ccl_device_inline float max3(float3 a)
+ 
+ ccl_device_inline float len(const float3 a)
+ {
+-#if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
++#if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+   return _mm_cvtss_f32(_mm_sqrt_ss(_mm_dp_ps(a.m128, a.m128, 0x7F)));
+ #else
+   return sqrtf(dot(a, a));
+diff --git a/intern/cycles/util/util_math_float4.h b/intern/cycles/util/util_math_float4.h
+index 0ba2baf..399967d 100644
+--- a/intern/cycles/util/util_math_float4.h
++++ b/intern/cycles/util/util_math_float4.h
+@@ -256,7 +256,7 @@ ccl_device_inline float distance(const float4 &a, const float4 &b)
+ 
+ ccl_device_inline float dot(const float4 &a, const float4 &b)
+ {
+-#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
++#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+ #    if defined(__KERNEL_NEON__)
+   __m128 t = vmulq_f32(a, b);
+   return vaddvq_f32(t);
+diff --git a/intern/cycles/util/util_optimization.h b/intern/cycles/util/util_optimization.h
+index 7ecd389..6f1a67e 100644
+--- a/intern/cycles/util/util_optimization.h
++++ b/intern/cycles/util/util_optimization.h
+@@ -70,6 +70,14 @@
+ #    define __KERNEL_SSE3__
+ #    define __KERNEL_SSE41__
+ 
++#  elif defined(__e2k__)
++
++#    define __KERNEL_SSE__
++#    define __KERNEL_SSE2__
++#    define __KERNEL_SSE3__
++#    define __KERNEL_SSSE3__
++#    define __KERNEL_SSE41__
++
+ #  endif
+ 
+ #endif
+diff --git a/intern/cycles/util/util_simd.h b/intern/cycles/util/util_simd.h
+index 718ec92..7e8d7e0 100644
+--- a/intern/cycles/util/util_simd.h
++++ b/intern/cycles/util/util_simd.h
+@@ -33,7 +33,7 @@
+ #  include "util/util_windows.h"
+ #elif defined(_MSC_VER)
+ #  include <intrin.h>
+-#elif (defined(__x86_64__) || defined(__i386__))
++#elif (defined(__x86_64__) || defined(__i386__) || defined(__e2k__))
+ #  include <x86intrin.h>
+ #elif defined(__KERNEL_NEON__)
+ #  define SSE2NEON_PRECISE_MINMAX 1
+@@ -206,7 +206,7 @@ type shuffle_neon(const type &a, const type &b)
+ #  endif
+ #endif
+ 
+-#if defined(__LZCNT__)
++#if defined(__LZCNT__) && !defined(__e2k__)
+ #  define _lzcnt_u32 __lzcnt32
+ #  define _lzcnt_u64 __lzcnt64
+ #endif
+diff --git a/intern/cycles/util/util_ssef.h b/intern/cycles/util/util_ssef.h
+index d039b50..6652213 100644
+--- a/intern/cycles/util/util_ssef.h
++++ b/intern/cycles/util/util_ssef.h
+@@ -931,7 +931,7 @@ __forceinline ssef cross(const ssef &a, const ssef &b)
+ 
+ ccl_device_inline const ssef dot3_splat(const ssef &a, const ssef &b)
+ {
+-#  ifdef __KERNEL_SSE41__
++#  if defined(__KERNEL_SSE41__) && !defined(__e2k__)
+   return _mm_dp_ps(a.m128, b.m128, 0x7f);
+ #  else
+   ssef t = a * b;
+@@ -942,7 +942,7 @@ ccl_device_inline const ssef dot3_splat(const ssef &a, const ssef &b)
+ /* squared length taking only specified axes into account */
+ template<size_t X, size_t Y, size_t Z, size_t W> ccl_device_inline float len_squared(const ssef &a)
+ {
+-#  ifndef __KERNEL_SSE41__
++#  if !defined(__KERNEL_SSE41__) || defined(__e2k__)
+   float4 &t = (float4 &)a;
+   return (X ? t.x * t.x : 0.0f) + (Y ? t.y * t.y : 0.0f) + (Z ? t.z * t.z : 0.0f) +
+          (W ? t.w * t.w : 0.0f);
+@@ -954,7 +954,7 @@ template<size_t X, size_t Y, size_t Z, size_t W> ccl_device_inline float len_squ
+ 
+ ccl_device_inline float dot3(const ssef &a, const ssef &b)
+ {
+-#  ifdef __KERNEL_SSE41__
++#  if defined(__KERNEL_SSE41__) && !defined(__e2k__)
+   return extract<0>(ssef(_mm_dp_ps(a.m128, b.m128, 0x7f)));
+ #  else
+   ssef t = a * b;
+diff --git a/intern/cycles/util/util_system.cpp b/intern/cycles/util/util_system.cpp
+index 03bc5ae..ae3ce75 100644
+--- a/intern/cycles/util/util_system.cpp
++++ b/intern/cycles/util/util_system.cpp
+@@ -334,6 +334,12 @@ bool system_cpu_support_avx2()
+   return caps.sse && caps.sse2 && caps.sse3 && caps.ssse3 && caps.sse41 && caps.avx && caps.f16c &&
+          caps.avx2 && caps.fma3 && caps.bmi1 && caps.bmi2;
+ }
++#elif defined(__e2k__)
++bool system_cpu_support_sse2()  { return true; }
++bool system_cpu_support_sse3()  { return true; }
++bool system_cpu_support_sse41() { return true; }
++bool system_cpu_support_avx()   { return false; }
++bool system_cpu_support_avx2()  { return false; }
+ #else
+ 
+ bool system_cpu_support_sse2()
+diff --git a/intern/libmv/libmv/build/build_config.h b/intern/libmv/libmv/build/build_config.h
+index 7029a36..0fe3ef4 100644
+--- a/intern/libmv/libmv/build/build_config.h
++++ b/intern/libmv/libmv/build/build_config.h
+@@ -308,6 +308,11 @@
+ #  define ARCH_CPU_PPC64 1
+ #  define ARCH_CPU_64_BITS 1
+ #  define ARCH_CPU_LITTLE_ENDIAN 1
++#elif defined(__e2k__)
++#  define ARCH_CPU_E2K_FAMILY 1
++#  define ARCH_CPU_E2K 1
++#  define ARCH_CPU_64_BITS 1
++#  define ARCH_CPU_LITTLE_ENDIAN 1
+ #elif defined(__ARMEL__)
+ #  define ARCH_CPU_ARM_FAMILY 1
+ #  define ARCH_CPU_ARMEL 1
+@@ -372,6 +377,9 @@
+ #if !defined(ARCH_CPU_MIPS_FAMILY)
+ #  define ARCH_CPU_MIPS_FAMILY 0
+ #endif
++#if !defined(ARCH_CPU_E2K_FAMILY)
++#  define ARCH_CPU_E2K_FAMILY 0
++#endif
+ #if !defined(ARCH_CPU_PPC64_FAMILY)
+ #  define ARCH_CPU_PPC64_FAMILY 0
+ #endif
+diff --git a/intern/libmv/libmv/simple_pipeline/camera_intrinsics_impl.h b/intern/libmv/libmv/simple_pipeline/camera_intrinsics_impl.h
+index c8c4700..1566526 100644
+--- a/intern/libmv/libmv/simple_pipeline/camera_intrinsics_impl.h
++++ b/intern/libmv/libmv/simple_pipeline/camera_intrinsics_impl.h
+@@ -64,8 +64,9 @@ void LookupWarpGrid::Compute(const CameraIntrinsics& intrinsics,
+   double aspx = (double)w / intrinsics.image_width();
+   double aspy = (double)h / intrinsics.image_height();
+ #if defined(_OPENMP)
++  int nthreads = threads_, enablemp = threads_ > 1 && height > 100;
+ #  pragma omp parallel for schedule(static)                                    \
+-      num_threads(threads_) if (threads_ > 1 && height > 100)
++      num_threads(nthreads) if (enablemp)
+ #endif
+   for (int y = 0; y < height; y++) {
+     for (int x = 0; x < width; x++) {
+@@ -133,8 +134,9 @@ void LookupWarpGrid::Apply(const PixelType* input_buffer,
+                            int channels,
+                            PixelType* output_buffer) {
+ #if defined(_OPENMP)
++  int nthreads = threads_, enablemp = threads_ > 1 && height > 100;
+ #  pragma omp parallel for schedule(static)                                    \
+-      num_threads(threads_) if (threads_ > 1 && height > 100)
++      num_threads(nthreads) if (enablemp)
+ #endif
+   for (int y = 0; y < height; y++) {
+     for (int x = 0; x < width; x++) {
+diff --git a/intern/numaapi/source/build_config.h b/intern/numaapi/source/build_config.h
+index fdd6ff7..a645bd3 100644
+--- a/intern/numaapi/source/build_config.h
++++ b/intern/numaapi/source/build_config.h
+@@ -314,6 +314,11 @@
+ #  define ARCH_CPU_PPC64 1
+ #  define ARCH_CPU_64_BITS 1
+ #  define ARCH_CPU_LITTLE_ENDIAN 1
++#elif defined(__e2k__)
++#  define ARCH_CPU_E2K_FAMILY 1
++#  define ARCH_CPU_E2K 1
++#  define ARCH_CPU_64_BITS 1
++#  define ARCH_CPU_LITTLE_ENDIAN 1
+ #elif defined(__ARMEL__)
+ #  define ARCH_CPU_ARM_FAMILY 1
+ #  define ARCH_CPU_ARMEL 1
+@@ -378,6 +383,9 @@
+ #if !defined(ARCH_CPU_MIPS_FAMILY)
+ #  define ARCH_CPU_MIPS_FAMILY 0
+ #endif
++#if !defined(ARCH_CPU_E2K_FAMILY)
++#  define ARCH_CPU_E2K_FAMILY 0
++#endif
+ #if !defined(ARCH_CPU_PPC64_FAMILY)
+ #  define ARCH_CPU_PPC64_FAMILY 0
+ #endif
+diff --git a/source/blender/blenlib/BLI_hash.hh b/source/blender/blenlib/BLI_hash.hh
+index 4022c2b..ad8cb6a 100644
+--- a/source/blender/blenlib/BLI_hash.hh
++++ b/source/blender/blenlib/BLI_hash.hh
+@@ -100,6 +100,9 @@ template<typename T> struct DefaultHash {
+     else {
+       return value.hash();
+     }
++#ifdef __EDG__
++    return 0;
++#endif
+   }
+ };
+ 
+diff --git a/source/blender/blenlib/BLI_utildefines.h b/source/blender/blenlib/BLI_utildefines.h
+index 1c6e6ff..b69a1a3 100644
+--- a/source/blender/blenlib/BLI_utildefines.h
++++ b/source/blender/blenlib/BLI_utildefines.h
+@@ -509,7 +509,7 @@ extern "C" {
+   ((void)0)
+ 
+ /* assuming a static array */
+-#if defined(__GNUC__) && !defined(__cplusplus) && !defined(__clang__) && !defined(__INTEL_COMPILER)
++#if defined(__GNUC__) && !defined(__cplusplus) && !defined(__clang__) && !defined(__INTEL_COMPILER) && !defined(__EDG__)
+ #  define ARRAY_SIZE(arr) \
+     ((sizeof(struct { int isnt_array : ((const void *)&(arr) == &(arr)[0]); }) * 0) + \
+      (sizeof(arr) / sizeof(*(arr))))
+diff --git a/source/blender/simulation/intern/implicit_blender.c b/source/blender/simulation/intern/implicit_blender.c
+index cf092d7..b145be5 100644
+--- a/source/blender/simulation/intern/implicit_blender.c
++++ b/source/blender/simulation/intern/implicit_blender.c
+@@ -621,8 +621,8 @@ DO_INLINE void mul_bfmatrix_lfvector(float (*to)[3], fmatrix3x3 *from, lfVector
+   lfVector *temp = create_lfvector(vcount);
+ 
+   zero_lfvector(to, vcount);
+-
+-#  pragma omp parallel sections if (vcount > CLOTH_OPENMP_LIMIT)
++  int enablemp = vcount > CLOTH_OPENMP_LIMIT;
++#  pragma omp parallel sections if (enablemp)
+   {
+ #  pragma omp section
+     {
+-- 
+2.17.1
+
