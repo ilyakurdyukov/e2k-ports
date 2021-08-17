@@ -1,6 +1,6 @@
-From 497c5ba4159f30f719067907baeb355fa346924d Mon Sep 17 00:00:00 2001
+From 60110d50fbd4be1e64810a97eda9f1e2f11925fc Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Wed, 11 Aug 2021 17:32:22 +0700
+Date: Mon, 16 Aug 2021 14:29:09 +0700
 Subject: [PATCH] blender-2.93.2 e2k support
 
 ---
@@ -15,10 +15,11 @@ Subject: [PATCH] blender-2.93.2 e2k support
  intern/libmv/libmv/build/build_config.h                   | 8 ++++++++
  .../libmv/libmv/simple_pipeline/camera_intrinsics_impl.h  | 6 ++++--
  intern/numaapi/source/build_config.h                      | 8 ++++++++
+ source/blender/blenkernel/intern/volume.cc                | 6 ++++++
  source/blender/blenlib/BLI_hash.hh                        | 3 +++
  source/blender/blenlib/BLI_utildefines.h                  | 2 +-
  source/blender/simulation/intern/implicit_blender.c       | 4 ++--
- 14 files changed, 54 insertions(+), 15 deletions(-)
+ 15 files changed, 60 insertions(+), 15 deletions(-)
 
 diff --git a/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp b/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
 index d2641c5..a0af3a4 100644
@@ -260,6 +261,30 @@ index fdd6ff7..a645bd3 100644
  #if !defined(ARCH_CPU_PPC64_FAMILY)
  #  define ARCH_CPU_PPC64_FAMILY 0
  #endif
+diff --git a/source/blender/blenkernel/intern/volume.cc b/source/blender/blenkernel/intern/volume.cc
+index 7b03839..c0100cc 100644
+--- a/source/blender/blenkernel/intern/volume.cc
++++ b/source/blender/blenkernel/intern/volume.cc
+@@ -1410,6 +1410,9 @@ struct CreateGridOp {
+     else {
+       return GridType::create();
+     }
++#ifdef __EDG__
++    return 0;
++#endif
+   }
+ };
+ #endif
+@@ -1577,6 +1580,9 @@ struct CreateGridWithChangedResolutionOp {
+       return create_grid_with_changed_resolution(static_cast<const GridType &>(grid),
+                                                  resolution_factor);
+     }
++#ifdef __EDG__
++    return 0;
++#endif
+   }
+ };
+ 
 diff --git a/source/blender/blenlib/BLI_hash.hh b/source/blender/blenlib/BLI_hash.hh
 index 4022c2b..ad8cb6a 100644
 --- a/source/blender/blenlib/BLI_hash.hh

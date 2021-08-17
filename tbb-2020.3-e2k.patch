@@ -1,15 +1,15 @@
-From e7f86a66710e04029ab4c197352e89372efde559 Mon Sep 17 00:00:00 2001
+From bd21380c7b36b403e9f85c5eb20c847288176e31 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Sat, 30 Jan 2021 14:33:34 +0700
+Date: Mon, 16 Aug 2021 12:56:13 +0700
 Subject: [PATCH] TBB-2020.3 e2k support
 
 ---
  build/linux.gcc.inc            | 4 ++++
  build/linux.inc                | 3 +++
- include/tbb/tbb_config.h       | 2 +-
+ include/tbb/tbb_config.h       | 6 +++++-
  src/test/test_malloc_pools.cpp | 4 ++++
  src/test/test_task_arena.cpp   | 4 ++++
- 5 files changed, 16 insertions(+), 1 deletion(-)
+ 5 files changed, 20 insertions(+), 1 deletion(-)
 
 diff --git a/build/linux.gcc.inc b/build/linux.gcc.inc
 index d820c15..f6b8d98 100644
@@ -41,10 +41,22 @@ index ad1841c..e02fa88 100644
      ifeq (64,$(findstring 64,$(arch)))
              def_prefix = lin64
 diff --git a/include/tbb/tbb_config.h b/include/tbb/tbb_config.h
-index 7a8d06a..ea16da4 100644
+index 7a8d06a..d70785b 100644
 --- a/include/tbb/tbb_config.h
 +++ b/include/tbb/tbb_config.h
-@@ -517,7 +517,7 @@ There are four cases that are supported:
+@@ -262,7 +262,11 @@
+     #define __TBB_CPP11_TEMPLATE_ALIASES_PRESENT            (__GXX_EXPERIMENTAL_CXX0X__ && __TBB_GCC_VERSION >= 40700)
+     #define __TBB_CPP14_INTEGER_SEQUENCE_PRESENT            (__cplusplus >= 201402L     && __TBB_GCC_VERSION >= 50000)
+     #define __TBB_CPP14_VARIABLE_TEMPLATES_PRESENT          (__cplusplus >= 201402L     && __TBB_GCC_VERSION >= 50000)
++#ifdef __EDG__
++    #define __TBB_CPP17_DEDUCTION_GUIDES_PRESENT            0
++#else
+     #define __TBB_CPP17_DEDUCTION_GUIDES_PRESENT            (__cpp_deduction_guides >= 201606L)
++#endif
+     #define __TBB_CPP17_INVOKE_RESULT_PRESENT               (__cplusplus >= 201703L     && __TBB_GCC_VERSION >= 70000)
+ #elif _MSC_VER
+     // These definitions are also used with Intel C++ Compiler in "default" mode (__INTEL_CXX11_MODE__ == 0);
+@@ -517,7 +521,7 @@ There are four cases that are supported:
  
  /** __TBB_WEAK_SYMBOLS_PRESENT denotes that the system supports the weak symbol mechanism **/
  #ifndef __TBB_WEAK_SYMBOLS_PRESENT
