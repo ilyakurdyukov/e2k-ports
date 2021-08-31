@@ -1,0 +1,153 @@
+From 1e81413bb6f7821b4ae091e7283c2bc5e7f510cb Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Tue, 31 Aug 2021 16:52:12 +0700
+Subject: [PATCH] manticore-3.6.0 e2k support
+
+---
+ src/coroutine.cpp | 57 ++++++++++++++++++++++++++++++++++++++++++++++-
+ src/searchd.cpp   |  2 +-
+ 2 files changed, 57 insertions(+), 2 deletions(-)
+
+diff --git a/src/coroutine.cpp b/src/coroutine.cpp
+index 5dd688f..068a143 100644
+--- a/src/coroutine.cpp
++++ b/src/coroutine.cpp
+@@ -24,7 +24,18 @@
+ #endif
+ #endif
+ 
++#ifdef __e2k__
++#define USE_UCONTEXT
++#endif
++
++#ifdef USE_UCONTEXT
++#ifdef BOOST_USE_VALGRIND
++#undef BOOST_USE_VALGRIND
++#endif
++#include <ucontext.h>
++#else
+ #include <boost/context/detail/fcontext.hpp>
++#endif
+ 
+ #if BOOST_USE_VALGRIND
+ #include <valgrind/valgrind.h>
+@@ -53,7 +64,9 @@ size_t GetDefaultCoroStackSize()
+ 
+ //////////////////////////////////////////////////////////////
+ /// Coroutine - uses boost::context to switch between jobs
++#ifndef USE_UCONTEXT
+ using namespace boost::context::detail;
++#endif
+ class CoRoutine_c
+ {
+ 	enum class State_e
+@@ -70,15 +83,27 @@ class CoRoutine_c
+ 	unsigned m_uValgrindStackID = 0;
+ #endif
+ 
++#ifdef USE_UCONTEXT
++	using Ctx_t = ucontext_t;
++#else
+ 	using Ctx_t = fcontext_t;
++#endif
+ 	Ctx_t m_tCoroutineContext;
+ 	Ctx_t m_tExternalContext;
+ 	friend StringBuilder_c & operator<< ( StringBuilder_c &, CoRoutine_c::State_e);
+ 
+ private:
++#ifdef USE_UCONTEXT
++	static void ucontext_wrapper( CoRoutine_c *data ) {
++			data->WorkerLowest ();
++	}
++	void WorkerLowest ()
++	{
++#else
+ 	void WorkerLowest ( Ctx_t tCtx )
+ 	{
+ 		m_tExternalContext = tCtx;
++#endif
+ 		m_eState = State_e::Running;
+ 		m_fnHandler ();
+ 		m_eState = State_e::Finished;
+@@ -88,7 +113,12 @@ private:
+ 	// goto back to external context
+ 	void YieldLowest ()
+ 	{
++#ifdef USE_UCONTEXT
++		int swapcontext_ret = swapcontext ( &m_tCoroutineContext, &m_tExternalContext );
++		assert ( swapcontext_ret >= 0 );
++#else
+ 		m_tExternalContext = jump_fcontext ( m_tExternalContext, nullptr ).fctx;
++#endif
+ 	}
+ 
+ 	inline void ValgrindRegisterStack()
+@@ -111,10 +141,25 @@ private:
+ 	{
+ 		m_fnHandler = std::move ( fnHandler );
+ 		m_dStack = dStack;
++#ifdef USE_UCONTEXT
++		int getcontext_ret = getcontext ( &m_tCoroutineContext );
++		assert ( getcontext_ret >= 0 );
++		m_tCoroutineContext.uc_stack.ss_sp = m_dStack.begin ();
++		m_tCoroutineContext.uc_stack.ss_size = m_dStack.GetLength ();
++		m_tCoroutineContext.uc_stack.ss_flags = 0;
++		m_tCoroutineContext.uc_link = nullptr;
++#ifdef __e2k__
++		int makecontext_ret = makecontext_e2k ( &m_tCoroutineContext, (void(*)())ucontext_wrapper, 1, this );
++		assert ( makecontext_ret >= 0 );
++#else
++		makecontext (&m_tCoroutineContext, (void(*)())ucontext_wrapper, 1, this);
++#endif
++#else
+ 		ValgrindRegisterStack ();
+ 		m_tCoroutineContext = make_fcontext ( &m_dStack.Last (), m_dStack.GetLength (), [] ( transfer_t pT ) {
+ 			static_cast<CoRoutine_c *>(pT.data)->WorkerLowest ( pT.fctx );
+ 		} );
++#endif
+ 	}
+ 
+ public:
+@@ -129,7 +174,12 @@ public:
+ 		CreateContext ( std::move ( fnHandler ), dStack );
+ 	}
+ 
+-#if BOOST_USE_VALGRIND
++#ifdef __e2k
++	~CoRoutine_c()
++	{
++		freecontext_e2k( &m_tCoroutineContext );
++	}
++#elif BOOST_USE_VALGRIND
+ 	~CoRoutine_c()
+ 	{
+ 		ValgrindDeregisterStack ();
+@@ -140,7 +190,12 @@ public:
+ 	{
+ 		LOG( DEBUGV, CORO ) << "Run";
+ 		assert ( m_eState==State_e::Paused );
++#ifdef USE_UCONTEXT
++		int swapcontext_ret = swapcontext ( &m_tExternalContext, &m_tCoroutineContext );
++		assert ( swapcontext_ret >= 0 );
++#else
+ 		m_tCoroutineContext = jump_fcontext ( m_tCoroutineContext, static_cast<void*>(this) ).fctx;
++#endif
+ 	}
+ 
+ 	bool IsFinished () const
+diff --git a/src/searchd.cpp b/src/searchd.cpp
+index c66b437..2ca8b44 100644
+--- a/src/searchd.cpp
++++ b/src/searchd.cpp
+@@ -733,7 +733,7 @@ void Shutdown () REQUIRES ( MainThread ) NO_THREAD_SAFETY_ANALYSIS
+ 	// unlock indexes and release locks if needed
+ 	for ( RLockedServedIt_c it ( g_pLocalIndexes ); it.Next(); )
+ 	{
+-		auto pIdx = (const ServedDesc_t *) it.Get(); // breaks any access, but we're finishing, that's ok.
++		auto pIdx = (const ServedDesc_t *) (const ServedIndex_c *) it.Get(); // breaks any access, but we're finishing, that's ok.
+ 		if ( pIdx && pIdx->m_pIndex )
+ 			pIdx->m_pIndex->Unlock();
+ 	}
+-- 
+2.17.1
+
