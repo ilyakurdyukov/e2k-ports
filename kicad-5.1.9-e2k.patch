@@ -1,0 +1,148 @@
+From b3c66e8b15a1a615957fb43daa4c625142b20e3e Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Thu, 2 Sep 2021 09:53:27 +0700
+Subject: [PATCH] kicad-5.1.9 e2k support
+
+---
+ common/system/libcontext.cpp | 70 ++++++++++++++++++++++++++++++++++++
+ include/system/libcontext.h  | 16 ++++++++-
+ include/tool/coroutine.h     |  1 +
+ 3 files changed, 86 insertions(+), 1 deletion(-)
+
+diff --git a/common/system/libcontext.cpp b/common/system/libcontext.cpp
+index e17fade..5034dc9 100644
+--- a/common/system/libcontext.cpp
++++ b/common/system/libcontext.cpp
+@@ -15,6 +15,76 @@
+ */
+ #include <system/libcontext.h>
+ 
++#if defined(LIBCONTEXT_PLATFORM_ucontext)
++/* Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd */
++/* Portable fallback to ucontext. */
++
++#include <assert.h>
++#include <ucontext.h>
++
++namespace libcontext {
++extern "C" {
++
++struct LIBCONTEXT_CTX
++{
++    intptr_t args;
++    void (* fn)( intptr_t );
++    ucontext_t ctx;
++};
++
++intptr_t jump_fcontext( fcontext_t* ofc, fcontext_t nfc,
++        intptr_t vp, bool preserve_fpu )
++{
++    LIBCONTEXT_CTX caller, *callee = (LIBCONTEXT_CTX*) nfc;
++
++    *ofc = (fcontext_t) &caller;
++    callee->args = vp;
++    int swapcontext_ret = swapcontext( &caller.ctx, &callee->ctx );
++    assert( swapcontext_ret >= 0 );
++    return caller.args;
++}
++
++static void fcontext_start( LIBCONTEXT_CTX* callee )
++{
++    callee->fn( callee->args );
++    assert( false );
++}
++
++fcontext_t make_fcontext( void* sp, size_t size,
++        void (* fn)( intptr_t ) )
++{
++    size &= -16;
++    assert( size > sizeof(LIBCONTEXT_CTX) + (1 << 14) );
++    size -= sizeof(LIBCONTEXT_CTX);
++    LIBCONTEXT_CTX* callee = (LIBCONTEXT_CTX*)( (char*)sp + size );
++    callee->fn = fn;
++
++    int getcontext_ret = getcontext( &callee->ctx );
++    assert( getcontext_ret >= 0 );
++    callee->ctx.uc_stack.ss_sp = sp;
++    callee->ctx.uc_stack.ss_size = size;
++    callee->ctx.uc_stack.ss_flags = 0;
++    callee->ctx.uc_link = nullptr;
++#ifdef __e2k__
++    int makecontext_ret = makecontext_e2k( &callee->ctx, (void(*)())fcontext_start, 1, callee );
++    assert( makecontext_ret >= 0 );
++#else
++    makecontext( &callee->ctx, (void(*)())fcontext_start, 1, callee );
++#endif
++    return (fcontext_t) callee;
++}
++
++#ifdef __e2k__
++void free_fcontext( fcontext_t fc ) {
++    LIBCONTEXT_CTX* callee = (LIBCONTEXT_CTX*) fc;
++    freecontext_e2k( &callee->ctx );
++}
++#endif
++
++}    // extern "C"
++}    // namespace
++#endif
++
+ #if defined(LIBCONTEXT_PLATFORM_windows_i386) && defined(LIBCONTEXT_COMPILER_gcc)
+ __asm (
+ ".text\n"
+diff --git a/include/system/libcontext.h b/include/system/libcontext.h
+index 8045fa2..a92ba1d 100644
+--- a/include/system/libcontext.h
++++ b/include/system/libcontext.h
+@@ -22,7 +22,12 @@
+ #include <stddef.h>
+ 
+ 
+-#if defined(__GNUC__) || defined(__APPLE__) || defined(__FreeBSD__)
++#ifdef __e2k__
++#define USE_UCONTEXT
++#endif
++
++#if (defined(__GNUC__) || defined(__APPLE__) || defined(__FreeBSD__)) \
++        && !defined(USE_UCONTEXT)
+ 
+     #define LIBCONTEXT_COMPILER_gcc
+ 
+@@ -73,6 +78,9 @@
+         #define LIBCONTEXT_CALL_CONVENTION
+     #endif
+     #endif
++#else
++    #define LIBCONTEXT_PLATFORM_ucontext
++    #define LIBCONTEXT_CALL_CONVENTION
+ #endif
+ 
+ #ifdef __cplusplus
+@@ -95,6 +103,12 @@ intptr_t LIBCONTEXT_CALL_CONVENTION jump_fcontext( fcontext_t* ofc, fcontext_t n
+ fcontext_t LIBCONTEXT_CALL_CONVENTION make_fcontext( void* sp, size_t size,
+         void (* fn)( intptr_t ) );
+ 
++#if defined(LIBCONTEXT_PLATFORM_ucontext) && defined(__e2k__)
++void free_fcontext( fcontext_t fc );
++#else
++static inline void free_fcontext( fcontext_t fc ) { (void)fc; }
++#endif
++
+ #ifdef __cplusplus
+ }    // namespace
+ #endif
+diff --git a/include/tool/coroutine.h b/include/tool/coroutine.h
+index 7be173a..27ffadc 100644
+--- a/include/tool/coroutine.h
++++ b/include/tool/coroutine.h
+@@ -145,6 +145,7 @@ public:
+ 
+     ~COROUTINE()
+     {
++        if ( m_callee != nullptr ) libcontext::free_fcontext( m_callee );
+     }
+ 
+ public:
+-- 
+2.17.1
+
