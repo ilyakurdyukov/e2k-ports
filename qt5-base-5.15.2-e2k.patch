@@ -1,0 +1,290 @@
+From 5d0c51b9a003a81afd9b8d5d4f5b7e0a80ecbc94 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Thu, 9 Sep 2021 15:50:08 +0700
+Subject: [PATCH] qt5-base-5.15.2 e2k support
+
+---
+ configure.json                                       |  2 +-
+ mkspecs/common/gcc-base.conf                         |  4 ++--
+ mkspecs/features/toolchain.prf                       |  2 ++
+ mkspecs/linux-icc/qmake.conf                         |  5 +----
+ .../include/double-conversion/utils.h                |  1 +
+ src/corelib/global/archdetect.cpp                    |  2 ++
+ src/corelib/global/qcompilerdetection.h              | 12 ++++++++++--
+ src/corelib/global/qfloat16.h                        |  5 +++++
+ src/corelib/global/qlogging.cpp                      |  2 +-
+ src/corelib/global/qprocessordetection.h             |  9 +++++++++
+ src/corelib/thread/qatomic_cxx11.h                   |  2 +-
+ src/corelib/tools/qsimd.cpp                          | 10 +++++++---
+ src/corelib/tools/qsimd_p.h                          |  4 ++--
+ src/gui/painting/qdrawhelper.cpp                     |  2 +-
+ tests/auto/corelib/text/qlocale/tst_qlocale.cpp      |  2 +-
+ 15 files changed, 46 insertions(+), 18 deletions(-)
+
+diff --git a/configure.json b/configure.json
+index c273aeee..7d2aab4b 100644
+--- a/configure.json
++++ b/configure.json
+@@ -1057,7 +1057,7 @@
+         },
+         "sse2": {
+             "label": "SSE2",
+-            "condition": "(arch.i386 || arch.x86_64) && tests.sse2",
++            "condition": "(arch.i386 || arch.x86_64 || arch.e2k) && tests.sse2",
+             "output": [
+                 "privateConfig",
+                 "privateFeature",
+diff --git a/mkspecs/common/gcc-base.conf b/mkspecs/common/gcc-base.conf
+index 99d77156..ea87fcbd 100644
+--- a/mkspecs/common/gcc-base.conf
++++ b/mkspecs/common/gcc-base.conf
+@@ -50,8 +50,8 @@ QMAKE_CFLAGS_YACC          += -Wno-unused -Wno-parentheses
+ QMAKE_CFLAGS_HIDESYMS      += -fvisibility=hidden
+ QMAKE_CFLAGS_EXCEPTIONS_OFF += -fno-exceptions
+ QMAKE_CFLAGS_SPLIT_SECTIONS += -ffunction-sections -fdata-sections
+-QMAKE_CFLAGS_LTCG           = -flto -fno-fat-lto-objects
+-QMAKE_CFLAGS_LTCG_FATOBJECTS = -ffat-lto-objects
++QMAKE_CFLAGS_LTCG           = -flto
++QMAKE_CFLAGS_LTCG_FATOBJECTS =
+ QMAKE_CFLAGS_DISABLE_LTCG   = -fno-lto
+ QMAKE_CFLAGS_SHSTK          = -mshstk
+ 
+diff --git a/mkspecs/features/toolchain.prf b/mkspecs/features/toolchain.prf
+index efbe7c1e..5d4f9760 100644
+--- a/mkspecs/features/toolchain.prf
++++ b/mkspecs/features/toolchain.prf
+@@ -283,6 +283,8 @@ isEmpty($${target_prefix}.INCDIRS) {
+                 }
+             }
+         }
++        QMAKE_DEFAULT_INCDIRS = "/usr/include"
++        QMAKE_DEFAULT_LIBDIRS = "/usr/lib64"
+         isEmpty(QMAKE_DEFAULT_LIBDIRS)|isEmpty(QMAKE_DEFAULT_INCDIRS): \
+             !integrity: \
+                 error("failed to parse default search paths from compiler output")
+diff --git a/mkspecs/linux-icc/qmake.conf b/mkspecs/linux-icc/qmake.conf
+index 09f897d0..96219853 100644
+--- a/mkspecs/linux-icc/qmake.conf
++++ b/mkspecs/linux-icc/qmake.conf
+@@ -28,10 +28,7 @@ QMAKE_LFLAGS_VERSION_SCRIPT = -Wl,--version-script,
+ 
+ # fat LTO support for Linux ICC; not available for macOS ICC, see
+ # https://software.intel.com/en-us/cpp-compiler-18.0-developer-guide-and-reference-ffat-lto-objects
+-QMAKE_CFLAGS_LTCG      += -fno-fat-lto-objects
+-QMAKE_CXXFLAGS_LTCG    += -fno-fat-lto-objects
+-QMAKE_LFLAGS_LTCG      += -fno-fat-lto-objects
+-QMAKE_CFLAGS_LTCG_FATOBJECTS = -ffat-lto-objects
++QMAKE_CFLAGS_LTCG_FATOBJECTS =
+ QMAKE_CXXFLAGS_LTCG_FATOBJECTS = $$QMAKE_CFLAGS_LTCG_FATOBJECTS
+ 
+ QMAKE_LIBS              =
+diff --git a/src/3rdparty/double-conversion/include/double-conversion/utils.h b/src/3rdparty/double-conversion/include/double-conversion/utils.h
+index 70e697ca..24849817 100644
+--- a/src/3rdparty/double-conversion/include/double-conversion/utils.h
++++ b/src/3rdparty/double-conversion/include/double-conversion/utils.h
+@@ -94,6 +94,7 @@ int main(int argc, char** argv) {
+     defined(__ARMEL__) || defined(__avr32__) || defined(_M_ARM) || defined(_M_ARM64) || \
+     defined(__hppa__) || defined(__ia64__) || \
+     defined(__mips__) || \
++    defined(__e2k__) || \
+     defined(__powerpc__) || defined(__ppc__) || defined(__ppc64__) || \
+     defined(_POWER) || defined(_ARCH_PPC) || defined(_ARCH_PPC64) || \
+     defined(__sparc__) || defined(__sparc) || defined(__s390__) || \
+diff --git a/src/corelib/global/archdetect.cpp b/src/corelib/global/archdetect.cpp
+index 1d00b7f5..93a98e2d 100644
+--- a/src/corelib/global/archdetect.cpp
++++ b/src/corelib/global/archdetect.cpp
+@@ -71,6 +71,8 @@
+ #  define ARCH_PROCESSOR "riscv32"
+ #elif defined(Q_PROCESSOR_RISCV_64)
+ #  define ARCH_PROCESSOR "riscv64"
++#elif defined(Q_PROCESSOR_E2K)
++#  define ARCH_PROCESSOR "e2k"
+ #elif defined(Q_PROCESSOR_S390_X)
+ #  define ARCH_PROCESSOR "s390x"
+ #elif defined(Q_PROCESSOR_S390)
+diff --git a/src/corelib/global/qcompilerdetection.h b/src/corelib/global/qcompilerdetection.h
+index ebffe741..54d2b272 100644
+--- a/src/corelib/global/qcompilerdetection.h
++++ b/src/corelib/global/qcompilerdetection.h
+@@ -1287,6 +1287,14 @@
+ #  define QT_WARNING_DISABLE_INTEL(number)
+ #  define QT_WARNING_DISABLE_MSVC(number)
+ #  define QT_WARNING_DISABLE_DEPRECATED         QT_WARNING_DISABLE_CLANG("-Wdeprecated-declarations")
++#elif defined(__EDG__)
++#  define QT_WARNING_PUSH
++#  define QT_WARNING_POP                        QT_DO_PRAGMA(diag_default deprecated_entity_with_custom_message)
++#  define QT_WARNING_DISABLE_GCC(text)
++#  define QT_WARNING_DISABLE_CLANG(text)
++#  define QT_WARNING_DISABLE_INTEL(number)
++#  define QT_WARNING_DISABLE_MSVC(number)
++#  define QT_WARNING_DISABLE_DEPRECATED         QT_DO_PRAGMA(diag_suppress deprecated_entity_with_custom_message)
+ #elif defined(Q_CC_GNU) && (__GNUC__ * 100 + __GNUC_MINOR__ >= 406)
+ #  define QT_WARNING_PUSH                       QT_DO_PRAGMA(GCC diagnostic push)
+ #  define QT_WARNING_POP                        QT_DO_PRAGMA(GCC diagnostic pop)
+@@ -1343,7 +1351,7 @@
+     } while (false)
+ 
+ #if defined(__cplusplus)
+-#if __has_cpp_attribute(clang::fallthrough)
++#if __has_cpp_attribute(clang::fallthrough) && !defined(__e2k__)
+ #    define Q_FALLTHROUGH() [[clang::fallthrough]]
+ #elif __has_cpp_attribute(gnu::fallthrough)
+ #    define Q_FALLTHROUGH() [[gnu::fallthrough]]
+@@ -1363,7 +1371,7 @@
+ /*
+     Sanitize compiler feature availability
+ */
+-#if !defined(Q_PROCESSOR_X86)
++#if !defined(Q_PROCESSOR_X86) && !defined(__e2k__)
+ #  undef QT_COMPILER_SUPPORTS_SSE2
+ #  undef QT_COMPILER_SUPPORTS_SSE3
+ #  undef QT_COMPILER_SUPPORTS_SSSE3
+diff --git a/src/corelib/global/qfloat16.h b/src/corelib/global/qfloat16.h
+index c7a9c87a..fafe5466 100644
+--- a/src/corelib/global/qfloat16.h
++++ b/src/corelib/global/qfloat16.h
+@@ -54,6 +54,11 @@
+ # endif
+ #endif
+ 
++#ifdef __e2k__
++#undef QT_COMPILER_SUPPORTS_F16C
++#undef QFLOAT16_INCLUDE_FAST
++#endif
++
+ #if defined(QT_COMPILER_SUPPORTS_F16C) && defined(__F16C__)
+ #include <immintrin.h>
+ #endif
+diff --git a/src/corelib/global/qlogging.cpp b/src/corelib/global/qlogging.cpp
+index 89f49324..ef44564a 100644
+--- a/src/corelib/global/qlogging.cpp
++++ b/src/corelib/global/qlogging.cpp
+@@ -1277,7 +1277,7 @@ void QMessagePattern::setPattern(const QString &pattern)
+ // make sure the function has "Message" in the name so the function is removed
+ 
+ #if ((defined(Q_CC_GNU) && defined(QT_COMPILER_SUPPORTS_SIMD_ALWAYS)) || __has_attribute(optimize)) \
+-    && !defined(Q_CC_INTEL) && !defined(Q_CC_CLANG)
++    && !defined(Q_CC_INTEL) && !defined(Q_CC_CLANG) && !defined(__EDG__)
+ // force skipping the frame pointer, to save the backtrace() function some work
+ __attribute__((optimize("omit-frame-pointer")))
+ #endif
+diff --git a/src/corelib/global/qprocessordetection.h b/src/corelib/global/qprocessordetection.h
+index 8d657208..de3d9c95 100644
+--- a/src/corelib/global/qprocessordetection.h
++++ b/src/corelib/global/qprocessordetection.h
+@@ -281,6 +281,15 @@
+ #  endif
+ // Q_BYTE_ORDER not defined, use endianness auto-detection
+ 
++/*
++    Elbrus 2000 family.
++
++    Elbrus is little-endian.
++*/
++#elif defined(__e2k__)
++#  define Q_PROCESSOR_E2K
++#  define Q_BYTE_ORDER Q_LITTLE_ENDIAN
++
+ /*
+     RISC-V family, known variants: 32- and 64-bit
+ 
+diff --git a/src/corelib/thread/qatomic_cxx11.h b/src/corelib/thread/qatomic_cxx11.h
+index 96695545..35a36b7f 100644
+--- a/src/corelib/thread/qatomic_cxx11.h
++++ b/src/corelib/thread/qatomic_cxx11.h
+@@ -187,7 +187,7 @@ template <> Q_DECL_CONSTEXPR inline bool QAtomicTraits<2>::isLockFree()
+ { return false; }
+ #endif
+ 
+-#if QT_CONFIG(std_atomic64)
++#if QT_CONFIG(std_atomic64) || defined(__e2k__)
+ template<> struct QAtomicOpsSupport<8> { enum { IsSupported = 1 }; };
+ #  define Q_ATOMIC_INT64_IS_SUPPORTED
+ #  if ATOMIC_LLONG_LOCK_FREE == 2
+diff --git a/src/corelib/tools/qsimd.cpp b/src/corelib/tools/qsimd.cpp
+index 6ad6795f..0bdb8d4a 100644
+--- a/src/corelib/tools/qsimd.cpp
++++ b/src/corelib/tools/qsimd.cpp
+@@ -112,7 +112,7 @@ static const char features_string[] =
+ static const int features_indices[] = {
+        0,    5
+ };
+-#elif defined(Q_PROCESSOR_X86)
++#elif defined(Q_PROCESSOR_X86) || defined(__e2k__)
+ #  include "qsimd_x86.cpp"                  // generated by util/x86simdgen
+ #else
+ static const char features_string[] = "";
+@@ -183,7 +183,11 @@ static inline quint64 detectProcessorFeatures()
+     return features;
+ }
+ 
+-#elif defined(Q_PROCESSOR_X86)
++#elif defined(Q_PROCESSOR_X86) || defined(__e2k__)
++
++#ifdef __e2k__
++#define Q_CC_EMSCRIPTEN
++#endif
+ 
+ #ifdef Q_PROCESSOR_X86_32
+ # define PICreg "%%ebx"
+@@ -723,7 +727,7 @@ QT_FUNCTION_TARGET(RDRND) qsizetype qRandomCpu(void *buffer, qsizetype count) no
+     ptr = qt_random_rdrnd(ptr, end);
+     return ptr - reinterpret_cast<unsigned *>(buffer);
+ }
+-#elif defined(Q_PROCESSOR_X86) && !defined(Q_OS_NACL) && !defined(Q_PROCESSOR_ARM)
++#elif (defined(Q_PROCESSOR_X86) || defined(__e2k__)) && !defined(Q_OS_NACL) && !defined(Q_PROCESSOR_ARM)
+ static bool checkRdrndWorks() noexcept { return false; }
+ #endif // Q_PROCESSOR_X86 && RDRND
+ 
+diff --git a/src/corelib/tools/qsimd_p.h b/src/corelib/tools/qsimd_p.h
+index 26e98c45..254b614f 100644
+--- a/src/corelib/tools/qsimd_p.h
++++ b/src/corelib/tools/qsimd_p.h
+@@ -177,7 +177,7 @@
+ #  define QT_FUNCTION_TARGET(x)
+ #endif
+ 
+-#ifdef Q_PROCESSOR_X86
++#if defined(Q_PROCESSOR_X86) || defined(__e2k__)
+ /* -- x86 intrinsic support -- */
+ 
+ #  if defined(Q_CC_MSVC) && (defined(_M_X64) || _M_IX86_FP >= 2)
+@@ -308,7 +308,7 @@ QT_END_NAMESPACE
+ 
+ QT_BEGIN_NAMESPACE
+ 
+-#ifndef Q_PROCESSOR_X86
++#if !defined(Q_PROCESSOR_X86) && !defined(__e2k__)
+ enum CPUFeatures {
+ #if defined(Q_PROCESSOR_ARM)
+     CpuFeatureNEON          = 2,
+diff --git a/src/gui/painting/qdrawhelper.cpp b/src/gui/painting/qdrawhelper.cpp
+index 7b3fffcc..4f584d66 100644
+--- a/src/gui/painting/qdrawhelper.cpp
++++ b/src/gui/painting/qdrawhelper.cpp
+@@ -6642,7 +6642,7 @@ void qt_memfill64(quint64 *dest, quint64 color, qsizetype count)
+ }
+ #endif
+ 
+-#if defined(QT_COMPILER_SUPPORTS_SSSE3) && defined(Q_CC_GNU) && !defined(Q_CC_INTEL) && !defined(Q_CC_CLANG)
++#if defined(QT_COMPILER_SUPPORTS_SSSE3) && defined(Q_CC_GNU) && !defined(Q_CC_INTEL) && !defined(Q_CC_CLANG) && !defined(__EDG__)
+ __attribute__((optimize("no-tree-vectorize")))
+ #endif
+ void qt_memfill24(quint24 *dest, quint24 color, qsizetype count)
+diff --git a/tests/auto/corelib/text/qlocale/tst_qlocale.cpp b/tests/auto/corelib/text/qlocale/tst_qlocale.cpp
+index c4094947..43272164 100644
+--- a/tests/auto/corelib/text/qlocale/tst_qlocale.cpp
++++ b/tests/auto/corelib/text/qlocale/tst_qlocale.cpp
+@@ -46,7 +46,7 @@
+ #include <private/qlocale_tools_p.h>
+ #include <qnumeric.h>
+ 
+-#if defined(Q_OS_LINUX) && !defined(__UCLIBC__)
++#if defined(Q_OS_LINUX) && !defined(__UCLIBC__) && !defined(__e2k__)
+ #    define QT_USE_FENV
+ #endif
+ 
+-- 
+2.17.1
+
