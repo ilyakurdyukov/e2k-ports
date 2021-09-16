@@ -1,0 +1,120 @@
+From 377e87997df424d5c1242d82d98f32f685ad1e5a Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Mon, 13 Sep 2021 14:02:12 +0700
+Subject: [PATCH] glib-2.64.5 e2k support
+
+---
+ glib/gmacros.h | 77 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 77 insertions(+)
+
+diff --git a/glib/gmacros.h b/glib/gmacros.h
+index a770ac7..066f83a 100644
+--- a/glib/gmacros.h
++++ b/glib/gmacros.h
+@@ -623,6 +623,11 @@
+   _Pragma ("warning (disable:1478)")
+ #define G_GNUC_END_IGNORE_DEPRECATIONS			\
+   _Pragma ("warning (pop)")
++#elif defined(__EDG__)
++#define G_GNUC_BEGIN_IGNORE_DEPRECATIONS		\
++  _Pragma ("diag_suppress 1215,1444")
++#define G_GNUC_END_IGNORE_DEPRECATIONS			\
++  _Pragma ("diag_default 1215,1444")
+ #elif    __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
+ #define G_GNUC_BEGIN_IGNORE_DEPRECATIONS		\
+   _Pragma ("GCC diagnostic push")			\
+@@ -1034,7 +1039,16 @@
+ #define _GLIB_AUTOPTR_QUEUE_FUNC_NAME(TypeName) glib_queueautoptr_cleanup_##TypeName
+ #define _GLIB_AUTOPTR_QUEUE_TYPENAME(TypeName)  TypeName##_queueautoptr
+ #define _GLIB_AUTO_FUNC_NAME(TypeName)    glib_auto_cleanup_##TypeName
++
++#if defined(__cplusplus) && defined(__EDG__)
++#define _GLIB_CLEANUP(func) \
++  _Pragma("diag_error 1097") \
++  __attribute__((cleanup(func))) \
++  _Pragma("diag_default 1097")
++#else
+ #define _GLIB_CLEANUP(func)               __attribute__((cleanup(func)))
++#endif
++
+ #define _GLIB_DEFINE_AUTOPTR_CLEANUP_FUNCS(TypeName, ParentName, cleanup) \
+   typedef TypeName *_GLIB_AUTOPTR_TYPENAME(TypeName);                                                           \
+   typedef GList *_GLIB_AUTOPTR_LIST_TYPENAME(TypeName);                                                         \
+@@ -1067,11 +1081,74 @@
+   G_GNUC_BEGIN_IGNORE_DEPRECATIONS                                                                              \
+   static G_GNUC_UNUSED inline void _GLIB_AUTO_FUNC_NAME(TypeName) (TypeName *_ptr) { if (*_ptr != none) (func) (*_ptr); }     \
+   G_GNUC_END_IGNORE_DEPRECATIONS
++/* EDG frontend doesn't support "attribute cleanup" in C++ mode */
++#if defined(__cplusplus) && defined(__EDG__)
++#include <stddef.h>
++
++#define EDG_CLEANUP_COMMON(name) \
++  T *v; \
++  /* prevent copying */ \
++  name(name &x) { v = (T*)x; } \
++public: \
++  name(const name &x) { v = (T*)x; } \
++  name() { } \
++  name(T *x) { v = x; } \
++  ~name() { func((X*)&v); } \
++  T* operator=(T *x) { return (v = x); } \
++  T& operator[](ptrdiff_t i) { return v[i]; } \
++  T* operator->() { return v; } \
++  T** operator&() { return &v; } \
++  T& operator*() { return *v; } \
++  operator T*() const { return v; } \
++  template<typename Z> \
++  explicit operator Z*() { return (Z*)v; }
++
++/* need to hide C++ code from glib-mkenums */
++#define EDG_CLEANUP_DEFINE \
++template <typename T, typename X, void(*func)(X*)> \
++class EDG_CLEANUP_HELPER { \
++  EDG_CLEANUP_COMMON(EDG_CLEANUP_HELPER) \
++}; \
++\
++template <typename T, typename X, void(*func)(X*), class Y> \
++class EDG_CLEANUP_HELPER_EX { \
++  EDG_CLEANUP_COMMON(EDG_CLEANUP_HELPER_EX) \
++  operator Y() const { return Y((T*)this); } \
++}; \
++\
++template <typename T, void(*func)(T*)> \
++class EDG_CLEANUP_HELPER_AUTO { \
++  T v; \
++  /* prevent copying */ \
++  EDG_CLEANUP_HELPER_AUTO(EDG_CLEANUP_HELPER_AUTO &x) { v = (T)x; } \
++public: \
++  EDG_CLEANUP_HELPER_AUTO(const EDG_CLEANUP_HELPER_AUTO &x) { v = (T)x; } \
++  EDG_CLEANUP_HELPER_AUTO(T x) { v = x; } \
++  ~EDG_CLEANUP_HELPER_AUTO() { func(&v); } \
++  T operator=(T x) { return (v = x); } \
++  operator T() const { return v; } \
++};
++
++EDG_CLEANUP_DEFINE
++#undef EDG_CLEANUP_DEFINE
++#undef EDG_CLEANUP_COMMON
++
++#define g_autoptr_free(TypeName, var) _GLIB_AUTOPTR_FUNC_NAME(TypeName)(&var)
++#define g_autoptr(TypeName) EDG_CLEANUP_HELPER<TypeName, TypeName*, _GLIB_AUTOPTR_FUNC_NAME(TypeName)>
++#define g_autolist(TypeName) EDG_CLEANUP_HELPER<GList, GList*, _GLIB_AUTOPTR_LIST_FUNC_NAME(TypeName)>
++#define g_autoslist(TypeName) EDG_CLEANUP_HELPER<GSList, GSList*, _GLIB_AUTOPTR_SLIST_FUNC_NAME(TypeName)>
++#define g_autoqueue(TypeName) EDG_CLEANUP_HELPER<GQueue, GQueue*, _GLIB_AUTOPTR_QUEUE_FUNC_NAME(TypeName)>
++#define g_auto(TypeName) EDG_CLEANUP_HELPER_AUTO<TypeName, _GLIB_AUTO_FUNC_NAME(TypeName)>
++// g_autofree gchar *ptr -> g_autofree_edg(gchar) ptr
++#define g_autofree_edg(TypeName) EDG_CLEANUP_HELPER<TypeName, void, g_autoptr_cleanup_generic_gfree>
++#define g_autofree_edg_ex(TypeName, ExtraType) EDG_CLEANUP_HELPER_EX<TypeName, void, g_autoptr_cleanup_generic_gfree, ExtraType>
++#else
+ #define g_autoptr(TypeName) _GLIB_CLEANUP(_GLIB_AUTOPTR_FUNC_NAME(TypeName)) _GLIB_AUTOPTR_TYPENAME(TypeName)
+ #define g_autolist(TypeName) _GLIB_CLEANUP(_GLIB_AUTOPTR_LIST_FUNC_NAME(TypeName)) _GLIB_AUTOPTR_LIST_TYPENAME(TypeName)
+ #define g_autoslist(TypeName) _GLIB_CLEANUP(_GLIB_AUTOPTR_SLIST_FUNC_NAME(TypeName)) _GLIB_AUTOPTR_SLIST_TYPENAME(TypeName)
+ #define g_autoqueue(TypeName) _GLIB_CLEANUP(_GLIB_AUTOPTR_QUEUE_FUNC_NAME(TypeName)) _GLIB_AUTOPTR_QUEUE_TYPENAME(TypeName)
+ #define g_auto(TypeName) _GLIB_CLEANUP(_GLIB_AUTO_FUNC_NAME(TypeName)) TypeName
++#endif
+ #define g_autofree _GLIB_CLEANUP(g_autoptr_cleanup_generic_gfree)
+ 
+ #else /* not GNU C */
+-- 
+2.17.1
+
