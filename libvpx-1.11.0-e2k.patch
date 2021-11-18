@@ -1,11 +1,11 @@
-From bbd9c5696d079873647e6ade21747f28815c86b4 Mon Sep 17 00:00:00 2001
+From 0468fb9a5e3683f5214d61023be82bdcd198c169 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Fri, 12 Nov 2021 15:01:05 +0700
+Date: Thu, 18 Nov 2021 16:28:04 +0700
 Subject: [PATCH] libvpx-1.11.0 e2k support
 
 ---
  build/make/Makefile                       |    4 +
- build/make/configure.sh                   |    8 +
+ build/make/configure.sh                   |   10 +
  build/make/rtcd.pl                        |   33 +
  configure                                 |    2 +
  test/convolve_test.cc                     |    6 +-
@@ -17,8 +17,8 @@ Subject: [PATCH] libvpx-1.11.0 e2k support
  vp8/common/x86/vp8_asm_stubs.c            |    4 +-
  vp8/encoder/e2k/block_error_e2k.c         |   72 +
  vp8/encoder/e2k/dct_e2k.c                 |  292 ++++
- vp8/encoder/x86/quantize_sse4.c           |   29 +
- vp8/encoder/x86/vp8_quantize_ssse3.c      |    4 +-
+ vp8/encoder/x86/quantize_sse4.c           |   95 +-
+ vp8/encoder/x86/vp8_quantize_ssse3.c      |   33 +-
  vp8/vp8_common.mk                         |    6 +-
  vp8/vp8cx.mk                              |    2 +
  vp9/common/vp9_rtcd_defs.pl               |    2 +-
@@ -42,10 +42,11 @@ Subject: [PATCH] libvpx-1.11.0 e2k support
  vpx_dsp/vpx_dsp_rtcd_defs.pl              |    2 +-
  vpx_dsp/x86/variance_sse2.c               |    8 +
  vpx_dsp/x86/vpx_subpixel_4t_intrin_sse2.c |   12 +-
+ vpx_ports/bitops.h                        |   23 +-
  vpx_ports/e2k.h                           |  133 ++
  vpx_ports/vpx_ports.mk                    |    2 +
  vpx_ports/x86.h                           |    4 +
- 41 files changed, 6521 insertions(+), 15 deletions(-)
+ 42 files changed, 6575 insertions(+), 81 deletions(-)
  create mode 100644 vp8/common/e2k/loopfilter_e2k.c
  create mode 100644 vp8/common/e2k/subpixel_e2k.c
  create mode 100644 vp8/encoder/e2k/block_error_e2k.c
@@ -83,7 +84,7 @@ index 9ca97c8..1984cd0 100644
  $(BUILD_PFX)%_vsx.c.d: CFLAGS += -maltivec -mvsx
  $(BUILD_PFX)%_vsx.c.o: CFLAGS += -maltivec -mvsx
 diff --git a/build/make/configure.sh b/build/make/configure.sh
-index 81d30a1..c72894f 100644
+index 81d30a1..f0fcb99 100644
 --- a/build/make/configure.sh
 +++ b/build/make/configure.sh
 @@ -754,6 +754,9 @@ process_common_toolchain() {
@@ -108,6 +109,15 @@ index 81d30a1..c72894f 100644
      x86*)
        case  ${tgt_os} in
          android)
+@@ -1483,6 +1491,8 @@ EOF
+ static inline function() {}
+ EOF
+ 
++  enabled e2k && INLINE="__attribute__((__always_inline__)) inline"
++
+   # Almost every platform uses pthreads.
+   if enabled multithread; then
+     case ${toolchain} in
 diff --git a/build/make/rtcd.pl b/build/make/rtcd.pl
 index acb9f6e..bc7fd3d 100755
 --- a/build/make/rtcd.pl
@@ -1751,74 +1761,184 @@ index 0000000..4342f9e
 +}
 +
 diff --git a/vp8/encoder/x86/quantize_sse4.c b/vp8/encoder/x86/quantize_sse4.c
-index 389c167..afe1da4 100644
+index 389c167..6d03365 100644
 --- a/vp8/encoder/x86/quantize_sse4.c
 +++ b/vp8/encoder/x86/quantize_sse4.c
-@@ -14,6 +14,7 @@
- #include "vp8/common/entropy.h" /* vp8_default_inv_zig_zag */
+@@ -11,28 +11,14 @@
+ #include <smmintrin.h> /* SSE4.1 */
+ 
+ #include "./vp8_rtcd.h"
+-#include "vp8/common/entropy.h" /* vp8_default_inv_zig_zag */
  #include "vp8/encoder/block.h"
+-
+-#define SELECT_EOB(i, z, x, y, q)                         \
+-  do {                                                    \
+-    short boost = *zbin_boost_ptr;                        \
+-    /* Technically _mm_extract_epi16() returns an int: */ \
+-    /* https://bugs.llvm.org/show_bug.cgi?id=41657 */     \
+-    short x_z = (short)_mm_extract_epi16(x, z);           \
+-    short y_z = (short)_mm_extract_epi16(y, z);           \
+-    int cmp = (x_z < boost) | (y_z == 0);                 \
+-    zbin_boost_ptr++;                                     \
+-    if (cmp) break;                                       \
+-    q = _mm_insert_epi16(q, y_z, z);                      \
+-    eob = i;                                              \
+-    zbin_boost_ptr = b->zrun_zbin_boost;                  \
+-  } while (0)
++#include "vpx_ports/bitops.h" /* get_lsb */
  
-+#if !VPX_ARCH_E2K
- #define SELECT_EOB(i, z, x, y, q)                         \
-   do {                                                    \
-     short boost = *zbin_boost_ptr;                        \
-@@ -32,6 +33,29 @@
  void vp8_regular_quantize_b_sse4_1(BLOCK *b, BLOCKD *d) {
-   char eob = 0;
+-  char eob = 0;
++  int eob = -1;
    short *zbin_boost_ptr = b->zrun_zbin_boost;
-+#else
-+#define qcoeff0_off 0
-+#define qcoeff1_off 8
-+#define SELECT_EOB(i, z, x, y, q)                         \
-+  do {                                                    \
-+    int boost = zbin_next;                                \
-+    int x_z = (short)_mm_extract_epi16(x, z);             \
-+    int y_z = (short)_mm_extract_epi16(y, z);             \
-+    zbin_next = *zbin_boost_ptr++;                        \
-+    if (x_z < boost || !y_z) break;                       \
-+    qcoeff[q##_off + z] = y_z;                            \
-+    eob = i;                                              \
-+    zbin_boost_ptr = zbin_boost;                          \
-+    zbin_next = zbin_first;                               \
-+  } while (0)
-+
-+void vp8_regular_quantize_b_sse4_1(BLOCK *b, BLOCKD *d) {
-+  char eob = 0;
-+  short *zbin_boost = b->zrun_zbin_boost;
-+  int zbin_first = *zbin_boost++, zbin_next = zbin_first;
-+  short *zbin_boost_ptr = zbin_boost;
-+  DECLARE_ALIGNED(16, short, qcoeff[16]) = { 0 };
-+#endif
- 
+-
++  __m128i zbin_boost0 = _mm_load_si128((__m128i *)(zbin_boost_ptr));
++  __m128i zbin_boost1 = _mm_load_si128((__m128i *)(zbin_boost_ptr + 8));
    __m128i x0, x1, y0, y1, x_minus_zbin0, x_minus_zbin1, dqcoeff0, dqcoeff1;
    __m128i quant_shift0 = _mm_load_si128((__m128i *)(b->quant_shift));
-@@ -106,6 +130,11 @@ void vp8_regular_quantize_b_sse4_1(BLOCK *b, BLOCKD *d) {
-   SELECT_EOB(15, 6, x_minus_zbin1, y1, qcoeff1);
-   SELECT_EOB(16, 7, x_minus_zbin1, y1, qcoeff1);
+   __m128i quant_shift1 = _mm_load_si128((__m128i *)(b->quant_shift + 8));
+@@ -47,8 +33,12 @@ void vp8_regular_quantize_b_sse4_1(BLOCK *b, BLOCKD *d) {
+   __m128i quant1 = _mm_load_si128((__m128i *)(b->quant + 8));
+   __m128i dequant0 = _mm_load_si128((__m128i *)(d->dequant));
+   __m128i dequant1 = _mm_load_si128((__m128i *)(d->dequant + 8));
+-  __m128i qcoeff0 = _mm_setzero_si128();
+-  __m128i qcoeff1 = _mm_setzero_si128();
++  __m128i qcoeff0, qcoeff1, t0, t1, x_shuf0, x_shuf1;
++  uint32_t mask, ymask;
++  DECLARE_ALIGNED(16, static const uint8_t,
++                  zig_zag_mask[16]) = { 0, 1,  4,  8,  5, 2,  3,  6,
++                                        9, 12, 13, 10, 7, 11, 14, 15 };
++  DECLARE_ALIGNED(16, uint16_t, qcoeff[16]) = { 0 };
  
-+#if VPX_ARCH_E2K
+   /* Duplicate to all lanes. */
+   zbin_extra = _mm_shufflelo_epi16(zbin_extra, 0);
+@@ -88,23 +78,52 @@ void vp8_regular_quantize_b_sse4_1(BLOCK *b, BLOCKD *d) {
+   y0 = _mm_sign_epi16(y0, z0);
+   y1 = _mm_sign_epi16(y1, z1);
+ 
+-  /* The loop gets unrolled anyway. Avoid the vp8_default_zig_zag1d lookup. */
+-  SELECT_EOB(1, 0, x_minus_zbin0, y0, qcoeff0);
+-  SELECT_EOB(2, 1, x_minus_zbin0, y0, qcoeff0);
+-  SELECT_EOB(3, 4, x_minus_zbin0, y0, qcoeff0);
+-  SELECT_EOB(4, 0, x_minus_zbin1, y1, qcoeff1);
+-  SELECT_EOB(5, 5, x_minus_zbin0, y0, qcoeff0);
+-  SELECT_EOB(6, 2, x_minus_zbin0, y0, qcoeff0);
+-  SELECT_EOB(7, 3, x_minus_zbin0, y0, qcoeff0);
+-  SELECT_EOB(8, 6, x_minus_zbin0, y0, qcoeff0);
+-  SELECT_EOB(9, 1, x_minus_zbin1, y1, qcoeff1);
+-  SELECT_EOB(10, 4, x_minus_zbin1, y1, qcoeff1);
+-  SELECT_EOB(11, 5, x_minus_zbin1, y1, qcoeff1);
+-  SELECT_EOB(12, 2, x_minus_zbin1, y1, qcoeff1);
+-  SELECT_EOB(13, 7, x_minus_zbin0, y0, qcoeff0);
+-  SELECT_EOB(14, 3, x_minus_zbin1, y1, qcoeff1);
+-  SELECT_EOB(15, 6, x_minus_zbin1, y1, qcoeff1);
+-  SELECT_EOB(16, 7, x_minus_zbin1, y1, qcoeff1);
++  {
++    const __m128i zig_zag_i16_0 =
++        _mm_setr_epi8(0, 1, 2, 3, 8, 9, 14, 15, 10, 11, 4, 5, 6, 7, 12, 13);
++    const __m128i zig_zag_i16_1 =
++        _mm_setr_epi8(0, 1, 6, 7, 8, 9, 2, 3, 14, 15, 4, 5, 10, 11, 12, 13);
++
++    /* The first part of the zig zag needs a value
++     * from x_minus_zbin1 and vice versa. */
++    t1 = _mm_alignr_epi8(x_minus_zbin1, x_minus_zbin1, 2);
++    t0 = _mm_blend_epi16(x_minus_zbin0, t1, 0x80);
++    t1 = _mm_blend_epi16(t1, x_minus_zbin0, 0x80);
++    x_shuf0 = _mm_shuffle_epi8(t0, zig_zag_i16_0);
++    x_shuf1 = _mm_shuffle_epi8(t1, zig_zag_i16_1);
++  }
++
++  /* Check if y is nonzero and put it in zig zag order. */
++  t0 = _mm_packs_epi16(y0, y1);
++  t0 = _mm_cmpeq_epi8(t0, _mm_setzero_si128());
++  t0 = _mm_shuffle_epi8(t0, _mm_load_si128((const __m128i *)zig_zag_mask));
++  ymask = _mm_movemask_epi8(t0) ^ 0xffff;
++
++  for (;;) {
++    t0 = _mm_cmpgt_epi16(zbin_boost0, x_shuf0);
++    t1 = _mm_cmpgt_epi16(zbin_boost1, x_shuf1);
++    t0 = _mm_packs_epi16(t0, t1);
++    mask = _mm_movemask_epi8(t0);
++    mask = ~mask & ymask;
++    if (!mask) break;
++    /* |eob| will contain the index of the next found element where:
++     * boost[i - old_eob - 1] <= x[zigzag[i]] && y[zigzag[i]] != 0 */
++    eob = get_lsb(mask);
++    /* Need to clear the mask from processed elements so that
++     * they are no longer counted in the next iteration. */
++    ymask &= ~1U << eob;
++    /* It's safe to read ahead of this buffer if struct VP8_COMP has at
++     * least 32 bytes before the zrun_zbin_boost_* fields (it has 384).
++     * Any data read outside of the buffer is masked by the updated |ymask|. */
++    zbin_boost0 = _mm_loadu_si128((__m128i *)(zbin_boost_ptr - eob - 1));
++    zbin_boost1 = _mm_loadu_si128((__m128i *)(zbin_boost_ptr - eob + 7));
++    qcoeff[zig_zag_mask[eob]] = 0xffff;
++  }
++
 +  qcoeff0 = _mm_load_si128((__m128i *)(qcoeff));
 +  qcoeff1 = _mm_load_si128((__m128i *)(qcoeff + 8));
-+#endif
-+
++  qcoeff0 = _mm_and_si128(qcoeff0, y0);
++  qcoeff1 = _mm_and_si128(qcoeff1, y1);
+ 
    _mm_store_si128((__m128i *)(d->qcoeff), qcoeff0);
    _mm_store_si128((__m128i *)(d->qcoeff + 8), qcoeff1);
+@@ -115,5 +134,5 @@ void vp8_regular_quantize_b_sse4_1(BLOCK *b, BLOCKD *d) {
+   _mm_store_si128((__m128i *)(d->dqcoeff), dqcoeff0);
+   _mm_store_si128((__m128i *)(d->dqcoeff + 8), dqcoeff1);
  
+-  *d->eob = eob;
++  *d->eob = eob + 1;
+ }
 diff --git a/vp8/encoder/x86/vp8_quantize_ssse3.c b/vp8/encoder/x86/vp8_quantize_ssse3.c
-index 147c30c..0a0b177 100644
+index 147c30c..f6df146 100644
 --- a/vp8/encoder/x86/vp8_quantize_ssse3.c
 +++ b/vp8/encoder/x86/vp8_quantize_ssse3.c
-@@ -27,7 +27,9 @@ static int bsr(int mask) {
- #else
- static int bsr(int mask) {
-   int eob;
+@@ -12,31 +12,7 @@
+ 
+ #include "./vp8_rtcd.h"
+ #include "vp8/encoder/block.h"
+-
+-/* bitscan reverse (bsr) */
+-#if defined(_MSC_VER)
+-#include <intrin.h>
+-#pragma intrinsic(_BitScanReverse)
+-static int bsr(int mask) {
+-  unsigned long eob;
+-  _BitScanReverse(&eob, mask);
+-  eob++;
+-  if (mask == 0) eob = 0;
+-  return eob;
+-}
+-#else
+-static int bsr(int mask) {
+-  int eob;
 -#if defined(__GNUC__) && __GNUC__
-+#if VPX_ARCH_E2K
-+  eob = 31 - __builtin_clz(mask);
-+#elif defined(__GNUC__) && __GNUC__
-   __asm__ __volatile__("bsr %1, %0" : "=r"(eob) : "r"(mask) : "flags");
- #elif defined(__SUNPRO_C) || defined(__SUNPRO_CC)
-   asm volatile("bsr %1, %0" : "=r"(eob) : "r"(mask) : "flags");
+-  __asm__ __volatile__("bsr %1, %0" : "=r"(eob) : "r"(mask) : "flags");
+-#elif defined(__SUNPRO_C) || defined(__SUNPRO_CC)
+-  asm volatile("bsr %1, %0" : "=r"(eob) : "r"(mask) : "flags");
+-#endif
+-  eob++;
+-  if (mask == 0) eob = 0;
+-  return eob;
+-}
+-#endif
++#include "vpx_ports/bitops.h" /* get_msb */
+ 
+ void vp8_fast_quantize_b_ssse3(BLOCK *b, BLOCKD *d) {
+   int eob, mask;
+@@ -108,7 +84,10 @@ void vp8_fast_quantize_b_ssse3(BLOCK *b, BLOCKD *d) {
+ 
+   mask = _mm_movemask_epi8(x);
+ 
+-  eob = bsr(mask);
++  /* x2 is needed to increase the result from non-zero masks by 1,
++   * +1 is needed to mask undefined behavior for a null argument,
++   * the result of get_msb(1) is 0 */
++  eob = get_msb(mask * 2 + 1);
+ 
+-  *d->eob = 0xFF & eob;
++  *d->eob = eob;
+ }
 diff --git a/vp8/vp8_common.mk b/vp8/vp8_common.mk
 index 286a93a..d00c28f 100644
 --- a/vp8/vp8_common.mk
@@ -6973,6 +7093,59 @@ index 2391790..7499aa9 100644
  HIGH_FUN_CONV_2D(avg_, sse2, 1);
 -#endif  // CONFIG_VP9_HIGHBITDEPTH && VPX_ARCH_X86_64
 +#endif  // CONFIG_VP9_HIGHBITDEPTH && (VPX_ARCH_X86_64 || VPX_ARCH_E2K)
+diff --git a/vpx_ports/bitops.h b/vpx_ports/bitops.h
+index 5b2f31c..1b5cdaa 100644
+--- a/vpx_ports/bitops.h
++++ b/vpx_ports/bitops.h
+@@ -26,20 +26,32 @@
+ extern "C" {
+ #endif
+ 
+-// These versions of get_msb() are only valid when n != 0 because all
+-// of the optimized versions are undefined when n == 0:
++// These versions of get_lsb() and get_msb() are only valid when n != 0
++// because all of the optimized versions are undefined when n == 0:
+ // https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
+ 
+ // use GNU builtins where available.
+ #if defined(__GNUC__) && \
+     ((__GNUC__ == 3 && __GNUC_MINOR__ >= 4) || __GNUC__ >= 4)
++static INLINE int get_lsb(unsigned int n) {
++  assert(n != 0);
++  return __builtin_ctz(n);
++}
++
+ static INLINE int get_msb(unsigned int n) {
+   assert(n != 0);
+   return 31 ^ __builtin_clz(n);
+ }
+ #elif defined(USE_MSC_INTRINSICS)
++#pragma intrinsic(_BitScanForward)
+ #pragma intrinsic(_BitScanReverse)
+ 
++static INLINE int get_lsb(unsigned int n) {
++  unsigned long first_set_bit;  // NOLINT(runtime/int)
++  _BitScanForward(&first_set_bit, n);
++  return first_set_bit;
++}
++
+ static INLINE int get_msb(unsigned int n) {
+   unsigned long first_set_bit;
+   assert(n != 0);
+@@ -48,6 +60,13 @@ static INLINE int get_msb(unsigned int n) {
+ }
+ #undef USE_MSC_INTRINSICS
+ #else
++static INLINE int get_lsb(unsigned int n) {
++  int i;
++  assert(n != 0);
++  for (i = 0; i < 32 && !(n & 1); ++i) n >>= 1;
++  return i;
++}
++
+ // Returns (int)floor(log2(n)). n must be > 0.
+ static INLINE int get_msb(unsigned int n) {
+   int log = 0;
 diff --git a/vpx_ports/e2k.h b/vpx_ports/e2k.h
 new file mode 100644
 index 0000000..7cc4862
