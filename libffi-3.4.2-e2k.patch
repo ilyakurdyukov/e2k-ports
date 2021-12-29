@@ -1,0 +1,544 @@
+From 2b5d4aacaef41864a5f0501111886046c85f7425 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Wed, 29 Dec 2021 17:44:27 +0700
+Subject: [PATCH] libffi-3.4.2 e2k support
+
+LCC >= 1.25.18 or LCC >= 1.26.04 is required
+for __clear_cache() to work properly
+---
+ configure.host                       |   5 +
+ src/e2k/ffi.c                        | 385 +++++++++++++++++++++++++++
+ src/e2k/ffitarget.h                  |  63 +++++
+ testsuite/lib/libffi.exp             |   7 +
+ testsuite/libffi.complex/complex.exp |   7 +
+ testsuite/libffi.go/static-chain.h   |   2 +
+ 6 files changed, 469 insertions(+)
+ create mode 100644 src/e2k/ffi.c
+ create mode 100644 src/e2k/ffitarget.h
+
+diff --git a/configure.host b/configure.host
+index 2682671..38eb214 100644
+--- a/configure.host
++++ b/configure.host
+@@ -261,6 +261,11 @@ case "${host}" in
+ 	TARGET=XTENSA; TARGETDIR=xtensa
+ 	SOURCES="ffi.c sysv.S"
+ 	;;
++
++  e2k*-*)
++	TARGET=E2K; TARGETDIR=e2k
++	SOURCES="ffi.c"
++	;;
+ esac
+ 
+ # ... but some of the cases above share configury.
+diff --git a/src/e2k/ffi.c b/src/e2k/ffi.c
+new file mode 100644
+index 0000000..fe8a656
+--- /dev/null
++++ b/src/e2k/ffi.c
+@@ -0,0 +1,385 @@
++/* -----------------------------------------------------------------------
++   ffi.c - Elbrus 2000 Foreign Function Interface
++
++   Copyright 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
++
++   Permission is hereby granted, free of charge, to any person obtaining
++   a copy of this software and associated documentation files (the
++   ``Software''), to deal in the Software without restriction, including
++   without limitation the rights to use, copy, modify, merge, publish,
++   distribute, sublicense, and/or sell copies of the Software, and to
++   permit persons to whom the Software is furnished to do so, subject to
++   the following conditions:
++
++   The above copyright notice and this permission notice shall be included
++   in all copies or substantial portions of the Software.
++
++   THE SOFTWARE IS PROVIDED ``AS IS'', WITHOUT WARRANTY OF ANY KIND,
++   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++   NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++   DEALINGS IN THE SOFTWARE.
++   ----------------------------------------------------------------------- */
++
++#include <ffi.h>
++#include <ffi_common.h>
++
++#include <stdlib.h>
++#include <stdarg.h>
++#include <stdint.h>
++
++#ifdef __e2k__
++
++#define MAX(a, b) ((a) > (b) ? (a) : (b))
++#define ALIGN(a, b) (((a) + (b) - 1) & -(b))
++
++#define ARG_REGS 8
++typedef struct { long r[ARG_REGS]; } regs_t;
++
++ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
++{
++  long bytes = 0, i, size, align, nargs = cif->nargs;
++  ffi_type **arg_types = cif->arg_types;
++
++  for (i = 0; i < nargs; i++)
++    {
++      size = arg_types[i]->size;
++      align = size > 8 ? 16 : 8;
++      bytes = ALIGN(bytes, align) + size;
++    }
++  cif->bytes = ALIGN(bytes, 8);
++
++  size = cif->rtype->size;
++  bytes = MAX(bytes, size);
++  bytes = MAX(bytes, sizeof(regs_t));
++  cif->flags = ALIGN(bytes, 16) - sizeof(regs_t);
++
++  if (cif->abi != FFI_DEFAULT_ABI)
++    return FFI_BAD_ABI;
++
++  return FFI_OK;
++}
++
++void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue)
++{
++  long *frame, *dst, i, size, nargs = cif->nargs;
++  long asize = cif->flags, rsize = cif->rtype->size;
++  ffi_type **arg_types = cif->arg_types;
++  regs_t ret;
++
++  dst = frame = (long*)alloca(asize) - ARG_REGS;
++
++  for (i = 0; i < nargs; i++)
++    {
++      ffi_type *arg_type = arg_types[i];
++      void *src = avalue[i];
++      size = arg_type->size;
++      dst = (long*)FFI_ALIGN(dst, 8);
++
++      switch (arg_type->type)
++        {
++        case FFI_TYPE_SINT8:
++          *dst = *(SINT8*)src;
++          break;
++        case FFI_TYPE_UINT8:
++          *dst = *(UINT8*)src;
++          break;
++        case FFI_TYPE_SINT16:
++          *dst = *(SINT16*)src;
++          break;
++        case FFI_TYPE_UINT16:
++          *dst = *(UINT16*)src;
++          break;
++        case FFI_TYPE_SINT32:
++          *dst = *(SINT32*)src;
++          break;
++        case FFI_TYPE_UINT32:
++        case FFI_TYPE_FLOAT:
++          *dst = *(UINT32*)src;
++          break;
++        case FFI_TYPE_SINT64:
++        case FFI_TYPE_UINT64:
++        case FFI_TYPE_DOUBLE:
++          *dst = *(long*)src;
++          break;
++        case FFI_TYPE_POINTER:
++          *dst = *(uintptr_t*)src;
++          break;
++        default:
++          if (size > 8) dst = (long*)FFI_ALIGN(dst, 16);
++          if (size & 7)
++            *(long*)(((uintptr_t)dst + size) & -8) = 0;
++          memcpy(dst, src, size);
++        }
++      dst = (long*)((uintptr_t)dst + size);
++    }
++
++  ret = (*(regs_t(*)(regs_t))fn)(*(regs_t*)frame);
++
++  if (rvalue)
++    {
++      if (rsize <= sizeof(ret))
++        *(regs_t*)frame = ret;
++      memcpy(rvalue, frame, rsize);
++    }
++}
++
++static regs_t ffi_closure_e2k(regs_t iarg, regs_t sarg)
++{
++  register void *env __asm__("g16");
++  ffi_closure *closure = env;
++  /* Must be saved early to prevent the compiler
++     from saving "iarg" in the caller's stack frame. */
++  regs_t *ret, iarg_copy = iarg;
++  ffi_cif *cif = closure->cif;
++  void **args; char *ptr; long i, size, align, *dst, nargs;
++  ffi_type **arg_types;
++
++  args = alloca(cif->nargs * sizeof(void*));
++  size = cif->rtype->size;
++  if (size < sizeof(*ret)) size = sizeof(*ret);
++  ret = alloca(size);
++  dst = (long*)(&sarg - 1);
++
++  if (size & 7)
++    *(long*)(((uintptr_t)ret + size) & -8) = 0;
++
++  nargs = cif->nargs;
++  arg_types = cif->arg_types;
++  for (i = 0; i < nargs; i++)
++    {
++      ffi_type *arg_type = arg_types[i];
++      size = arg_type->size;
++      align = size > 8 ? 16 : 8;
++      ptr = (char*)FFI_ALIGN(dst, align);
++      dst = (long*)(ptr + size);
++
++      if ((uintptr_t)dst <= (uintptr_t)&sarg)
++        ptr += (char*)&iarg_copy - (char*)(&sarg - 1);
++
++      args[i] = ptr;
++    }
++
++  closure->fun(cif, ret, args, closure->user_data);
++
++  switch (cif->rtype->type)
++    {
++    case FFI_TYPE_SINT8:
++      ret->r[0] = *(SINT8*)ret;
++      break;
++    case FFI_TYPE_SINT16:
++      ret->r[0] = *(SINT16*)ret;
++      break;
++    case FFI_TYPE_SINT32:
++      ret->r[0] = *(SINT32*)ret;
++      break;
++    default:
++      size = cif->rtype->size;
++      if (size > sizeof(*ret))
++        {
++          ptr = (char*)(&sarg - 1);
++          for (i = 0; i < size; i += sizeof(long))
++            *(long*)(ptr + i) = *(long*)((char*)ret + i);
++        }
++    }
++
++  return *ret;
++}
++
++ffi_status ffi_prep_closure_loc(ffi_closure* closure, ffi_cif* cif,
++    void (*fun)(ffi_cif*, void*, void**, void*), 
++    void *user_data, void *codeloc)
++{
++  char *function = closure->tramp;
++  void *address = ffi_closure_e2k, *data = closure;
++
++  if (cif->abi != FFI_E2K)
++    return FFI_BAD_ABI;
++
++/* copy from: ffcall/callback/trampoline_r/trampoline.c */
++#define swaphilo(x) ((x) << 32 | (x) >> 32)
++  /* function:
++   *    nop 7
++   *    movtd,sm <address>, %ctpr1; ipd 2
++   *    addd 0, <data>, %g16
++   *
++   *    nop
++   *
++   *    ct %ctpr1
++   */
++  *(long *)  (function + 0) = 0x800000000C0013B3L;
++  *(long *)  (function + 8) = 0x11C0DCF0E1C0DED1L;
++  *(long *)  (function +16) = swaphilo((unsigned long) address);
++  *(long *)  (function +24) = swaphilo((unsigned long) data);
++  *(long *)  (function +32) = 0;
++  *(long *)  (function +40) = 0xC000042000001001L;
++/* copy end */
++
++  closure->cif = cif;
++  closure->fun = fun;
++  closure->user_data = user_data;
++
++  __clear_cache(function, function + FFI_TRAMPOLINE_SIZE);
++
++  return FFI_OK;
++}
++
++#ifdef FFI_GO_CLOSURES
++/* set g16 = closure before calling fn() */
++void ffi_call_go(ffi_cif *cif, void (*fn)(void), void *rvalue,
++    void **avalue, void *closure)
++{
++  /* copy from ffi_call */
++  long *frame, *dst, i, size, nargs = cif->nargs;
++  long asize = cif->flags, rsize = cif->rtype->size;
++  ffi_type **arg_types = cif->arg_types;
++  regs_t ret;
++
++  dst = frame = (long*)alloca(asize) - ARG_REGS;
++
++  for (i = 0; i < nargs; i++)
++    {
++      ffi_type *arg_type = arg_types[i];
++      void *src = avalue[i];
++      size = arg_type->size;
++      dst = (long*)FFI_ALIGN(dst, 8);
++
++      switch (arg_type->type)
++        {
++        case FFI_TYPE_SINT8:
++          *dst = *(SINT8*)src;
++          break;
++        case FFI_TYPE_UINT8:
++          *dst = *(UINT8*)src;
++          break;
++        case FFI_TYPE_SINT16:
++          *dst = *(SINT16*)src;
++          break;
++        case FFI_TYPE_UINT16:
++          *dst = *(UINT16*)src;
++          break;
++        case FFI_TYPE_SINT32:
++          *dst = *(SINT32*)src;
++          break;
++        case FFI_TYPE_UINT32:
++        case FFI_TYPE_FLOAT:
++          *dst = *(UINT32*)src;
++          break;
++        case FFI_TYPE_SINT64:
++        case FFI_TYPE_UINT64:
++        case FFI_TYPE_DOUBLE:
++          *dst = *(long*)src;
++          break;
++        case FFI_TYPE_POINTER:
++          *dst = *(uintptr_t*)src;
++          break;
++        default:
++          if (size > 8) dst = (long*)FFI_ALIGN(dst, 16);
++          if (size & 7)
++            *(long*)(((uintptr_t)dst + size) & -8) = 0;
++          memcpy(dst, src, size);
++        }
++      dst = (long*)((uintptr_t)dst + size);
++    }
++  /* copy end */
++  {
++    register void *chain_reg __asm__("g16") = closure;
++    ret = (*(regs_t(*)(regs_t))fn)(*(regs_t*)frame);
++    __asm__ __volatile__ ("" : : "r"(chain_reg) : "memory");
++  }
++  /* copy from ffi_call */
++  if (rvalue)
++    {
++      if (rsize <= sizeof(ret))
++        *(regs_t*)frame = ret;
++      memcpy(rvalue, frame, rsize);
++    }
++  /* copy end */
++}
++
++/* with ffi_go_closure, user_data = closure */
++static regs_t ffi_go_closure_e2k(regs_t iarg, regs_t sarg)
++{
++  register void *env __asm__("g16");
++  ffi_go_closure *closure = env;
++  /* copy from ffi_go_closure */
++
++  /* Must be saved early to prevent the compiler
++     from saving "iarg" in the caller's stack frame. */
++  regs_t *ret, iarg_copy = iarg;
++  ffi_cif *cif = closure->cif;
++  void **args; char *ptr; long i, size, align, *dst, nargs;
++  ffi_type **arg_types;
++
++  args = alloca(cif->nargs * sizeof(void*));
++  size = cif->rtype->size;
++  if (size < sizeof(*ret)) size = sizeof(*ret);
++  ret = alloca(size);
++  dst = (long*)(&sarg - 1);
++
++  if (size & 7)
++    *(long*)(((uintptr_t)ret + size) & -8) = 0;
++
++  nargs = cif->nargs;
++  arg_types = cif->arg_types;
++  for (i = 0; i < nargs; i++)
++    {
++      ffi_type *arg_type = arg_types[i];
++      size = arg_type->size;
++      align = size > 8 ? 16 : 8;
++      ptr = (char*)FFI_ALIGN(dst, align);
++      dst = (long*)(ptr + size);
++
++      if ((uintptr_t)dst <= (uintptr_t)&sarg)
++        ptr += (char*)&iarg_copy - (char*)(&sarg - 1);
++
++      args[i] = ptr;
++    }
++  /* copy end */
++
++  closure->fun(cif, ret, args, closure);
++
++  /* copy from ffi_go_closure */
++  switch (cif->rtype->type)
++    {
++    case FFI_TYPE_SINT8:
++      ret->r[0] = *(SINT8*)ret;
++      break;
++    case FFI_TYPE_SINT16:
++      ret->r[0] = *(SINT16*)ret;
++      break;
++    case FFI_TYPE_SINT32:
++      ret->r[0] = *(SINT32*)ret;
++      break;
++    default:
++      size = cif->rtype->size;
++      if (size > sizeof(*ret))
++        {
++          ptr = (char*)(&sarg - 1);
++          for (i = 0; i < size; i += sizeof(long))
++            *(long*)(ptr + i) = *(long*)((char*)ret + i);
++        }
++    }
++
++  return *ret;
++  /* copy end */
++}
++
++ffi_status ffi_prep_go_closure(ffi_go_closure* closure, ffi_cif* cif,
++    void (*fun)(ffi_cif*, void*, void**, void*))
++{
++  closure->tramp = ffi_go_closure_e2k;
++  closure->cif = cif;
++  closure->fun = fun;
++
++  if (cif->abi != FFI_DEFAULT_ABI)
++    return FFI_BAD_ABI;
++
++  return FFI_OK;
++}
++#endif
++
++#endif /* __e2k__ */
+diff --git a/src/e2k/ffitarget.h b/src/e2k/ffitarget.h
+new file mode 100644
+index 0000000..7d6a7c4
+--- /dev/null
++++ b/src/e2k/ffitarget.h
+@@ -0,0 +1,63 @@
++/* -----------------------------------------------------------------*-C-*-
++   ffitarget.h - Target configuration macros for Elbrus 2000.
++
++   Copyright 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
++
++   Permission is hereby granted, free of charge, to any person obtaining
++   a copy of this software and associated documentation files (the
++   ``Software''), to deal in the Software without restriction, including
++   without limitation the rights to use, copy, modify, merge, publish,
++   distribute, sublicense, and/or sell copies of the Software, and to
++   permit persons to whom the Software is furnished to do so, subject to
++   the following conditions:
++
++   The above copyright notice and this permission notice shall be included
++   in all copies or substantial portions of the Software.
++
++   THE SOFTWARE IS PROVIDED ``AS IS'', WITHOUT WARRANTY OF ANY KIND,
++   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++   NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++   DEALINGS IN THE SOFTWARE.
++
++   ----------------------------------------------------------------------- */
++
++#ifndef LIBFFI_TARGET_H
++#define LIBFFI_TARGET_H
++
++#ifndef LIBFFI_H
++#error "Please do not include ffitarget.h directly into your source.  Use ffi.h instead."
++#endif
++
++/* ---- System specific configurations ----------------------------------- */
++
++#define FFI_SIZEOF_ARG 8
++#define FFI_TARGET_SPECIFIC_STACK_SPACE_ALLOCATION
++#define FFI_TARGET_HAS_COMPLEX_TYPE
++
++/* ---- Generic type definitions ----------------------------------------- */
++
++#ifndef LIBFFI_ASM
++typedef unsigned long          ffi_arg;
++typedef signed long            ffi_sarg;
++
++typedef enum ffi_abi {
++  FFI_FIRST_ABI = 0,
++  FFI_E2K,
++  FFI_LAST_ABI,
++  FFI_DEFAULT_ABI = FFI_E2K
++} ffi_abi;
++#endif
++
++/* ---- Definitions for closures ----------------------------------------- */
++
++#define FFI_CLOSURES 1
++#define FFI_GO_CLOSURES 1
++#define FFI_TRAMPOLINE_SIZE (48 + 64)
++#define FFI_NATIVE_RAW_API 0
++
++#endif
++
+diff --git a/testsuite/lib/libffi.exp b/testsuite/lib/libffi.exp
+index 4f4dd48..4750e1d 100644
+--- a/testsuite/lib/libffi.exp
++++ b/testsuite/lib/libffi.exp
+@@ -652,6 +652,13 @@ if { [info procs saved-dg-test] == [list] } {
+     }
+ }
+ 
++if { [istarget "e2k-*-*"] } {
++    # --print-multi-lib option not unsupported
++    proc get_multilibs { args } {
++        return ""
++    }
++}
++
+ # Local Variables:
+ # tcl-indent-level:4
+ # End:
+diff --git a/testsuite/libffi.complex/complex.exp b/testsuite/libffi.complex/complex.exp
+index 4631db2..c7441e6 100644
+--- a/testsuite/libffi.complex/complex.exp
++++ b/testsuite/libffi.complex/complex.exp
+@@ -21,6 +21,13 @@ global srcdir subdir
+ 
+ set tlist [lsort [glob -nocomplain -- $srcdir/$subdir/*.{c,cc}]]
+ 
++if { [libffi_feature_test "#ifdef __e2k__"] } {
++  # _Complex can only be used with floating-point types
++  unsupported "$srcdir/$subdir/complex_int.c"
++  set idx [lsearch -exact $tlist "$srcdir/$subdir/complex_int.c"]
++  set tlist [lreplace $tlist $idx $idx]
++}
++
+ if { [libffi_feature_test "#ifdef FFI_TARGET_HAS_COMPLEX_TYPE"] } {
+     run-many-tests $tlist ""
+ } else {
+diff --git a/testsuite/libffi.go/static-chain.h b/testsuite/libffi.go/static-chain.h
+index 3675b40..ce056c0 100644
+--- a/testsuite/libffi.go/static-chain.h
++++ b/testsuite/libffi.go/static-chain.h
+@@ -16,4 +16,6 @@
+ # ifndef ABI_NUM
+ #  define STATIC_CHAIN_REG  "ecx"	/* FFI_DEFAULT_ABI only */
+ # endif
++#elif defined(__e2k__)
++# define STATIC_CHAIN_REG  "g16"
+ #endif
+-- 
+2.17.1
+
