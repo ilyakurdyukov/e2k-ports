@@ -425,7 +425,7 @@ index 0000000..fe8a656
 +#endif /* __e2k__ */
 diff --git a/src/e2k/ffitarget.h b/src/e2k/ffitarget.h
 new file mode 100644
-index 0000000..7d6a7c4
+index 0000000..b6ed34b
 --- /dev/null
 +++ b/src/e2k/ffitarget.h
 @@ -0,0 +1,63 @@
@@ -487,7 +487,7 @@ index 0000000..7d6a7c4
 +
 +#define FFI_CLOSURES 1
 +#define FFI_GO_CLOSURES 1
-+#define FFI_TRAMPOLINE_SIZE (48 + 64)
++#define FFI_TRAMPOLINE_SIZE 48
 +#define FFI_NATIVE_RAW_API 0
 +
 +#endif
