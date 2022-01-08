@@ -1,0 +1,119 @@
+From 1d8ecdce28d7e268e9db8f1a963567375837291c Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Sat, 8 Jan 2022 21:29:38 +0700
+Subject: [PATCH] kicad-6.0.0 e2k support
+
+---
+ thirdparty/libcontext/libcontext.cpp | 69 ++++++++++++++++++++++++++++
+ thirdparty/libcontext/libcontext.h   |  8 ++++
+ 2 files changed, 77 insertions(+)
+
+diff --git a/thirdparty/libcontext/libcontext.cpp b/thirdparty/libcontext/libcontext.cpp
+index 44a969d..0194db2 100644
+--- a/thirdparty/libcontext/libcontext.cpp
++++ b/thirdparty/libcontext/libcontext.cpp
+@@ -1520,6 +1520,75 @@ void LIBCONTEXT_CALL_CONVENTION release_fcontext( fcontext_t ctx )
+ };
+ #endif
+ 
++#elif defined(LIBCONTEXT_USE_UCONTEXT)
++#include <cassert>
++#include <ucontext.h>
++
++namespace libcontext {
++extern "C" {
++
++struct LIBCONTEXT_CTX
++{
++    intptr_t args;
++    void (* fn)( intptr_t );
++    ucontext_t ctx;
++};
++
++intptr_t jump_fcontext( fcontext_t* ofc, fcontext_t nfc,
++        intptr_t vp, bool preserve_fpu )
++{
++    LIBCONTEXT_CTX caller, *callee = (LIBCONTEXT_CTX*) nfc;
++
++    *ofc = (fcontext_t) &caller;
++    callee->args = vp;
++    int swapcontext_ret = swapcontext( &caller.ctx, &callee->ctx );
++    assert( swapcontext_ret >= 0 );
++    return caller.args;
++}
++
++static void fcontext_start( LIBCONTEXT_CTX* callee )
++{
++    callee->fn( callee->args );
++    assert( false );
++}
++
++fcontext_t make_fcontext( void* sp, size_t size,
++        void (* fn)( intptr_t ) )
++{
++    assert( size > sizeof(LIBCONTEXT_CTX) + (1 << 14) );
++    sp = (char*)sp - size;
++    int align = (~(uintptr_t)sp + 1) & 31;
++    size = (size - align) & ~31;
++    sp = (char*)sp + align;
++    size -= sizeof(LIBCONTEXT_CTX);
++    LIBCONTEXT_CTX* callee = (LIBCONTEXT_CTX*)( (char*)sp + size );
++    callee->fn = fn;
++
++    int getcontext_ret = getcontext( &callee->ctx );
++    assert( getcontext_ret >= 0 );
++    callee->ctx.uc_stack.ss_sp = sp;
++    callee->ctx.uc_stack.ss_size = size;
++    callee->ctx.uc_stack.ss_flags = 0;
++    callee->ctx.uc_link = nullptr;
++#ifdef __e2k__
++    int makecontext_ret = makecontext_e2k( &callee->ctx, (void(*)())fcontext_start, 1, callee );
++    assert( makecontext_ret >= 0 );
++#else
++    makecontext( &callee->ctx, (void(*)())fcontext_start, 1, callee );
++#endif
++    return (fcontext_t) callee;
++}
++
++void release_fcontext( fcontext_t fc ) {
++#ifdef __e2k__
++    LIBCONTEXT_CTX* callee = (LIBCONTEXT_CTX*) fc;
++    freecontext_e2k( &callee->ctx );
++#endif
++}
++
++}    // extern "C"
++}    // namespace
++
+ #else // defined(LIBCONTEXT_USE_WINFIBER) && (defined(LIBCONTEXT_PLATFORM_msvc_x86_64) || defined(LIBCONTEXT_PLATFORM_msvc_i386))
+ 
+ #ifdef __cplusplus
+diff --git a/thirdparty/libcontext/libcontext.h b/thirdparty/libcontext/libcontext.h
+index 8214142..d2ff05a 100644
+--- a/thirdparty/libcontext/libcontext.h
++++ b/thirdparty/libcontext/libcontext.h
+@@ -28,6 +28,7 @@
+ 
+     #define LIBCONTEXT_COMPILER_gcc
+ 
++    #ifndef LIBCONTEXT_USE_UCONTEXT
+     #if defined(__linux__) || defined(__FreeBSD__)
+     #if defined(__x86_64__) || defined(__amd64__)
+         #define LIBCONTEXT_PLATFORM_linux_x86_64
+@@ -81,6 +82,13 @@
+         #define LIBCONTEXT_CALL_CONVENTION
+     #endif
+     #endif
++    #endif
++
++    #ifndef LIBCONTEXT_CALL_CONVENTION
++        #undef LIBCONTEXT_USE_UCONTEXT
++        #define LIBCONTEXT_USE_UCONTEXT
++        #define LIBCONTEXT_CALL_CONVENTION
++    #endif
+ #elif defined (_MSC_VER )
+ 
+ #if defined( LIBCONTEXT_USE_WINFIBER )
+-- 
+2.17.1
+
