@@ -32,7 +32,6 @@ The compiler enables MMX to AVX2 support by default, pass `-mno-avx` (`-mno-sse4
 - memory fence - supported (need to include `x86intrin.h` first)
     - __builtin_ia32_mfence, __builtin_ia32_lfence, __builtin_ia32_sfence
 
-
 #### cpuid
 
 Use compile time CPU detection, select the best SIMD up to SSE4.1.
@@ -54,6 +53,10 @@ Use before the loop:
 - `#pragma ivdep` - ignore data dependencies inside the loop
 - `#pragma unroll(n)` - unroll cycle N times
 
+#### restrict
+
+Using the `restrict` keyword is good for performance, but note that it is ignored by the LCC if you're using vector load/store intrinsics such as `_mm_load_si128()`. For code with vector intrinsics use `#pragma ivdep`.
+
 #### makecontext
 
 Instead of `makecontext(ctx, ...)` use `makecontext_e2k(ctx, ...)`, returns a negative integer on error. Allocates extra resources that need to be freed using `freecontext_e2k(ctx)`.
@@ -61,3 +64,18 @@ Instead of `makecontext(ctx, ...)` use `makecontext_e2k(ctx, ...)`, returns a ne
 #### nop
 
 Use `__asm__ __volatile__ ("nop")` or `_mm_pause()` for a little delay.
+
+#### clearing the instruction cache
+
+The GNUC standard function `__clear_cache(char *begin, char *end)` works correctly since LCC 1.25.18, LCC 1.26.04.
+This function is available in previous versions, but does nothing. 
+
+#### inline
+
+If it's crucial to performance, then use `__attribute__((__always_inline__)) inline` rather than just `inline`. Because when using large or complicated inline functions, the LCC compiler may decide not to inline them. 
+
+#### avoid if possible
+
+The GNUC C extension [Labels as Values](https://gcc.gnu.org/onlinedocs/gcc/Labels-as-Values.html) is available in the LCC, but performance is worse than using a simple switch/case.
+
+The GNUC [Vector Extension](https://gcc.gnu.org/onlinedocs/gcc/Vector-Extensions.html) is also available in LCC, but poorly implemented and its performance is very bad.
