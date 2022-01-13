@@ -1,0 +1,41 @@
+From 2a449db12010e23faa6cdcdc36c2a8434e980e1e Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Wed, 12 Jan 2022 21:42:09 +0700
+Subject: [PATCH] php-8.1.1 e2k support
+
+---
+ Zend/zend_fibers.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/Zend/zend_fibers.c b/Zend/zend_fibers.c
+index 92ae9b88..a947768c 100644
+--- a/Zend/zend_fibers.c
++++ b/Zend/zend_fibers.c
+@@ -328,7 +328,13 @@ ZEND_API bool zend_fiber_init_context(zend_fiber_context *context, void *kind, z
+ 	handle->uc_stack.ss_flags = 0;
+ 	handle->uc_link = NULL;
+ 
++#ifdef __e2k__
++	if (UNEXPECTED(makecontext_e2k(handle, (void (*)(void)) zend_fiber_trampoline, 0) < 0)) {
++		return false;
++	}
++#else
+ 	makecontext(handle, (void (*)(void)) zend_fiber_trampoline, 0);
++#endif
+ 
+ 	context->handle = handle;
+ #else
+@@ -354,6 +360,10 @@ ZEND_API void zend_fiber_destroy_context(zend_fiber_context *context)
+ {
+ 	zend_observer_fiber_destroy_notify(context);
+ 
++#ifdef __e2k__
++	freecontext_e2k(&context->stack->ucontext);
++#endif
++
+ 	zend_fiber_stack_free(context->stack);
+ }
+ 
+-- 
+2.17.1
+
