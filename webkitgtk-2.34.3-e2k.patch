@@ -1,0 +1,241 @@
+From aa54b9c6401ccab576f4edeba3d3a189fdba8dab Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Wed, 19 Jan 2022 19:18:10 +0700
+Subject: [PATCH] webkitgtk-2.34.3 e2k support
+
+using LCC 1.25.20
+---
+ Source/JavaScriptCore/heap/Heap.cpp                  |  7 +++++++
+ .../JavaScriptCore/llint/LLIntOffsetsExtractor.cpp   |  8 ++++++++
+ Source/ThirdParty/ANGLE/src/common/mathutil.h        |  4 +++-
+ Source/ThirdParty/ANGLE/src/common/platform.h        |  2 +-
+ Source/WTF/wtf/Compiler.h                            |  2 +-
+ Source/WTF/wtf/PlatformCPU.h                         |  4 ++++
+ Source/WTF/wtf/PlatformEnable.h                      |  2 +-
+ Source/WTF/wtf/StdFilesystem.h                       |  1 +
+ Source/WTF/wtf/dtoa/utils.h                          |  1 +
+ Source/WebCore/Modules/webaudio/OscillatorOptions.h  |  3 +++
+ .../inspector/agents/InspectorWorkerAgent.cpp        |  2 +-
+ Source/WebCore/rendering/style/GridArea.h            |  3 +++
+ Source/WebKit/UIProcess/WebPageProxy.cpp             | 12 ++++++------
+ Source/cmake/WebKitCompilerFlags.cmake               |  1 +
+ 14 files changed, 41 insertions(+), 11 deletions(-)
+
+diff --git a/Source/JavaScriptCore/heap/Heap.cpp b/Source/JavaScriptCore/heap/Heap.cpp
+index a07b3724..94c1b35d 100644
+--- a/Source/JavaScriptCore/heap/Heap.cpp
++++ b/Source/JavaScriptCore/heap/Heap.cpp
+@@ -2825,8 +2825,15 @@ void Heap::addCoreConstraints()
+     
+     m_constraintSet->add(
+         "O", "Output",
++#ifdef __EDG__
++#define EDG_FIX(V1, V2, ...) MarkingConstraintExecutorPair( \
++        [] (V1& visitor) { using Visitor = V1; __VA_ARGS__, \
++        [] (V2& visitor) { using Visitor = V2; __VA_ARGS__)
++        (EDG_FIX(AbstractSlotVisitor, SlotVisitor,
++#else
+         MAKE_MARKING_CONSTRAINT_EXECUTOR_PAIR(([] (auto& visitor) {
+             using Visitor = decltype(visitor);
++#endif
+             VM& vm = visitor.vm();
+ 
+             // The `visitor2` argument is strangely named because the WinCairo port
+diff --git a/Source/JavaScriptCore/llint/LLIntOffsetsExtractor.cpp b/Source/JavaScriptCore/llint/LLIntOffsetsExtractor.cpp
+index 6df46850..ee702c9b 100644
+--- a/Source/JavaScriptCore/llint/LLIntOffsetsExtractor.cpp
++++ b/Source/JavaScriptCore/llint/LLIntOffsetsExtractor.cpp
+@@ -80,6 +80,14 @@
+ 
+ namespace JSC {
+ 
++#ifdef __e2k__
++// linker doesn't remove dead code
++const unsigned opcodeLengths[] = { 0 };
++const unsigned wasmOpcodeLengths[] = { 0 };
++const char* const opcodeNames[] = { nullptr };
++const char* const wasmOpcodeNames[] = { nullptr };
++#endif
++
+ #define OFFLINE_ASM_OFFSETOF(clazz, field) (static_cast<unsigned>(OBJECT_OFFSETOF(clazz, field)))
+ 
+ class LLIntOffsetsExtractor {
+diff --git a/Source/ThirdParty/ANGLE/src/common/mathutil.h b/Source/ThirdParty/ANGLE/src/common/mathutil.h
+index 1d73bbff..5c5f832f 100644
+--- a/Source/ThirdParty/ANGLE/src/common/mathutil.h
++++ b/Source/ThirdParty/ANGLE/src/common/mathutil.h
+@@ -145,7 +145,9 @@ inline unsigned int unorm(float x)
+ 
+ inline bool supportsSSE2()
+ {
+-#if defined(ANGLE_USE_SSE)
++#if defined(__e2k__)
++    return true;
++#elif defined(ANGLE_USE_SSE)
+     static bool checked  = false;
+     static bool supports = false;
+ 
+diff --git a/Source/ThirdParty/ANGLE/src/common/platform.h b/Source/ThirdParty/ANGLE/src/common/platform.h
+index 41f3cf4f..a61d3448 100644
+--- a/Source/ThirdParty/ANGLE/src/common/platform.h
++++ b/Source/ThirdParty/ANGLE/src/common/platform.h
+@@ -89,7 +89,7 @@
+ #if defined(_MSC_VER) && !defined(_M_ARM) && !defined(_M_ARM64)
+ #    include <intrin.h>
+ #    define ANGLE_USE_SSE
+-#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
++#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__) || defined(__e2k__))
+ #    include <x86intrin.h>
+ #    define ANGLE_USE_SSE
+ #endif
+diff --git a/Source/WTF/wtf/Compiler.h b/Source/WTF/wtf/Compiler.h
+index f9bc8267..77e3f5dd 100644
+--- a/Source/WTF/wtf/Compiler.h
++++ b/Source/WTF/wtf/Compiler.h
+@@ -354,7 +354,7 @@
+ 
+ /* UNUSED_TYPE_ALIAS */
+ 
+-#if !defined(UNUSED_TYPE_ALIAS) && COMPILER(GCC_COMPATIBLE)
++#if !defined(UNUSED_TYPE_ALIAS) && COMPILER(GCC_COMPATIBLE) && !defined(__EDG__)
+ #define UNUSED_TYPE_ALIAS __attribute__((unused))
+ #endif
+ 
+diff --git a/Source/WTF/wtf/PlatformCPU.h b/Source/WTF/wtf/PlatformCPU.h
+index 23833417..69c8c6fc 100644
+--- a/Source/WTF/wtf/PlatformCPU.h
++++ b/Source/WTF/wtf/PlatformCPU.h
+@@ -112,6 +112,10 @@
+ #define WTF_CPU_KNOWN 1
+ #endif
+ 
++#if defined(__SSE2__) && defined(__e2k__)
++#define WTF_CPU_X86_SSE2 1
++#endif
++
+ /* CPU(ARM64) */
+ #if defined(__arm64__) || defined(__aarch64__)
+ #define WTF_CPU_ARM64 1
+diff --git a/Source/WTF/wtf/PlatformEnable.h b/Source/WTF/wtf/PlatformEnable.h
+index 041a3e28..cdde7b12 100644
+--- a/Source/WTF/wtf/PlatformEnable.h
++++ b/Source/WTF/wtf/PlatformEnable.h
+@@ -843,7 +843,7 @@
+ #define ENABLE_EXTRA_CTI_THUNKS 1
+ #endif
+ 
+-#if !defined(ENABLE_BINDING_INTEGRITY) && !OS(WINDOWS)
++#if !defined(ENABLE_BINDING_INTEGRITY) && !OS(WINDOWS) && !defined(__EDG__)
+ #define ENABLE_BINDING_INTEGRITY 1
+ #endif
+ 
+diff --git a/Source/WTF/wtf/StdFilesystem.h b/Source/WTF/wtf/StdFilesystem.h
+index bdcdf446..32fd3fef 100644
+--- a/Source/WTF/wtf/StdFilesystem.h
++++ b/Source/WTF/wtf/StdFilesystem.h
+@@ -28,6 +28,7 @@
+ #if HAVE(STD_FILESYSTEM)
+ #include <filesystem>
+ #elif HAVE(STD_EXPERIMENTAL_FILESYSTEM)
++#define preferred_separator preferred_separator_webkitgtk4
+ #include <experimental/filesystem>
+ namespace std {
+ namespace filesystem = std::experimental::filesystem;
+diff --git a/Source/WTF/wtf/dtoa/utils.h b/Source/WTF/wtf/dtoa/utils.h
+index 96d5bd7b..298f44a6 100644
+--- a/Source/WTF/wtf/dtoa/utils.h
++++ b/Source/WTF/wtf/dtoa/utils.h
+@@ -83,6 +83,7 @@ int main(int argc, char** argv) {
+     defined(__ARMEL__) || defined(__avr32__) || defined(_M_ARM) || defined(_M_ARM64) || \
+     defined(__hppa__) || defined(__ia64__) || \
+     defined(__mips__) || \
++    defined(__e2k__) || \
+     defined(__powerpc__) || defined(__ppc__) || defined(__ppc64__) || \
+     defined(_POWER) || defined(_ARCH_PPC) || defined(_ARCH_PPC64) || \
+     defined(__sparc__) || defined(__sparc) || defined(__s390__) || \
+diff --git a/Source/WebCore/Modules/webaudio/OscillatorOptions.h b/Source/WebCore/Modules/webaudio/OscillatorOptions.h
+index bd263c36..1e17f8e3 100644
+--- a/Source/WebCore/Modules/webaudio/OscillatorOptions.h
++++ b/Source/WebCore/Modules/webaudio/OscillatorOptions.h
+@@ -30,6 +30,9 @@
+ #include "AudioNodeOptions.h"
+ #include "OscillatorType.h"
+ #include <wtf/RefPtr.h>
++#ifdef __EDG__
++#include "PeriodicWave.h"
++#endif
+ 
+ namespace WebCore {
+ 
+diff --git a/Source/WebCore/inspector/agents/InspectorWorkerAgent.cpp b/Source/WebCore/inspector/agents/InspectorWorkerAgent.cpp
+index cc8667c1..3a08470b 100644
+--- a/Source/WebCore/inspector/agents/InspectorWorkerAgent.cpp
++++ b/Source/WebCore/inspector/agents/InspectorWorkerAgent.cpp
+@@ -137,7 +137,7 @@ void InspectorWorkerAgent::connectToAllWorkerInspectorProxiesForPage()
+ {
+     ASSERT(m_connectedProxies.isEmpty());
+ 
+-    for (Ref proxy : WorkerInspectorProxy::allWorkerInspectorProxies()) {
++    for (Ref<WorkerInspectorProxy> proxy : WorkerInspectorProxy::allWorkerInspectorProxies()) {
+         if (!is<Document>(proxy->scriptExecutionContext()))
+             continue;
+ 
+diff --git a/Source/WebCore/rendering/style/GridArea.h b/Source/WebCore/rendering/style/GridArea.h
+index b7ebd1d9..28addb6a 100644
+--- a/Source/WebCore/rendering/style/GridArea.h
++++ b/Source/WebCore/rendering/style/GridArea.h
+@@ -103,6 +103,9 @@ public:
+ 
+         operator unsigned&() { return value; }
+         unsigned operator*() const { return value; }
++#ifdef __EDG__
++        const GridSpanIterator &operator ++() { ++value; return *this; }
++#endif
+ 
+         unsigned value;
+     };
+diff --git a/Source/WebKit/UIProcess/WebPageProxy.cpp b/Source/WebKit/UIProcess/WebPageProxy.cpp
+index c33cfe44..dad1e505 100644
+--- a/Source/WebKit/UIProcess/WebPageProxy.cpp
++++ b/Source/WebKit/UIProcess/WebPageProxy.cpp
+@@ -5450,19 +5450,19 @@ void WebPageProxy::decidePolicyForNavigationAction(Ref<WebProcessProxy>&& proces
+             auto transaction = m_pageLoadState.transaction();
+             m_pageLoadState.setTitleFromSafeBrowsingWarning(transaction, safeBrowsingWarning->title());
+ 
+-            m_pageClient->showSafeBrowsingWarning(*safeBrowsingWarning, [this, protectedThis = WTFMove(protectedThis), completionHandler = WTFMove(completionHandler), policyAction] (auto&& result) mutable {
++            m_pageClient->showSafeBrowsingWarning(*safeBrowsingWarning, [self = this, protectedThis = WTFMove(protectedThis), completionHandler = WTFMove(completionHandler), policyAction] (auto&& result) mutable {
+ 
+-                auto transaction = m_pageLoadState.transaction();
+-                m_pageLoadState.setTitleFromSafeBrowsingWarning(transaction, { });
++                auto transaction = self->m_pageLoadState.transaction();
++                self->m_pageLoadState.setTitleFromSafeBrowsingWarning(transaction, { });
+ 
+                 switchOn(result, [&] (const URL& url) {
+                     completionHandler(PolicyAction::Ignore);
+-                    loadRequest({ url });
++                    self->loadRequest({ url });
+                 }, [&] (ContinueUnsafeLoad continueUnsafeLoad) {
+                     switch (continueUnsafeLoad) {
+                     case ContinueUnsafeLoad::No:
+-                        if (!hasCommittedAnyProvisionalLoads())
+-                            m_uiClient->close(protectedThis.ptr());
++                        if (!self->hasCommittedAnyProvisionalLoads())
++                            self->m_uiClient->close(protectedThis.ptr());
+                         completionHandler(PolicyAction::Ignore);
+                         break;
+                     case ContinueUnsafeLoad::Yes:
+diff --git a/Source/cmake/WebKitCompilerFlags.cmake b/Source/cmake/WebKitCompilerFlags.cmake
+index 77ebb802..df28e06c 100644
+--- a/Source/cmake/WebKitCompilerFlags.cmake
++++ b/Source/cmake/WebKitCompilerFlags.cmake
+@@ -307,6 +307,7 @@ if (COMPILER_IS_GCC_OR_CLANG)
+     check_cxx_source_compiles("${FILESYSTEM_TEST_SOURCE}" STD_FILESYSTEM_IS_AVAILABLE)
+     if (NOT STD_FILESYSTEM_IS_AVAILABLE)
+         set(EXPERIMENTAL_FILESYSTEM_TEST_SOURCE "
++            #define preferred_separator preferred_separator_webkitgtk4
+             #include <experimental/filesystem>
+             int main() {
+                 std::experimental::filesystem::path p1(\"//home\");
+-- 
+2.17.1
+
