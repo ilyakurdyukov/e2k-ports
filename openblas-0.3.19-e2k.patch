@@ -1,20 +1,20 @@
-From 0e0c6012e85e2dc2d0123ae15000c4802b32c390 Mon Sep 17 00:00:00 2001
+From 5d51b1092156e11cac3e48a432c394395f2013a2 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Sat, 5 Jun 2021 14:10:31 +0700
-Subject: [PATCH] openblas-0.3.9 e2k support
+Date: Thu, 20 Jan 2022 22:34:16 +0700
+Subject: [PATCH] openblas-0.3.19 e2k support
 
 ---
  Makefile.e2k        |   1 +
  c_check             |   7 +++
  common.h            |   4 ++
- common_e2k.h        |  63 +++++++++++++++++++
+ common_e2k.h        |  64 +++++++++++++++++++
  common_macro.h      |   2 +-
  ctest.c             |   4 ++
  getarch.c           |  11 ++++
  kernel/Makefile.L3  |   4 ++
  kernel/e2k/KERNEL   | 149 ++++++++++++++++++++++++++++++++++++++++++++
  kernel/e2k/Makefile |   2 +
- 10 files changed, 246 insertions(+), 1 deletion(-)
+ 10 files changed, 247 insertions(+), 1 deletion(-)
  create mode 100644 Makefile.e2k
  create mode 100644 common_e2k.h
  create mode 100644 kernel/e2k/KERNEL
@@ -28,18 +28,18 @@ index 0000000..a5e50b1
 @@ -0,0 +1 @@
 +COPT	= -Wall -O2 # -DGEMMTEST
 diff --git a/c_check b/c_check
-index 19f7032..908e3a9 100644
+index bdf5b77..e73c46d 100644
 --- a/c_check
 +++ b/c_check
-@@ -91,6 +91,7 @@ $architecture = ia64   if ($data =~ /ARCH_IA64/);
- $architecture = arm    if ($data =~ /ARCH_ARM/);
- $architecture = arm64  if ($data =~ /ARCH_ARM64/);
- $architecture = zarch  if ($data =~ /ARCH_ZARCH/);
-+$architecture = e2k    if ($data =~ /ARCH_E2K/);
+@@ -84,6 +84,7 @@ $os = Haiku           if ($data =~ /OS_HAIKU/);
  
- $defined = 0;
- 
-@@ -120,6 +121,11 @@ if ($architecture eq "zarch") {
+ $architecture = x86          if ($data =~ /ARCH_X86/);
+ $architecture = x86_64       if ($data =~ /ARCH_X86_64/);
++$architecture = e2k          if ($data =~ /ARCH_E2K/);
+ $architecture = power        if ($data =~ /ARCH_POWER/);
+ $architecture = mips         if ($data =~ /ARCH_MIPS/);
+ $architecture = mips64       if ($data =~ /ARCH_MIPS64/);
+@@ -124,6 +125,11 @@ if ($architecture eq "zarch") {
      $binary = 64;
  }
  
@@ -51,20 +51,20 @@ index 19f7032..908e3a9 100644
  if ($architecture eq "alpha") {
      $defined = 1;
      $binary = 64;
-@@ -219,6 +225,7 @@ $architecture = ia64   if ($data =~ /ARCH_IA64/);
- $architecture = arm    if ($data =~ /ARCH_ARM/);
- $architecture = arm64  if ($data =~ /ARCH_ARM64/);
- $architecture = zarch  if ($data =~ /ARCH_ZARCH/);
-+$architecture = e2k    if ($data =~ /ARCH_E2K/);
+@@ -224,6 +230,7 @@ if (($architecture eq "mips") || ($architecture eq "mips64")) {
  
- $binformat    = bin32;
- $binformat    = bin64  if ($data =~ /BINARY_64/);
+ $architecture = x86          if ($data =~ /ARCH_X86/);
+ $architecture = x86_64       if ($data =~ /ARCH_X86_64/);
++$architecture = e2k          if ($data =~ /ARCH_E2K/);
+ $architecture = power        if ($data =~ /ARCH_POWER/);
+ $architecture = mips         if ($data =~ /ARCH_MIPS/);
+ $architecture = mips64       if ($data =~ /ARCH_MIPS64/);
 diff --git a/common.h b/common.h
-index a9fe8d9..8310939 100644
+index ff5254a..00d1d0b 100644
 --- a/common.h
 +++ b/common.h
-@@ -441,6 +441,10 @@ please https://github.com/xianyi/OpenBLAS/issues/246
- #include "common_zarch.h"
+@@ -474,6 +474,10 @@ please https://github.com/xianyi/OpenBLAS/issues/246
+ #include "common_loongarch64.h"
  #endif
  
 +#ifdef ARCH_E2K
@@ -76,10 +76,10 @@ index a9fe8d9..8310939 100644
  typedef char env_var_t[MAX_PATH];
 diff --git a/common_e2k.h b/common_e2k.h
 new file mode 100644
-index 0000000..48d212c
+index 0000000..0739c94
 --- /dev/null
 +++ b/common_e2k.h
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,64 @@
 +/*****************************************************************************
 +Copyright (c) 2011-2016, The OpenBLAS Project
 +All rights reserved.
@@ -121,6 +121,7 @@ index 0000000..48d212c
 +
 +#define MB do { __asm__ __volatile__("": : :"memory"); } while (0)
 +#define WMB do { __asm__ __volatile__("": : :"memory"); } while (0)
++#define RMB
 +
 +#define INLINE __attribute__((__always_inline__)) inline
 +
@@ -144,24 +145,24 @@ index 0000000..48d212c
 +#endif
 +
 diff --git a/common_macro.h b/common_macro.h
-index 13bb857..7afab83 100644
+index cf2a3fd..9826f18 100644
 --- a/common_macro.h
 +++ b/common_macro.h
-@@ -2199,7 +2199,7 @@
- #endif
+@@ -2611,7 +2611,7 @@
  
  #ifndef ASSEMBLER
--#if defined(ARCH_X86) || defined(ARCH_X86_64) || defined(ARCH_IA64) || defined(ARCH_MIPS64) || defined(ARCH_ARM64)
-+#if defined(ARCH_X86) || defined(ARCH_X86_64) || defined(ARCH_IA64) || defined(ARCH_MIPS64) || defined(ARCH_ARM64) || defined(ARCH_E2K)
+ #if defined(ARCH_X86) || defined(ARCH_X86_64) || defined(ARCH_IA64) || defined(ARCH_MIPS64) || defined(ARCH_ARM64)\
+-|| defined(ARCH_LOONGARCH64)
++|| defined(ARCH_LOONGARCH64) || defined(ARCH_E2K)
  extern BLASLONG gemm_offset_a;
  extern BLASLONG gemm_offset_b;
- extern BLASLONG sgemm_p;
+ extern BLASLONG sbgemm_p;
 diff --git a/ctest.c b/ctest.c
-index 5e869b9..2de3441 100644
+index 2afd93f..fc52b43 100644
 --- a/ctest.c
 +++ b/ctest.c
-@@ -153,3 +153,7 @@ ARCH_ARM
- ARCH_ARM64
+@@ -165,3 +165,7 @@ ARCH_LOONGARCH64
+ HAVE_C11
  #endif
  
 +#if defined(__e2k__)
@@ -169,12 +170,12 @@ index 5e869b9..2de3441 100644
 +#endif
 +
 diff --git a/getarch.c b/getarch.c
-index 30ca290..89834a5 100644
+index 8222bde..19c9935 100644
 --- a/getarch.c
 +++ b/getarch.c
-@@ -1158,6 +1158,17 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- #define CORENAME  "Z14"
+@@ -1515,6 +1515,17 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  #endif
+ 
  
 +#if defined(FORCE_E2K) || defined(__e2k__)
 +#define FORCE
@@ -191,20 +192,20 @@ index 30ca290..89834a5 100644
  
  #ifdef USER_TARGET
 diff --git a/kernel/Makefile.L3 b/kernel/Makefile.L3
-index 6d96abb..b01ab1c 100644
+index d22bd46..917b733 100644
 --- a/kernel/Makefile.L3
 +++ b/kernel/Makefile.L3
-@@ -59,6 +59,10 @@ ifeq ($(CORE), Z14)
- USE_TRMM = 1
- endif
+@@ -617,6 +617,10 @@ $(KDIR)zgemm_beta$(TSUFFIX).$(SUFFIX) : $(KERNELDIR)/$(ZGEMM_BETA)
+ $(KDIR)xgemm_beta$(TSUFFIX).$(SUFFIX) : $(KERNELDIR)/$(XGEMM_BETA)
+ 	$(CC) $(CFLAGS) -c -DXDOUBLE -DCOMPLEX $< -o $@
  
 +ifeq ($(ARCH), E2K)
 +USE_TRMM = 1
 +endif
 +
  
- SKERNELOBJS	+= \
- 	sgemm_kernel$(TSUFFIX).$(SUFFIX) \
+ ifeq ($(BUILD_BFLOAT16), 1)
+ 
 diff --git a/kernel/e2k/KERNEL b/kernel/e2k/KERNEL
 new file mode 100644
 index 0000000..afa8a08
