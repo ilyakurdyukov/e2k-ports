@@ -1,17 +1,17 @@
-From 377e87997df424d5c1242d82d98f32f685ad1e5a Mon Sep 17 00:00:00 2001
+From b682f42f13b0e7e8ac37c889da91909ca234d1fa Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Mon, 13 Sep 2021 14:02:12 +0700
-Subject: [PATCH] glib-2.64.5 e2k support
+Date: Thu, 3 Feb 2022 15:49:56 +0700
+Subject: [PATCH] glib-2.70.3 e2k support
 
 ---
  glib/gmacros.h | 77 ++++++++++++++++++++++++++++++++++++++++++++++++++
  1 file changed, 77 insertions(+)
 
 diff --git a/glib/gmacros.h b/glib/gmacros.h
-index a770ac7..066f83a 100644
+index 7fc34d5..2d98200 100644
 --- a/glib/gmacros.h
 +++ b/glib/gmacros.h
-@@ -623,6 +623,11 @@
+@@ -699,6 +699,11 @@
    _Pragma ("warning (disable:1478)")
  #define G_GNUC_END_IGNORE_DEPRECATIONS			\
    _Pragma ("warning (pop)")
@@ -20,10 +20,10 @@ index a770ac7..066f83a 100644
 +  _Pragma ("diag_suppress 1215,1444")
 +#define G_GNUC_END_IGNORE_DEPRECATIONS			\
 +  _Pragma ("diag_default 1215,1444")
- #elif    __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
+ #elif G_GNUC_CHECK_VERSION(4, 6)
  #define G_GNUC_BEGIN_IGNORE_DEPRECATIONS		\
    _Pragma ("GCC diagnostic push")			\
-@@ -1034,7 +1039,16 @@
+@@ -1200,7 +1205,16 @@
  #define _GLIB_AUTOPTR_QUEUE_FUNC_NAME(TypeName) glib_queueautoptr_cleanup_##TypeName
  #define _GLIB_AUTOPTR_QUEUE_TYPENAME(TypeName)  TypeName##_queueautoptr
  #define _GLIB_AUTO_FUNC_NAME(TypeName)    glib_auto_cleanup_##TypeName
@@ -40,7 +40,7 @@ index a770ac7..066f83a 100644
  #define _GLIB_DEFINE_AUTOPTR_CLEANUP_FUNCS(TypeName, ParentName, cleanup) \
    typedef TypeName *_GLIB_AUTOPTR_TYPENAME(TypeName);                                                           \
    typedef GList *_GLIB_AUTOPTR_LIST_TYPENAME(TypeName);                                                         \
-@@ -1067,11 +1081,74 @@
+@@ -1233,11 +1247,74 @@
    G_GNUC_BEGIN_IGNORE_DEPRECATIONS                                                                              \
    static G_GNUC_UNUSED inline void _GLIB_AUTO_FUNC_NAME(TypeName) (TypeName *_ptr) { if (*_ptr != none) (func) (*_ptr); }     \
    G_GNUC_END_IGNORE_DEPRECATIONS
@@ -92,7 +92,7 @@ index a770ac7..066f83a 100644
 +  operator T() const { return v; } \
 +};
 +
-+EDG_CLEANUP_DEFINE
++extern "C++" { EDG_CLEANUP_DEFINE }
 +#undef EDG_CLEANUP_DEFINE
 +#undef EDG_CLEANUP_COMMON
 +
