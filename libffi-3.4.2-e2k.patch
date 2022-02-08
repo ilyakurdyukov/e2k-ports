@@ -1,21 +1,36 @@
-From 2b5d4aacaef41864a5f0501111886046c85f7425 Mon Sep 17 00:00:00 2001
+From 35ea11214ddff0e87aeaf1f1706ce545ab8f96f5 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Wed, 29 Dec 2021 17:44:27 +0700
+Date: Tue, 8 Feb 2022 15:10:55 +0700
 Subject: [PATCH] libffi-3.4.2 e2k support
 
 LCC >= 1.25.18 or LCC >= 1.26.04 is required
 for __clear_cache() to work properly
 ---
+ Makefile.am                          |   3 +
  configure.host                       |   5 +
  src/e2k/ffi.c                        | 385 +++++++++++++++++++++++++++
  src/e2k/ffitarget.h                  |  63 +++++
  testsuite/lib/libffi.exp             |   7 +
  testsuite/libffi.complex/complex.exp |   7 +
  testsuite/libffi.go/static-chain.h   |   2 +
- 6 files changed, 469 insertions(+)
+ 7 files changed, 472 insertions(+)
  create mode 100644 src/e2k/ffi.c
  create mode 100644 src/e2k/ffitarget.h
 
+diff --git a/Makefile.am b/Makefile.am
+index 1b18198..6d008f5 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -98,6 +98,9 @@ EXTRA_libffi_la_SOURCES = src/aarch64/ffi.c src/aarch64/sysv.S		\
+ TARGET_OBJ = @TARGET_OBJ@
+ libffi_la_LIBADD = $(TARGET_OBJ)
+ 
++noinst_HEADERS += src/e2k/ffitarget.h
++EXTRA_libffi_la_SOURCES += src/e2k/ffi.c
++
+ libffi_convenience_la_SOURCES = $(libffi_la_SOURCES)
+ EXTRA_libffi_convenience_la_SOURCES = $(EXTRA_libffi_la_SOURCES)
+ libffi_convenience_la_LIBADD = $(libffi_la_LIBADD)
 diff --git a/configure.host b/configure.host
 index 2682671..38eb214 100644
 --- a/configure.host
