@@ -1,7 +1,7 @@
-From 7e1f0e318d1c02914f456085402386db3225cb18 Mon Sep 17 00:00:00 2001
+From 1b89c5d61449aeb185b5f873fd10b14f91ad5c46 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Sat, 15 Jan 2022 13:23:43 +0700
-Subject: [PATCH] mysql-8.0.27 e2k support
+Date: Tue, 15 Feb 2022 17:26:42 +0700
+Subject: [PATCH] mysql-8.0.28 e2k support
 
 These sed patches are also needed to workaround bugs in the EDG frontend: 
 sed -i "/using __base/{N;N;s/^.*using __base.*EncodeBase.*friend __base.*$/EncodeBase_EDG/}" router/src/mysql_protocol/include/mysqlrouter/classic_protocol_codec_*.h
@@ -34,10 +34,10 @@ sed -i "s/-Werror/-Wno-error/" mysql-shell/cmake/compiler.cmake
  23 files changed, 61 insertions(+), 20 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index fd377c40..3427f967 100644
+index 6c54a7d6..7501fc87 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -629,6 +629,7 @@ SET(MYSQL_MACHINE_TYPE ${CMAKE_SYSTEM_PROCESSOR})
+@@ -637,6 +637,7 @@ SET(MYSQL_MACHINE_TYPE ${CMAKE_SYSTEM_PROCESSOR})
  SET(KNOWN_64BIT_ARCHITECTURES
    arm64
    aarch64
@@ -46,18 +46,18 @@ index fd377c40..3427f967 100644
    ppc64le
    s390x
 diff --git a/cmake/abi_check.cmake b/cmake/abi_check.cmake
-index 0e1886bb..6a04fc6a 100644
+index c0caf802..1a9e5401 100644
 --- a/cmake/abi_check.cmake
 +++ b/cmake/abi_check.cmake
-@@ -29,7 +29,7 @@
- # only be run  on Unix and only if gcc is used. On some Unixes,
- # (Solaris) sed or diff might act differently from GNU, so we run only 
- # on systems we can trust.
--IF(LINUX)
-+IF(LINUX AND NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "e2k")
+@@ -32,7 +32,7 @@
+ # On Windows we use the Windows subsystem for Linux and gcc and sed
+ # installed in it, if available.
+ SET(RUN_ABI_CHECK 0)
+-IF(LINUX AND MY_COMPILER_IS_GNU)
++IF(LINUX AND MY_COMPILER_IS_GNU AND NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "e2k")
    SET(RUN_ABI_CHECK 1)
- ELSE()
-   SET(RUN_ABI_CHECK 0)
+ ELSEIF(WIN32)
+   FIND_PROGRAM(WSL_EXECUTABLE wsl HINTS C:/Windows/Sysnative)
 diff --git a/extra/robin-hood-hashing/robin_hood.h b/extra/robin-hood-hashing/robin_hood.h
 index c92b96ad..67f25aeb 100644
 --- a/extra/robin-hood-hashing/robin_hood.h
@@ -185,7 +185,7 @@ index 1ffe48f4..581004d1 100644
        }
      }
 diff --git a/router/src/mysql_protocol/include/mysqlrouter/classic_protocol_codec_base.h b/router/src/mysql_protocol/include/mysqlrouter/classic_protocol_codec_base.h
-index 17d918fe..08f738ec 100644
+index 413ba4bb..baeb8001 100644
 --- a/router/src/mysql_protocol/include/mysqlrouter/classic_protocol_codec_base.h
 +++ b/router/src/mysql_protocol/include/mysqlrouter/classic_protocol_codec_base.h
 @@ -347,6 +347,22 @@ class EncodeSizeAccumulator {
@@ -246,10 +246,10 @@ index 68db8f85..b32fb2ff 100644
    }
  
 diff --git a/sql/mem_root_array.h b/sql/mem_root_array.h
-index 4a0311a6..ba527a7d 100644
+index 034edd5c..af8152be 100644
 --- a/sql/mem_root_array.h
 +++ b/sql/mem_root_array.h
-@@ -477,7 +477,7 @@ class Mem_root_array : public Mem_root_array_YY<Element_type> {
+@@ -480,7 +480,7 @@ class Mem_root_array : public Mem_root_array_YY<Element_type> {
        : Mem_root_array(root, x.cbegin(), x.cend()) {}
  
    Mem_root_array(std::initializer_list<Element_type> elements)
@@ -259,10 +259,10 @@ index 4a0311a6..ba527a7d 100644
    ~Mem_root_array() { super::clear(); }
  
 diff --git a/sql/mysqld.cc b/sql/mysqld.cc
-index 8105d4b7..89863c28 100644
+index a1016601..30c6a17d 100644
 --- a/sql/mysqld.cc
 +++ b/sql/mysqld.cc
-@@ -1524,7 +1524,7 @@ SHOW_COMP_OPTION have_statement_timeout = SHOW_OPTION_DISABLED;
+@@ -1530,7 +1530,7 @@ SHOW_COMP_OPTION have_statement_timeout = SHOW_OPTION_DISABLED;
  
  /* Thread specific variables */
  
@@ -272,10 +272,10 @@ index 8105d4b7..89863c28 100644
  mysql_mutex_t LOCK_status, LOCK_uuid_generator, LOCK_crypt,
      LOCK_global_system_variables, LOCK_user_conn, LOCK_error_messages;
 diff --git a/sql/mysqld.h b/sql/mysqld.h
-index dcd6762c..90376e06 100644
+index 96ac6f04..9389fb6a 100644
 --- a/sql/mysqld.h
 +++ b/sql/mysqld.h
-@@ -403,7 +403,7 @@ extern bool migrate_connect_options;
+@@ -414,7 +414,7 @@ extern bool migrate_connect_options;
  
  extern LEX_CSTRING sql_statement_names[(uint)SQLCOM_END + 1];
  
@@ -298,7 +298,7 @@ index bf8a99f9..ad45fc74 100644
  void init_sql_alloc(PSI_memory_key key, MEM_ROOT *root, size_t block_size,
                      size_t pre_alloc_size);
 diff --git a/storage/innobase/handler/ha_innodb.cc b/storage/innobase/handler/ha_innodb.cc
-index 53f9c0d9..03fe040f 100644
+index 85ca1ed4..6fe96d2e 100644
 --- a/storage/innobase/handler/ha_innodb.cc
 +++ b/storage/innobase/handler/ha_innodb.cc
 @@ -286,7 +286,7 @@ static ulong innobase_commit_concurrency = 0;
