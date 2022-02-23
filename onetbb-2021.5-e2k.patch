@@ -1,23 +1,46 @@
-From e3a57bd6bd8ecc9dacaab54578aac1912cc6a0d4 Mon Sep 17 00:00:00 2001
+From 836cc41950ecb9c90108fe5d39fe8b15fcdbeaf8 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Mon, 1 Feb 2021 16:48:48 +0700
-Subject: [PATCH] oneTBB-2021.2 e2k support
+Date: Wed, 23 Feb 2022 13:56:05 +0700
+Subject: [PATCH] oneTBB-2021.5 e2k support
 
+tests passed: 118/134
+
+hanging:
+test_adaptive_mutex
+test_function_node
+test_multifunction_node
+test_async_node
+test_global_control
+test_scheduler_mix
+python_test
+
+failed:
+test_dynamic_link (Failed)
+test_collaborative_call_once (SEGFAULT)
+test_parallel_invoke (Subprocess aborted)
+test_arena_constraints (Subprocess aborted)
+test_malloc_regression (Subprocess aborted)
+test_malloc_compliance (Subprocess aborted)
+test_malloc_used_by_lib (Subprocess aborted)
+test_malloc_lib_unload (Subprocess aborted)
+test_malloc_whitebox (Subprocess aborted)
 ---
- cmake/compilers/GNU.cmake            | 5 +++++
- include/oneapi/tbb/detail/_config.h  | 2 +-
- src/tbb/allocator.cpp                | 6 ++++++
- src/tbb/co_context.h                 | 9 +++++++++
- src/tbb/tools_api/ittnotify_config.h | 7 +++++++
- test/tbb/test_openmp.cpp             | 5 +++++
- 6 files changed, 33 insertions(+), 1 deletion(-)
+ cmake/compilers/GNU.cmake            |  5 +++++
+ include/oneapi/tbb/detail/_config.h  |  2 +-
+ src/tbb/allocator.cpp                |  6 ++++++
+ src/tbb/co_context.h                 |  9 +++++++++
+ src/tbb/tools_api/ittnotify_config.h |  7 +++++++
+ src/tbbmalloc/tbbmalloc.cpp          | 13 +++++++++++++
+ test/common/doctest.h                |  6 ++++++
+ test/tbb/test_openmp.cpp             |  5 +++++
+ 8 files changed, 52 insertions(+), 1 deletion(-)
 
 diff --git a/cmake/compilers/GNU.cmake b/cmake/compilers/GNU.cmake
-index d9c0759..717e977 100644
+index 86958e3..1eb5704 100644
 --- a/cmake/compilers/GNU.cmake
 +++ b/cmake/compilers/GNU.cmake
-@@ -39,6 +39,11 @@ if ("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "mips")
-     set(TBB_TEST_COMPILE_FLAGS ${TBB_TEST_COMPILE_FLAGS} -DTBB_TEST_LOW_WORKLOAD)
+@@ -69,6 +69,11 @@ if (NOT TBB_SANITIZE MATCHES "thread")
+     set(TBB_IPO_LINK_FLAGS $<$<NOT:$<CONFIG:Debug>>:-flto>)
  endif()
  
 +if (CMAKE_SYSTEM_PROCESSOR STREQUAL e2k)
@@ -29,10 +52,10 @@ index d9c0759..717e977 100644
  set(TBBMALLOC_LIB_COMPILE_FLAGS -fno-rtti -fno-exceptions)
  set(TBB_OPENMP_FLAG -fopenmp)
 diff --git a/include/oneapi/tbb/detail/_config.h b/include/oneapi/tbb/detail/_config.h
-index e591b80..ea7d40b 100644
+index cce8ad6..14ee9b4 100644
 --- a/include/oneapi/tbb/detail/_config.h
 +++ b/include/oneapi/tbb/detail/_config.h
-@@ -193,7 +193,7 @@
+@@ -195,7 +195,7 @@
  
  /** __TBB_WEAK_SYMBOLS_PRESENT denotes that the system supports the weak symbol mechanism **/
  #ifndef __TBB_WEAK_SYMBOLS_PRESENT
@@ -42,10 +65,10 @@ index e591b80..ea7d40b 100644
  
  /** Presence of compiler features **/
 diff --git a/src/tbb/allocator.cpp b/src/tbb/allocator.cpp
-index 6bf5a0b..b52fe58 100644
+index f30ded6..47e1d06 100644
 --- a/src/tbb/allocator.cpp
 +++ b/src/tbb/allocator.cpp
-@@ -109,7 +109,13 @@ static const dynamic_link_descriptor MallocLinkTable[] = {
+@@ -115,7 +115,13 @@ static const dynamic_link_descriptor MallocLinkTable[] = {
      If that allocator is not found, it links to malloc and free. */
  void initialize_handler_pointers() {
      __TBB_ASSERT(allocate_handler == &initialize_allocate_handler, NULL);
@@ -60,23 +83,23 @@ index 6bf5a0b..b52fe58 100644
          // If unsuccessful, set the handlers to the default routines.
          // This must be done now, and not before FillDynamicLinks runs, because if other
 diff --git a/src/tbb/co_context.h b/src/tbb/co_context.h
-index 552dec3..6d9ab1e 100644
+index e9fed6e..db5d487 100644
 --- a/src/tbb/co_context.h
 +++ b/src/tbb/co_context.h
-@@ -180,7 +180,12 @@ inline void create_coroutine(coroutine_type& c, std::size_t stack_size, void* ar
-     c.my_context.uc_stack.ss_flags = 0;
+@@ -337,7 +337,12 @@ inline void create_coroutine(coroutine_type& c, std::size_t stack_size, void* ar
+     unsigned hi = unsigned(std::uint64_t(addr) >> 32);
+     __TBB_ASSERT(sizeof(addr) == 8 || hi == 0, nullptr);
  
-     typedef void(*coroutine_func_t)();
 +#ifdef __e2k__
-+    err = makecontext_e2k(&c.my_context, (coroutine_func_t)co_local_wait_for_all, sizeof(arg) / sizeof(int), arg);
++    err = makecontext_e2k(&c.my_context, (coroutine_func_t)co_local_wait_for_all, 2, hi, lo);
 +    __TBB_ASSERT_EX(err >= 0, NULL);
 +#else
-     makecontext(&c.my_context, (coroutine_func_t)co_local_wait_for_all, sizeof(arg) / sizeof(int), arg);
+     makecontext(&c.my_context, (coroutine_func_t)co_local_wait_for_all, 2, hi, lo);
 +#endif
  }
  
  inline void current_coroutine(coroutine_type& c) {
-@@ -200,6 +205,10 @@ inline void destroy_coroutine(coroutine_type& c) {
+@@ -357,6 +362,10 @@ inline void destroy_coroutine(coroutine_type& c) {
      // Clear the stack state afterwards
      c.my_stack = NULL;
      c.my_stack_size = 0;
@@ -88,11 +111,11 @@ index 552dec3..6d9ab1e 100644
  
  #if __APPLE__
 diff --git a/src/tbb/tools_api/ittnotify_config.h b/src/tbb/tools_api/ittnotify_config.h
-index c25730d..cd2bf5b 100644
+index 8ecc237..077b090 100644
 --- a/src/tbb/tools_api/ittnotify_config.h
 +++ b/src/tbb/tools_api/ittnotify_config.h
-@@ -330,6 +330,9 @@ ITT_INLINE long __TBB_machine_fetchadd4(volatile void* ptr, long addend)
- #elif ITT_ARCH==ITT_ARCH_ARM || ITT_ARCH==ITT_ARCH_PPC64
+@@ -340,6 +340,9 @@ ITT_INLINE long __TBB_machine_fetchadd4(volatile void* ptr, long addend)
+ #else
  #define __TBB_machine_fetchadd4(addr, val) __sync_fetch_and_add(addr, val)
  #endif /* ITT_ARCH==ITT_ARCH_IA64 */
 +#ifdef __e2k__
@@ -101,7 +124,7 @@ index c25730d..cd2bf5b 100644
  #ifndef ITT_SIMPLE_INIT
  ITT_INLINE long
  __itt_interlocked_increment(volatile long* ptr) ITT_INLINE_ATTRIBUTE;
-@@ -339,11 +342,14 @@ ITT_INLINE long __itt_interlocked_increment(volatile long* ptr)
+@@ -349,11 +352,14 @@ ITT_INLINE long __itt_interlocked_increment(volatile long* ptr)
  }
  #endif /* ITT_SIMPLE_INIT */
  
@@ -116,7 +139,7 @@ index c25730d..cd2bf5b 100644
  int pthread_mutex_init(pthread_mutex_t*, const pthread_mutexattr_t*) __attribute__((weak));
  int pthread_mutex_lock(pthread_mutex_t*) __attribute__((weak));
  int pthread_mutex_unlock(pthread_mutex_t*) __attribute__((weak));
-@@ -352,6 +358,7 @@ int pthread_mutexattr_init(pthread_mutexattr_t*) __attribute__((weak));
+@@ -362,6 +368,7 @@ int pthread_mutexattr_init(pthread_mutexattr_t*) __attribute__((weak));
  int pthread_mutexattr_settype(pthread_mutexattr_t*, int) __attribute__((weak));
  int pthread_mutexattr_destroy(pthread_mutexattr_t*) __attribute__((weak));
  pthread_t pthread_self(void) __attribute__((weak));
@@ -124,11 +147,50 @@ index c25730d..cd2bf5b 100644
  #define PTHREAD_SYMBOLS (pthread_mutex_init && pthread_mutex_lock && pthread_mutex_unlock && pthread_mutex_destroy && pthread_mutexattr_init && pthread_mutexattr_settype && pthread_mutexattr_destroy && pthread_self)
  
  #endif /* ITT_PLATFORM==ITT_PLATFORM_WIN */
+diff --git a/src/tbbmalloc/tbbmalloc.cpp b/src/tbbmalloc/tbbmalloc.cpp
+index 8775498..a13613a 100644
+--- a/src/tbbmalloc/tbbmalloc.cpp
++++ b/src/tbbmalloc/tbbmalloc.cpp
+@@ -108,3 +108,16 @@ static RegisterProcessShutdownNotification reg;
+ 
+ } } // namespaces
+ 
++#ifdef __EDG__
++extern "C" __attribute__((visibility("hidden")))
++void __cxa_vec_ctor(void *a, size_t n, size_t size,
++		void (*c)(void*), void (*d)(void*)) {
++	size_t i = 0;
++	if (c) while (n--) c((char*)a + size * i++);
++}
++extern "C" __attribute__((visibility("hidden")))
++void __cxa_vec_dtor(void *a, size_t n, size_t size,
++		void (*d)(void*)) {
++	if (d) while (n--) d((char*)a + size * n);
++}
++#endif
+diff --git a/test/common/doctest.h b/test/common/doctest.h
+index 4c638f6..084f0d0 100644
+--- a/test/common/doctest.h
++++ b/test/common/doctest.h
+@@ -1170,7 +1170,13 @@ DOCTEST_CLANG_SUPPRESS_WARNING_WITH_PUSH("-Wunused-comparison")
+         bool   m_passed;
+         String m_decomp;
+ 
++#ifdef __EDG__
++        // fixes an internal error in EDG frontend
++        Result(bool passed, const String& decomposition);
++        Result(bool passed) : Result(passed, String()) {}
++#else
+         Result(bool passed, const String& decomposition = String());
++#endif
+ 
+         // forbidding some expressions based on this table: https://en.cppreference.com/w/cpp/language/operator_precedence
+         DOCTEST_FORBIT_EXPRESSION(Result, &)
 diff --git a/test/tbb/test_openmp.cpp b/test/tbb/test_openmp.cpp
-index d3727dc..e564a6a 100644
+index 495be1c..b10b157 100644
 --- a/test/tbb/test_openmp.cpp
 +++ b/test/tbb/test_openmp.cpp
-@@ -103,7 +103,12 @@ public:
+@@ -114,7 +114,12 @@ public:
              int start = i < n ? 0 : i - n + 1;
              int finish = i < m ? i + 1 : m;
              data_type sum = 0;
