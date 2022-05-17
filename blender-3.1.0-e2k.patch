@@ -1,0 +1,441 @@
+From b5eecac081b9340f513a58821a17eff1ffcade59 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Sat, 7 May 2022 09:27:37 +0700
+Subject: [PATCH] blender-3.1.0 e2k support
+
+---
+ .../btSequentialImpulseConstraintSolver.cpp   |  4 ++++
+ intern/cycles/util/defines.h                  |  2 +-
+ intern/cycles/util/math_float3.h              |  6 ++---
+ intern/cycles/util/math_float4.h              |  2 +-
+ intern/cycles/util/optimization.h             |  8 +++++++
+ intern/cycles/util/simd.h                     |  4 ++--
+ intern/cycles/util/ssef.h                     |  6 ++---
+ intern/cycles/util/system.cpp                 |  6 +++++
+ intern/libmv/libmv/build/build_config.h       |  8 +++++++
+ .../simple_pipeline/camera_intrinsics_impl.h  |  6 +++--
+ source/blender/blenkernel/intern/volume.cc    |  3 +++
+ .../blenlib/BLI_enumerable_thread_specific.hh |  7 ++++++
+ source/blender/blenlib/BLI_hash.hh            |  3 +++
+ source/blender/blenlib/BLI_utildefines.h      |  2 +-
+ source/blender/blenlib/BLI_virtual_array.hh   |  3 +++
+ .../operations/COM_DilateErodeOperation.cc    |  4 ++--
+ .../operations/COM_MathBaseOperation.h        |  2 +-
+ .../blender/editors/space_node/node_draw.cc   |  4 ++++
+ .../geometry/nodes/node_geo_extrude_mesh.cc   | 23 +++++++++++++++----
+ .../simulation/intern/implicit_blender.c      |  6 +++--
+ 20 files changed, 87 insertions(+), 22 deletions(-)
+
+diff --git a/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp b/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
+index d2641c5..a0af3a4 100644
+--- a/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
++++ b/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
+@@ -115,7 +115,11 @@ static inline __m128 btSimdDot3(__m128 vec0, __m128 vec1)
+ 
+ #define USE_FMA 1
+ #define USE_FMA3_INSTEAD_FMA4 1
++#ifdef __e2k__
++#define USE_SSE4_DOT 0
++#else
+ #define USE_SSE4_DOT 1
++#endif
+ 
+ #define SSE4_DP(a, b) _mm_dp_ps(a, b, 0x7f)
+ #define SSE4_DP_FP(a, b) _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7f))
+diff --git a/intern/cycles/util/defines.h b/intern/cycles/util/defines.h
+index a2e8d83..83c566a 100644
+--- a/intern/cycles/util/defines.h
++++ b/intern/cycles/util/defines.h
+@@ -26,7 +26,7 @@
+ /* Bitness */
+ 
+ #if defined(__ppc64__) || defined(__PPC64__) || defined(__x86_64__) || defined(__ia64__) || \
+-    defined(_M_X64) || defined(__aarch64__)
++    defined(_M_X64) || defined(__aarch64__) || defined(__e2k__)
+ #  define __KERNEL_64_BIT__
+ #endif
+ 
+diff --git a/intern/cycles/util/math_float3.h b/intern/cycles/util/math_float3.h
+index 74f1c98..b958da7 100644
+--- a/intern/cycles/util/math_float3.h
++++ b/intern/cycles/util/math_float3.h
+@@ -280,7 +280,7 @@ ccl_device_inline float distance(const float3 &a, const float3 &b)
+ 
+ ccl_device_inline float dot(const float3 &a, const float3 &b)
+ {
+-#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
++#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+   return _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7F));
+ #  else
+   return a.x * b.x + a.y * b.y + a.z * b.z;
+@@ -304,7 +304,7 @@ ccl_device_inline float3 cross(const float3 &a, const float3 &b)
+ 
+ ccl_device_inline float3 normalize(const float3 &a)
+ {
+-#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
++#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+   __m128 norm = _mm_sqrt_ps(_mm_dp_ps(a.m128, a.m128, 0x7F));
+   return float3(_mm_div_ps(a.m128, norm));
+ #  else
+@@ -404,7 +404,7 @@ ccl_device_inline float max3(float3 a)
+ 
+ ccl_device_inline float len(const float3 a)
+ {
+-#if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
++#if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+   return _mm_cvtss_f32(_mm_sqrt_ss(_mm_dp_ps(a.m128, a.m128, 0x7F)));
+ #else
+   return sqrtf(dot(a, a));
+diff --git a/intern/cycles/util/math_float4.h b/intern/cycles/util/math_float4.h
+index 1203a10..785d8c7 100644
+--- a/intern/cycles/util/math_float4.h
++++ b/intern/cycles/util/math_float4.h
+@@ -256,7 +256,7 @@ ccl_device_inline float distance(const float4 &a, const float4 &b)
+ 
+ ccl_device_inline float dot(const float4 &a, const float4 &b)
+ {
+-#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
++#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+ #    if defined(__KERNEL_NEON__)
+   __m128 t = vmulq_f32(a, b);
+   return vaddvq_f32(t);
+diff --git a/intern/cycles/util/optimization.h b/intern/cycles/util/optimization.h
+index 7ecd389..6f1a67e 100644
+--- a/intern/cycles/util/optimization.h
++++ b/intern/cycles/util/optimization.h
+@@ -70,6 +70,14 @@
+ #    define __KERNEL_SSE3__
+ #    define __KERNEL_SSE41__
+ 
++#  elif defined(__e2k__)
++
++#    define __KERNEL_SSE__
++#    define __KERNEL_SSE2__
++#    define __KERNEL_SSE3__
++#    define __KERNEL_SSSE3__
++#    define __KERNEL_SSE41__
++
+ #  endif
+ 
+ #endif
+diff --git a/intern/cycles/util/simd.h b/intern/cycles/util/simd.h
+index cc49508..ebfdd79 100644
+--- a/intern/cycles/util/simd.h
++++ b/intern/cycles/util/simd.h
+@@ -33,7 +33,7 @@
+ #  include "util/windows.h"
+ #elif defined(_MSC_VER)
+ #  include <intrin.h>
+-#elif (defined(__x86_64__) || defined(__i386__))
++#elif (defined(__x86_64__) || defined(__i386__) || defined(__e2k__))
+ #  include <x86intrin.h>
+ #elif defined(__KERNEL_NEON__)
+ #  define SSE2NEON_PRECISE_MINMAX 1
+@@ -206,7 +206,7 @@ type shuffle_neon(const type &a, const type &b)
+ #  endif
+ #endif
+ 
+-#if defined(__LZCNT__)
++#if defined(__LZCNT__) && !defined(__e2k__)
+ #  define _lzcnt_u32 __lzcnt32
+ #  define _lzcnt_u64 __lzcnt64
+ #endif
+diff --git a/intern/cycles/util/ssef.h b/intern/cycles/util/ssef.h
+index fc496e5..0bd2312 100644
+--- a/intern/cycles/util/ssef.h
++++ b/intern/cycles/util/ssef.h
+@@ -931,7 +931,7 @@ __forceinline ssef cross(const ssef &a, const ssef &b)
+ 
+ ccl_device_inline const ssef dot3_splat(const ssef &a, const ssef &b)
+ {
+-#  ifdef __KERNEL_SSE41__
++#  if defined(__KERNEL_SSE41__) && !defined(__e2k__)
+   return _mm_dp_ps(a.m128, b.m128, 0x7f);
+ #  else
+   ssef t = a * b;
+@@ -942,7 +942,7 @@ ccl_device_inline const ssef dot3_splat(const ssef &a, const ssef &b)
+ /* squared length taking only specified axes into account */
+ template<size_t X, size_t Y, size_t Z, size_t W> ccl_device_inline float len_squared(const ssef &a)
+ {
+-#  ifndef __KERNEL_SSE41__
++#  if !defined(__KERNEL_SSE41__) || defined(__e2k__)
+   float4 &t = (float4 &)a;
+   return (X ? t.x * t.x : 0.0f) + (Y ? t.y * t.y : 0.0f) + (Z ? t.z * t.z : 0.0f) +
+          (W ? t.w * t.w : 0.0f);
+@@ -954,7 +954,7 @@ template<size_t X, size_t Y, size_t Z, size_t W> ccl_device_inline float len_squ
+ 
+ ccl_device_inline float dot3(const ssef &a, const ssef &b)
+ {
+-#  ifdef __KERNEL_SSE41__
++#  if defined(__KERNEL_SSE41__) && !defined(__e2k__)
+   return extract<0>(ssef(_mm_dp_ps(a.m128, b.m128, 0x7f)));
+ #  else
+   ssef t = a * b;
+diff --git a/intern/cycles/util/system.cpp b/intern/cycles/util/system.cpp
+index 61ad552..5f0296f 100644
+--- a/intern/cycles/util/system.cpp
++++ b/intern/cycles/util/system.cpp
+@@ -248,6 +248,12 @@ bool system_cpu_support_avx2()
+   return caps.sse && caps.sse2 && caps.sse3 && caps.ssse3 && caps.sse41 && caps.avx && caps.f16c &&
+          caps.avx2 && caps.fma3 && caps.bmi1 && caps.bmi2;
+ }
++#elif defined(__e2k__)
++bool system_cpu_support_sse2()  { return true; }
++bool system_cpu_support_sse3()  { return true; }
++bool system_cpu_support_sse41() { return true; }
++bool system_cpu_support_avx()   { return false; }
++bool system_cpu_support_avx2()  { return false; }
+ #else
+ 
+ bool system_cpu_support_sse2()
+diff --git a/intern/libmv/libmv/build/build_config.h b/intern/libmv/libmv/build/build_config.h
+index 1d87660..d00de4d 100644
+--- a/intern/libmv/libmv/build/build_config.h
++++ b/intern/libmv/libmv/build/build_config.h
+@@ -308,6 +308,11 @@
+ #  define ARCH_CPU_PPC64 1
+ #  define ARCH_CPU_64_BITS 1
+ #  define ARCH_CPU_LITTLE_ENDIAN 1
++#elif defined(__e2k__)
++#  define ARCH_CPU_E2K_FAMILY 1
++#  define ARCH_CPU_E2K 1
++#  define ARCH_CPU_64_BITS 1
++#  define ARCH_CPU_LITTLE_ENDIAN 1
+ #elif defined(__ARMEL__)
+ #  define ARCH_CPU_ARM_FAMILY 1
+ #  define ARCH_CPU_ARMEL 1
+@@ -372,6 +377,9 @@
+ #if !defined(ARCH_CPU_MIPS_FAMILY)
+ #  define ARCH_CPU_MIPS_FAMILY 0
+ #endif
++#if !defined(ARCH_CPU_E2K_FAMILY)
++#  define ARCH_CPU_E2K_FAMILY 0
++#endif
+ #if !defined(ARCH_CPU_PPC64_FAMILY)
+ #  define ARCH_CPU_PPC64_FAMILY 0
+ #endif
+diff --git a/intern/libmv/libmv/simple_pipeline/camera_intrinsics_impl.h b/intern/libmv/libmv/simple_pipeline/camera_intrinsics_impl.h
+index c8c4700..1566526 100644
+--- a/intern/libmv/libmv/simple_pipeline/camera_intrinsics_impl.h
++++ b/intern/libmv/libmv/simple_pipeline/camera_intrinsics_impl.h
+@@ -64,8 +64,9 @@ void LookupWarpGrid::Compute(const CameraIntrinsics& intrinsics,
+   double aspx = (double)w / intrinsics.image_width();
+   double aspy = (double)h / intrinsics.image_height();
+ #if defined(_OPENMP)
++  int nthreads = threads_, enablemp = threads_ > 1 && height > 100;
+ #  pragma omp parallel for schedule(static)                                    \
+-      num_threads(threads_) if (threads_ > 1 && height > 100)
++      num_threads(nthreads) if (enablemp)
+ #endif
+   for (int y = 0; y < height; y++) {
+     for (int x = 0; x < width; x++) {
+@@ -133,8 +134,9 @@ void LookupWarpGrid::Apply(const PixelType* input_buffer,
+                            int channels,
+                            PixelType* output_buffer) {
+ #if defined(_OPENMP)
++  int nthreads = threads_, enablemp = threads_ > 1 && height > 100;
+ #  pragma omp parallel for schedule(static)                                    \
+-      num_threads(threads_) if (threads_ > 1 && height > 100)
++      num_threads(nthreads) if (enablemp)
+ #endif
+   for (int y = 0; y < height; y++) {
+     for (int x = 0; x < width; x++) {
+diff --git a/source/blender/blenkernel/intern/volume.cc b/source/blender/blenkernel/intern/volume.cc
+index a0e2d1a..3ce2497 100644
+--- a/source/blender/blenkernel/intern/volume.cc
++++ b/source/blender/blenkernel/intern/volume.cc
+@@ -1450,6 +1450,9 @@ struct CreateGridOp {
+     else {
+       return GridType::create();
+     }
++#ifdef __EDG__
++    return 0;
++#endif
+   }
+ };
+ #endif
+diff --git a/source/blender/blenlib/BLI_enumerable_thread_specific.hh b/source/blender/blenlib/BLI_enumerable_thread_specific.hh
+index b598102..7127f9f 100644
+--- a/source/blender/blenlib/BLI_enumerable_thread_specific.hh
++++ b/source/blender/blenlib/BLI_enumerable_thread_specific.hh
+@@ -30,7 +30,14 @@ namespace blender::threading {
+ 
+ namespace enumerable_thread_specific_utils {
+ inline std::atomic<int> next_id = 0;
++#ifdef __EDG__
++extern thread_local int thread_id;
++#ifdef EDG_THREAD_FIX
++thread_local int thread_id = next_id.fetch_add(1, std::memory_order_relaxed);
++#endif
++#else
+ inline thread_local int thread_id = next_id.fetch_add(1, std::memory_order_relaxed);
++#endif
+ }  // namespace enumerable_thread_specific_utils
+ 
+ /**
+diff --git a/source/blender/blenlib/BLI_hash.hh b/source/blender/blenlib/BLI_hash.hh
+index 9132aac..b223f09 100644
+--- a/source/blender/blenlib/BLI_hash.hh
++++ b/source/blender/blenlib/BLI_hash.hh
+@@ -106,6 +106,9 @@ template<typename T> struct DefaultHash {
+       /* If this results in a compiler error, no hash function for the type has been found. */
+       return value.hash();
+     }
++#ifdef __EDG__
++    return 0;
++#endif
+   }
+ 
+   template<typename U> uint64_t operator()(const U &value) const
+diff --git a/source/blender/blenlib/BLI_utildefines.h b/source/blender/blenlib/BLI_utildefines.h
+index c4b3181..7d21ac3 100644
+--- a/source/blender/blenlib/BLI_utildefines.h
++++ b/source/blender/blenlib/BLI_utildefines.h
+@@ -509,7 +509,7 @@ extern "C" {
+   ((void)0)
+ 
+ /* assuming a static array */
+-#if defined(__GNUC__) && !defined(__cplusplus) && !defined(__clang__) && !defined(__INTEL_COMPILER)
++#if defined(__GNUC__) && !defined(__cplusplus) && !defined(__clang__) && !defined(__INTEL_COMPILER) && !defined(__EDG__)
+ #  define ARRAY_SIZE(arr) \
+     ((sizeof(struct { int isnt_array : ((const void *)&(arr) == &(arr)[0]); }) * 0) + \
+      (sizeof(arr) / sizeof(*(arr))))
+diff --git a/source/blender/blenlib/BLI_virtual_array.hh b/source/blender/blenlib/BLI_virtual_array.hh
+index 231ce1b..2ff0660 100644
+--- a/source/blender/blenlib/BLI_virtual_array.hh
++++ b/source/blender/blenlib/BLI_virtual_array.hh
+@@ -498,6 +498,9 @@ template<typename T> struct VArrayAnyExtraInfo {
+       BLI_assert_unreachable();
+       return {};
+     }
++#ifdef __EDG__
++    return {};
++#endif
+   }
+ };
+ 
+diff --git a/source/blender/compositor/operations/COM_DilateErodeOperation.cc b/source/blender/compositor/operations/COM_DilateErodeOperation.cc
+index 3aaf402..ae19062 100644
+--- a/source/blender/compositor/operations/COM_DilateErodeOperation.cc
++++ b/source/blender/compositor/operations/COM_DilateErodeOperation.cc
+@@ -194,7 +194,7 @@ static float get_min_distance(DilateErodeThresholdOperation::PixelData &p)
+   /* TODO(manzanilla): bad performance, generate a table with relative offsets on operation
+    * initialization to loop from less to greater distance and break as soon as #compare is
+    * true. */
+-  const TCompare compare;
++  const TCompare<float> compare;
+   float min_dist = p.distance;
+   const float *row = p.elem + ((intptr_t)p.ymin - p.y) * p.row_stride +
+                      ((intptr_t)p.xmin - p.x) * p.elem_stride;
+@@ -422,7 +422,7 @@ static float get_distance_value(DilateDistanceOperation::PixelData &p, const flo
+ {
+   /* TODO(manzanilla): bad performance, only loop elements within minimum distance removing
+    * coordinates and conditional if `dist <= min_dist`. May need to generate a table of offsets. */
+-  const TCompare compare;
++  const TCompare<float> compare;
+   const float min_dist = p.min_distance;
+   float value = start_value;
+   const float *row = p.elem + ((intptr_t)p.ymin - p.y) * p.row_stride +
+diff --git a/source/blender/compositor/operations/COM_MathBaseOperation.h b/source/blender/compositor/operations/COM_MathBaseOperation.h
+index dc5a16b..029c221 100644
+--- a/source/blender/compositor/operations/COM_MathBaseOperation.h
++++ b/source/blender/compositor/operations/COM_MathBaseOperation.h
+@@ -94,7 +94,7 @@ template<template<typename> typename TFunctor>
+ class MathFunctor2Operation : public MathBaseOperation {
+   void update_memory_buffer_partial(BuffersIterator<float> &it) final
+   {
+-    TFunctor functor;
++    TFunctor<float> functor;
+     for (; !it.is_end(); ++it) {
+       *it.out = functor(*it.in(0), *it.in(1));
+       clamp_when_enabled(it.out);
+diff --git a/source/blender/editors/space_node/node_draw.cc b/source/blender/editors/space_node/node_draw.cc
+index 2c47883..652342a 100644
+--- a/source/blender/editors/space_node/node_draw.cc
++++ b/source/blender/editors/space_node/node_draw.cc
+@@ -16,6 +16,10 @@
+  * The Original Code is Copyright (C) 2008 Blender Foundation.
+  * All rights reserved.
+  */
++ 
++#ifdef __EDG__
++#define EDG_THREAD_FIX
++#endif
+ 
+ /** \file
+  * \ingroup spnode
+diff --git a/source/blender/nodes/geometry/nodes/node_geo_extrude_mesh.cc b/source/blender/nodes/geometry/nodes/node_geo_extrude_mesh.cc
+index c39c092..39387e7 100644
+--- a/source/blender/nodes/geometry/nodes/node_geo_extrude_mesh.cc
++++ b/source/blender/nodes/geometry/nodes/node_geo_extrude_mesh.cc
+@@ -266,7 +266,9 @@ static void extrude_mesh_vertices(MeshComponent &component,
+     new_edges[i_selection] = new_loose_edge(selection[i_selection], new_vert_range[i_selection]);
+   }
+ 
+-  component.attribute_foreach([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
++  component.attribute_foreach([&,
++    &vert_to_edge_map=vert_to_edge_map, &selection=selection
++  ](const AttributeIDRef &id, const AttributeMetaData meta_data) {
+     if (!ELEM(meta_data.domain, ATTR_DOMAIN_POINT, ATTR_DOMAIN_EDGE)) {
+       return true;
+     }
+@@ -514,7 +516,12 @@ static void extrude_mesh_edges(MeshComponent &component,
+       return true; /* Impossible to write the "normal" attribute. */
+     }
+ 
+-    attribute_math::convert_to_static_type(meta_data.data_type, [&](auto dummy) {
++    attribute_math::convert_to_static_type(meta_data.data_type, [&,
++      &new_vert_to_duplicate_edge_map=new_vert_to_duplicate_edge_map,
++      &edge_to_poly_map=edge_to_poly_map, &edge_selection=edge_selection,
++      &duplicate_edges=duplicate_edges, &new_vert_indices=new_vert_indices,
++      &orig_vert_size=orig_vert_size, &polys=polys, &loops=loops, &new_loops=new_loops
++    ](auto dummy) {
+       using T = decltype(dummy);
+       MutableSpan<T> data = attribute.as_span().typed<T>();
+       switch (attribute.domain()) {
+@@ -885,7 +892,12 @@ static void extrude_mesh_face_regions(MeshComponent &component,
+       return true; /* Impossible to write the "normal" attribute. */
+     }
+ 
+-    attribute_math::convert_to_static_type(meta_data.data_type, [&](auto dummy) {
++    attribute_math::convert_to_static_type(meta_data.data_type, [&,
++      &new_vert_to_duplicate_edge_map=new_vert_to_duplicate_edge_map,
++      &polys=polys, &edge_extruded_face_indices=edge_extruded_face_indices,
++      &boundary_edges=boundary_edges, &new_vert_indices=new_vert_indices,
++      &orig_vert_size=orig_vert_size, &loops=loops, &new_loops=new_loops
++    ](auto dummy) {
+       using T = decltype(dummy);
+       MutableSpan<T> data = attribute.as_span().typed<T>();
+       switch (attribute.domain()) {
+@@ -1126,7 +1138,10 @@ static void extrude_individual_mesh_faces(MeshComponent &component,
+       return true; /* Impossible to write the "normal" attribute. */
+     }
+ 
+-    attribute_math::convert_to_static_type(meta_data.data_type, [&](auto dummy) {
++    attribute_math::convert_to_static_type(meta_data.data_type, [&,
++      &polys=polys, &poly_selection=poly_selection,
++      &loops=loops, &index_offsets=index_offsets
++    ](auto dummy) {
+       using T = decltype(dummy);
+       MutableSpan<T> data = attribute.as_span().typed<T>();
+       switch (attribute.domain()) {
+diff --git a/source/blender/simulation/intern/implicit_blender.c b/source/blender/simulation/intern/implicit_blender.c
+index 95bf591..886c090 100644
+--- a/source/blender/simulation/intern/implicit_blender.c
++++ b/source/blender/simulation/intern/implicit_blender.c
+@@ -621,8 +621,10 @@ DO_INLINE void mul_bfmatrix_lfvector(float (*to)[3], fmatrix3x3 *from, lfVector
+   lfVector *temp = create_lfvector(vcount);
+ 
+   zero_lfvector(to, vcount);
+-
+-#  pragma omp parallel sections if (vcount > CLOTH_OPENMP_LIMIT)
++#  ifdef _OPENMP
++  int enablemp = vcount > CLOTH_OPENMP_LIMIT;
++#  endif
++#  pragma omp parallel sections if (enablemp)
+   {
+ #  pragma omp section
+     {
+-- 
+2.34.1
+
