@@ -1,6 +1,6 @@
-From 35ea11214ddff0e87aeaf1f1706ce545ab8f96f5 Mon Sep 17 00:00:00 2001
+From a0f9ea3549ee1c0f8868ee85fcee2cc5d9ae35a3 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Tue, 8 Feb 2022 15:10:55 +0700
+Date: Fri, 20 May 2022 11:06:32 +0700
 Subject: [PATCH] libffi-3.4.2 e2k support
 
 LCC >= 1.25.18 or LCC >= 1.26.04 is required
@@ -8,12 +8,12 @@ for __clear_cache() to work properly
 ---
  Makefile.am                          |   3 +
  configure.host                       |   5 +
- src/e2k/ffi.c                        | 385 +++++++++++++++++++++++++++
+ src/e2k/ffi.c                        | 392 +++++++++++++++++++++++++++
  src/e2k/ffitarget.h                  |  63 +++++
  testsuite/lib/libffi.exp             |   7 +
  testsuite/libffi.complex/complex.exp |   7 +
  testsuite/libffi.go/static-chain.h   |   2 +
- 7 files changed, 472 insertions(+)
+ 7 files changed, 479 insertions(+)
  create mode 100644 src/e2k/ffi.c
  create mode 100644 src/e2k/ffitarget.h
 
@@ -49,10 +49,10 @@ index 2682671..38eb214 100644
  # ... but some of the cases above share configury.
 diff --git a/src/e2k/ffi.c b/src/e2k/ffi.c
 new file mode 100644
-index 0000000..fe8a656
+index 0000000..d5e4555
 --- /dev/null
 +++ b/src/e2k/ffi.c
-@@ -0,0 +1,385 @@
+@@ -0,0 +1,392 @@
 +/* -----------------------------------------------------------------------
 +   ffi.c - Elbrus 2000 Foreign Function Interface
 +
@@ -118,6 +118,24 @@ index 0000000..fe8a656
 +  return FFI_OK;
 +}
 +
++#define COPY8(i) frame[i] = ret.r[i];
++#define COPY16(i) COPY8(i) COPY8(i+1)
++#define COPY32(i) COPY16(i) COPY16(i+2)
++#define COPY_RET \
++  if (rvalue) { \
++    switch ((rsize + 7) >> 3) { \
++    case 1: COPY8(0) break; \
++    case 2: COPY16(0) break; \
++    case 3: COPY16(0) COPY8(2) break; \
++    case 4: COPY32(0) break; \
++    case 5: COPY32(0) COPY8(4) break; \
++    case 6: COPY32(0) COPY16(4) break; \
++    case 7: COPY32(0) COPY16(4) COPY8(6) break; \
++    case 8: COPY32(0) COPY32(4) break; \
++    } \
++    memcpy(rvalue, frame, rsize); \
++  }
++
 +void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue)
 +{
 +  long *frame, *dst, i, size, nargs = cif->nargs;
@@ -173,13 +191,7 @@ index 0000000..fe8a656
 +    }
 +
 +  ret = (*(regs_t(*)(regs_t))fn)(*(regs_t*)frame);
-+
-+  if (rvalue)
-+    {
-+      if (rsize <= sizeof(ret))
-+        *(regs_t*)frame = ret;
-+      memcpy(rvalue, frame, rsize);
-+    }
++  COPY_RET
 +}
 +
 +static regs_t ffi_closure_e2k(regs_t iarg, regs_t sarg)
@@ -346,12 +358,7 @@ index 0000000..fe8a656
 +    __asm__ __volatile__ ("" : : "r"(chain_reg) : "memory");
 +  }
 +  /* copy from ffi_call */
-+  if (rvalue)
-+    {
-+      if (rsize <= sizeof(ret))
-+        *(regs_t*)frame = ret;
-+      memcpy(rvalue, frame, rsize);
-+    }
++  COPY_RET
 +  /* copy end */
 +}
 +
@@ -555,5 +562,5 @@ index 3675b40..ce056c0 100644
 +# define STATIC_CHAIN_REG  "g16"
  #endif
 -- 
-2.17.1
+2.34.1
 
