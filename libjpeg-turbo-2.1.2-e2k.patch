@@ -1,6 +1,6 @@
-From a2b606a195c3ec5195732d8213ca7b9f7fefc988 Mon Sep 17 00:00:00 2001
+From 61006804e35d65eac1efe532eccaae01ff76741f Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Wed, 25 May 2022 12:58:16 +0700
+Date: Thu, 26 May 2022 13:55:01 +0700
 Subject: [PATCH] libjpeg-turbo-2.1.2 e2k support
 
 ---
@@ -8,28 +8,30 @@ Subject: [PATCH] libjpeg-turbo-2.1.2 e2k support
  simd/CMakeLists.txt      |  23 ++
  simd/e2k/jccolext-e2k.c  | 213 +++++++++++
  simd/e2k/jccolor-e2k.c   | 163 +++++++++
- simd/e2k/jchuff-e2k.c    | 314 +++++++++++++++++
+ simd/e2k/jchuff-e2k.c    | 307 ++++++++++++++++
+ simd/e2k/jcphuff-e2k.c   | 145 ++++++++
  simd/e2k/jcsample-e2k.c  | 203 +++++++++++
  simd/e2k/jcsample.h      |  28 ++
- simd/e2k/jdcolext-e2k.c  | 258 ++++++++++++++
+ simd/e2k/jdcolext-e2k.c  | 258 +++++++++++++
  simd/e2k/jdcolor-e2k.c   | 289 +++++++++++++++
- simd/e2k/jdcoltab-e2k.c  |  80 +++++
- simd/e2k/jdsample-e2k.c  | 389 +++++++++++++++++++++
+ simd/e2k/jdcoltab-e2k.c  |  80 ++++
+ simd/e2k/jdsample-e2k.c  | 389 ++++++++++++++++++++
  simd/e2k/jfdctflt-e2k.c  | 127 +++++++
  simd/e2k/jfdctfst-e2k.c  | 145 ++++++++
- simd/e2k/jfdctint-e2k.c  | 255 ++++++++++++++
- simd/e2k/jidctflt-e2k.c  | 215 ++++++++++++
+ simd/e2k/jfdctint-e2k.c  | 255 +++++++++++++
+ simd/e2k/jidctflt-e2k.c  | 215 +++++++++++
  simd/e2k/jidctfst-e2k.c  | 187 ++++++++++
- simd/e2k/jidctint-e2k.c  | 294 ++++++++++++++++
+ simd/e2k/jidctint-e2k.c  | 294 +++++++++++++++
  simd/e2k/jquantf-e2k.c   | 121 +++++++
- simd/e2k/jquanti-e2k.c   | 178 ++++++++++
- simd/e2k/jsimd.c         | 739 +++++++++++++++++++++++++++++++++++++++
- simd/e2k/jsimd_api_e2k.h |  87 +++++
+ simd/e2k/jquanti-e2k.c   | 178 +++++++++
+ simd/e2k/jsimd.c         | 761 +++++++++++++++++++++++++++++++++++++++
+ simd/e2k/jsimd_api_e2k.h |  94 +++++
  simd/e2k/jsimd_e2k.h     | 207 +++++++++++
- 22 files changed, 4520 insertions(+)
+ 23 files changed, 4687 insertions(+)
  create mode 100644 simd/e2k/jccolext-e2k.c
  create mode 100644 simd/e2k/jccolor-e2k.c
  create mode 100644 simd/e2k/jchuff-e2k.c
+ create mode 100644 simd/e2k/jcphuff-e2k.c
  create mode 100644 simd/e2k/jcsample-e2k.c
  create mode 100644 simd/e2k/jcsample.h
  create mode 100644 simd/e2k/jdcolext-e2k.c
@@ -72,7 +74,7 @@ index 6dd83d3..b5f684f 100644
      set(DEFAULT_FLOATTEST no-fp-contract)
    endif()
 diff --git a/simd/CMakeLists.txt b/simd/CMakeLists.txt
-index c0e80f3..33d8c29 100644
+index c0e80f3..9550d15 100644
 --- a/simd/CMakeLists.txt
 +++ b/simd/CMakeLists.txt
 @@ -452,6 +452,29 @@ if(CMAKE_POSITION_INDEPENDENT_CODE OR ENABLE_SHARED)
@@ -90,7 +92,7 @@ index c0e80f3..33d8c29 100644
 +  e2k/jdcolor-e2k.c e2k/jdsample-e2k.c
 +  e2k/jfdctint-e2k.c e2k/jfdctfst-e2k.c e2k/jfdctflt-e2k.c
 +  e2k/jidctint-e2k.c e2k/jidctfst-e2k.c e2k/jidctflt-e2k.c
-+  e2k/jchuff-e2k.c)
++  e2k/jchuff-e2k.c e2k/jcphuff-e2k.c)
 +
 +set_source_files_properties(${SIMD_SOURCES} PROPERTIES
 +  COMPILE_FLAGS -msse4.1)
@@ -495,14 +497,14 @@ index 0000000..0af2626
 +
 diff --git a/simd/e2k/jchuff-e2k.c b/simd/e2k/jchuff-e2k.c
 new file mode 100644
-index 0000000..57d4c02
+index 0000000..ec4329e
 --- /dev/null
 +++ b/simd/e2k/jchuff-e2k.c
-@@ -0,0 +1,314 @@
+@@ -0,0 +1,307 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
-+ * Copyright (C) 2021, Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
++ * Copyright (C) 2022, Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
 + *
 + * This software is provided 'as-is', without any express or implied
 + * warranty.  In no event will the authors be held liable for any damages
@@ -587,11 +589,11 @@ index 0000000..57d4c02
 +}
 +
 +#define PUT_CODE(code, size) { \
-+  /* temp2 &= (((JLONG)1) << nbits) - 1; */ \
-+  /* temp2 |= code << nbits; */ \
-+  temp2 = __builtin_e2k_insfd(code, __builtin_e2k_insfd(nbits, 6 * 63 + 64, -nbits), temp2); \
++  /* temp &= (((JLONG)1) << nbits) - 1; */ \
++  /* temp |= code << nbits; */ \
++  temp = __builtin_e2k_insfd(code, __builtin_e2k_insfd(nbits, 6 * 63 + 64, -nbits), temp); \
 +  nbits += size; \
-+  PUT_BITS(temp2, nbits) \
++  PUT_BITS(temp, nbits) \
 +}
 +
 +#define KLOOP_PREPARE(mask, i) \
@@ -606,14 +608,14 @@ index 0000000..57d4c02
 +  v1 = _mm_abs_epi16(v1); \
 +  v2 = _mm_abs_epi16(v2); \
 +  v3 = _mm_abs_epi16(v3); \
-+  VEC_ST(block_temp  + i,      v0); \
-+  VEC_ST(block_temp  + i +  8, v1); \
-+  VEC_ST(block_temp  + i + 16, v2); \
-+  VEC_ST(block_temp  + i + 24, v3); \
-+  VEC_ST(block_temp2 + i,      t0); \
-+  VEC_ST(block_temp2 + i +  8, t1); \
-+  VEC_ST(block_temp2 + i + 16, t2); \
-+  VEC_ST(block_temp2 + i + 24, t3);
++  VEC_ST(block_nbits + i,      v0); \
++  VEC_ST(block_nbits + i +  8, v1); \
++  VEC_ST(block_nbits + i + 16, v2); \
++  VEC_ST(block_nbits + i + 24, v3); \
++  VEC_ST(block_diff + i,      t0); \
++  VEC_ST(block_diff + i +  8, t1); \
++  VEC_ST(block_diff + i + 16, t2); \
++  VEC_ST(block_diff + i + 24, t3);
 +
 +#define SHUF16X4(a, b, c, d) _mm_setr_pi8( \
 +  a * 2, a * 2 + 1, b * 2, b * 2 + 1, c * 2, c * 2 + 1, d * 2, d * 2 + 1)
@@ -626,7 +628,7 @@ index 0000000..57d4c02
 +jsimd_huff_encode_one_block_e2k(void *state, JOCTET *buffer,
 +                                JCOEFPTR block, int last_dc_val,
 +                                c_derived_tbl *dctbl, c_derived_tbl *actbl) {
-+  uint64_t temp, temp2, nbits;
++  uint64_t temp, nbits;
 +  uint64_t i, r, code, size;
 +  uint64_t code_0xf0 = actbl->ehufco[0xf0];
 +  uint64_t size_0xf0 = actbl->ehufsi[0xf0];
@@ -638,8 +640,8 @@ index 0000000..57d4c02
 +  __m128i zero = _mm_setzero_si128();
 +  __m128i v0, v1, v2, v3, t0, t1, t2, t3;
 +  int64_t mask, mask1;
-+  uint16_t __attribute__((aligned(16))) block_temp[DCTSIZE2];
-+  int16_t __attribute__((aligned(16))) block_temp2[DCTSIZE2];
++  uint16_t __attribute__((aligned(16))) block_nbits[DCTSIZE2];
++  int16_t __attribute__((aligned(16))) block_diff[DCTSIZE2];
 +
 +#if 1 /* faster this way */
 +  {
@@ -764,9 +766,9 @@ index 0000000..57d4c02
 +
 +  /* Encode the DC coefficient difference per section F.1.2.1 */
 +
-+  temp = block_temp[0];
-+  temp2 = block_temp2[0];
-+  nbits = temp ? 32 - __builtin_clz(temp) : 0;
++  nbits = block_nbits[0];
++  temp = block_diff[0];
++  nbits = nbits ? 32 - __builtin_clz(nbits) : 0;
 +
 +  /* Emit the Huffman-coded symbol for the number of bits */
 +  code = dctbl->ehufco[nbits];
@@ -778,40 +780,184 @@ index 0000000..57d4c02
 +  /* e2k doesn't have a tzcnt instruction */
 +  mask = __builtin_e2k_bitrevd(mask) << 1;
 +
-+  /* One iteration for each value in jpeg_natural_order[] */
-+  for (i = 1; i < DCTSIZE2; i++, mask <<= 1) {
-+    r = 0;                        /* r = run length of zeros */
-+    if (mask >= 0) {
-+      /* If the last coef(s) were zero, emit an end-of-block code */
-+      if (__builtin_expect(!mask, 0)) {
-+        code = actbl->ehufco[0];
-+        size = actbl->ehufsi[0];
-+        PUT_BITS(code, size)
-+        break;
-+      }
-+      r = __builtin_clzll(mask);
-+      mask <<= r;
-+      i += r;
-+      /* if run length > 15, must emit special run-length-16 codes (0xF0) */
-+      while (r > 15) {
-+        PUT_BITS(code_0xf0, size_0xf0)
-+        r -= 16;
-+      }
-+      r <<= 4;
++  for (i = 1; mask; i++, mask <<= 1) {
++    r = __builtin_clzll(mask);
++    mask <<= r;
++    i += r;
++    /* if run length > 15, must emit special run-length-16 codes (0xF0) */
++    while (r > 15) {
++      PUT_BITS(code_0xf0, size_0xf0)
++      r -= 16;
 +    }
-+    temp = block_temp[i];
-+    temp2 = block_temp2[i];
-+    nbits = 32 - __builtin_clz(temp);
++    nbits = block_nbits[i];
++    temp = block_diff[i];
++    nbits = 32 - __builtin_clz(nbits);
 +    /* Emit Huffman symbol for run length / number of bits */
-+    temp = r + nbits;
-+    code = actbl->ehufco[temp];
-+    size = actbl->ehufsi[temp];
++    /* r = r << 4 | nbits; */
++    r = __builtin_e2k_insfd(r, 4 * 63 + 64, nbits);
++    code = actbl->ehufco[r];
++    size = actbl->ehufsi[r];
 +    PUT_CODE(code, size)
++  }
++
++  if (i != 64) {
++    PUT_BITS(actbl->ehufco[0], actbl->ehufsi[0])
 +  }
 +
 +  state_ptr->cur.put_buffer = put_buffer;
 +  state_ptr->cur.free_bits = free_bits;
 +  return buffer;
++}
+diff --git a/simd/e2k/jcphuff-e2k.c b/simd/e2k/jcphuff-e2k.c
+new file mode 100644
+index 0000000..f69afeb
+--- /dev/null
++++ b/simd/e2k/jcphuff-e2k.c
+@@ -0,0 +1,145 @@
++/*
++ * Elbrus optimizations for libjpeg-turbo
++ *
++ * Copyright (C) 2022, Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
++ *
++ * This software is provided 'as-is', without any express or implied
++ * warranty.  In no event will the authors be held liable for any damages
++ * arising from the use of this software.
++ *
++ * Permission is granted to anyone to use this software for any purpose,
++ * including commercial applications, and to alter it and redistribute it
++ * freely, subject to the following restrictions:
++ *
++ * 1. The origin of this software must not be misrepresented; you must not
++ *    claim that you wrote the original software. If you use this software
++ *    in a product, an acknowledgment in the product documentation would be
++ *    appreciated but is not required.
++ * 2. Altered source versions must be plainly marked as such, and must not be
++ *    misrepresented as being the original software.
++ * 3. This notice may not be removed or altered from any source distribution.
++ */
++
++#include "jsimd_e2k.h"
++
++#define X(i) coefs[i] = block[jpeg_natural_order_start[i]];
++#define Y(i) coefs[i] = i < rem ? block[jpeg_natural_order_start[i]] : 0;
++
++#define LOOP \
++  for (i = 0; i < Sl >> 4; i++) { \
++    X(0) X(1) X(2) X(3) X(4) X(5) X(6) X(7) \
++    X(8) X(9) X(10) X(11) X(12) X(13) X(14) X(15) \
++    BLOCK16 \
++    jpeg_natural_order_start += 16; \
++  } \
++  rem = Sl & 15; \
++  if (Sl & 8) { \
++    X(0) X(1) X(2) X(3) X(4) X(5) X(6) X(7) \
++    Y(8) Y(9) Y(10) Y(11) Y(12) Y(13) Y(14) \
++    coefs[15] = 0; \
++    BLOCK16 \
++  } else if (rem > 0) { \
++    Y(0) Y(1) Y(2) Y(3) Y(4) Y(5) Y(6) Y(7) \
++    BLOCK8 \
++  }
++
++void jsimd_encode_mcu_AC_first_prepare_e2k
++  (const JCOEF *block, const int *jpeg_natural_order_start, int Sl, int Al,
++   JCOEF *values, size_t *zerobits)
++{
++  JCOEF *diff = values + DCTSIZE2;
++  int16_t __attribute__((aligned(16))) coefs[16];
++  __m128i v0, v1, v2, v3;
++  __m128i c0 = _mm_setzero_si128(), shr = _mm_cvtsi32_si128(Al);
++  int i, rem;
++
++#define BLOCK16 \
++  v0 = _mm_load_si128((__m128i*)coefs); \
++  v1 = _mm_load_si128((__m128i*)coefs + 1); \
++  v2 = _mm_srai_epi16(v0, 15); \
++  v3 = _mm_srai_epi16(v1, 15); \
++  v0 = _mm_sra_epi16(_mm_abs_epi16(v0), shr); \
++  v1 = _mm_sra_epi16(_mm_abs_epi16(v1), shr); \
++  v2 = _mm_xor_si128(v0, v2); \
++  v3 = _mm_xor_si128(v1, v3); \
++  _mm_store_si128((__m128i*)values, v0); \
++  _mm_store_si128((__m128i*)values + 1, v1); \
++  _mm_store_si128((__m128i*)diff, v2); \
++  _mm_store_si128((__m128i*)diff + 1, v3); \
++  v2 = _mm_cmpeq_epi8(_mm_packus_epi16(v0, v1), c0); \
++  ((uint16_t*)zerobits)[i] = ~_mm_movemask_epi8(v2); \
++  values += 16; diff += 16;
++
++#define BLOCK8 \
++  v0 = _mm_load_si128((__m128i*)coefs); \
++  v2 = _mm_srai_epi16(v0, 15); \
++  v0 = _mm_sra_epi16(_mm_abs_epi16(v0), shr); \
++  v2 = _mm_xor_si128(v0, v2); \
++  _mm_store_si128((__m128i*)values, v0); \
++  _mm_store_si128((__m128i*)diff, v2); \
++  v2 = _mm_cmpeq_epi8(_mm_packus_epi16(v0, c0), c0); \
++  ((uint16_t*)zerobits)[i] = ~_mm_movemask_epi8(v2); \
++  values += 8; diff += 8;
++
++  ((uint64_t*)zerobits)[0] = 0;
++  LOOP
++#undef BLOCK16
++#undef BLOCK8
++
++  for (i = (64 - Sl) >> 3; i; i--) {
++    _mm_store_si128((__m128i*)values, c0);
++    _mm_store_si128((__m128i*)diff, c0);
++    values += 8; diff += 8;
++  }
++}
++
++int jsimd_encode_mcu_AC_refine_prepare_e2k
++  (const JCOEF *block, const int *jpeg_natural_order_start, int Sl, int Al,
++   JCOEF *absvalues, size_t *bits)
++{
++  union { uint64_t q; uint16_t w[4]; } mask1 = { 0 };
++  int16_t __attribute__((aligned(16))) coefs[16];
++  __m128i v0, v1, v2, c1 = _mm_set1_epi8(1);
++  __m128i c0 = _mm_setzero_si128(), shr = _mm_cvtsi32_si128(Al);
++  int i, rem;
++
++#define BLOCK16 \
++  v0 = _mm_load_si128((__m128i*)coefs); \
++  v1 = _mm_load_si128((__m128i*)coefs + 1); \
++  v2 = _mm_packs_epi16(v0, v1); \
++  ((uint16_t*)bits)[4 + i] = ~_mm_movemask_epi8(v2); \
++  v0 = _mm_sra_epi16(_mm_abs_epi16(v0), shr); \
++  v1 = _mm_sra_epi16(_mm_abs_epi16(v1), shr); \
++  v2 = _mm_cmpeq_epi8(_mm_packus_epi16(v0, v1), c0); \
++  ((uint16_t*)bits)[i] = ~_mm_movemask_epi8(v2); \
++  _mm_store_si128((__m128i*)absvalues, v0); \
++  _mm_store_si128((__m128i*)absvalues + 1, v1); \
++  v2 = _mm_cmpeq_epi8(_mm_packus_epi16(v0, v1), c1); \
++  mask1.w[i] = _mm_movemask_epi8(v2); \
++  absvalues += 16;
++
++#define BLOCK8 \
++  v0 = _mm_load_si128((__m128i*)coefs); \
++  v2 = _mm_packs_epi16(v0, c0); \
++  ((uint16_t*)bits)[4 + i] = ~_mm_movemask_epi8(v2); \
++  v0 = _mm_sra_epi16(_mm_abs_epi16(v0), shr); \
++  v2 = _mm_cmpeq_epi8(_mm_packus_epi16(v0, c0), c0); \
++  ((uint16_t*)bits)[i] = ~_mm_movemask_epi8(v2); \
++  _mm_store_si128((__m128i*)absvalues, v0); \
++  v2 = _mm_cmpeq_epi8(_mm_packus_epi16(v0, c0), c1); \
++  mask1.w[i] = _mm_movemask_epi8(v2); \
++  absvalues += 8;
++
++  ((uint64_t*)bits)[0] = 0; /* zero */
++  ((uint64_t*)bits)[1] = 0; /* sign */
++  LOOP
++#undef BLOCK16
++#undef BLOCK8
++
++  for (i = (64 - Sl) >> 3; i; i--) {
++    _mm_store_si128((__m128i*)absvalues, c0);
++    absvalues += 8;
++  }
++
++  return 63 - __builtin_clzll(mask1.q | 1);
 +}
 diff --git a/simd/e2k/jcsample-e2k.c b/simd/e2k/jcsample-e2k.c
 new file mode 100644
@@ -3668,10 +3814,10 @@ index 0000000..a3e1ff1
 +}
 diff --git a/simd/e2k/jsimd.c b/simd/e2k/jsimd.c
 new file mode 100644
-index 0000000..393416e
+index 0000000..20e39c6
 --- /dev/null
 +++ b/simd/e2k/jsimd.c
-@@ -0,0 +1,739 @@
+@@ -0,0 +1,761 @@
 +/*
 + * jsimd_e2k.c
 + *
@@ -4388,6 +4534,15 @@ index 0000000..393416e
 +GLOBAL(int)
 +jsimd_can_encode_mcu_AC_first_prepare(void)
 +{
++  init_simd();
++
++  if (DCTSIZE != 8)
++    return 0;
++  if (sizeof(JCOEF) != 2)
++    return 0;
++  if ((simd_support & JSIMD_SSE2) && simd_huffman)
++    return 1;
++
 +  return 0;
 +}
 +
@@ -4396,11 +4551,22 @@ index 0000000..393416e
 +                                  const int *jpeg_natural_order_start, int Sl,
 +                                  int Al, JCOEF *values, size_t *zerobits)
 +{
++  jsimd_encode_mcu_AC_first_prepare_e2k(block, jpeg_natural_order_start,
++                                        Sl, Al, values, zerobits);
 +}
 +
 +GLOBAL(int)
 +jsimd_can_encode_mcu_AC_refine_prepare(void)
 +{
++  init_simd();
++
++  if (DCTSIZE != 8)
++    return 0;
++  if (sizeof(JCOEF) != 2)
++    return 0;
++  if ((simd_support & JSIMD_SSE2) && simd_huffman)
++    return 1;
++
 +  return 0;
 +}
 +
@@ -4409,14 +4575,16 @@ index 0000000..393416e
 +                                   const int *jpeg_natural_order_start, int Sl,
 +                                   int Al, JCOEF *absvalues, size_t *bits)
 +{
-+  return 0;
++  return jsimd_encode_mcu_AC_refine_prepare_e2k(block,
++                                                jpeg_natural_order_start,
++                                                Sl, Al, absvalues, bits);
 +}
 diff --git a/simd/e2k/jsimd_api_e2k.h b/simd/e2k/jsimd_api_e2k.h
 new file mode 100644
-index 0000000..89be3e0
+index 0000000..d857203
 --- /dev/null
 +++ b/simd/e2k/jsimd_api_e2k.h
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,94 @@
 +/*
 + * Elbrus optimizations for libjpeg-turbo
 + *
@@ -4500,10 +4668,17 @@ index 0000000..89be3e0
 +  (void *dct_table, JCOEFPTR coef_block, JSAMPARRAY output_buf,
 +   JDIMENSION output_col);
 +
-+EXTERN(JOCTET *)jsimd_huff_encode_one_block_e2k
++EXTERN(JOCTET *) jsimd_huff_encode_one_block_e2k
 +  (void *state, JOCTET *buffer, JCOEFPTR block,
 +   int last_dc_val, c_derived_tbl *dctbl, c_derived_tbl *actbl);
 +
++EXTERN(void) jsimd_encode_mcu_AC_first_prepare_e2k
++  (const JCOEF *block, const int *jpeg_natural_order_start, int Sl, int Al,
++   JCOEF *values, size_t *zerobits);
++
++EXTERN(int) jsimd_encode_mcu_AC_refine_prepare_e2k
++  (const JCOEF *block, const int *jpeg_natural_order_start, int Sl, int Al,
++   JCOEF *absvalues, size_t *bits);
 diff --git a/simd/e2k/jsimd_e2k.h b/simd/e2k/jsimd_e2k.h
 new file mode 100644
 index 0000000..15d6262
