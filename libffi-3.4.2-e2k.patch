@@ -1,6 +1,6 @@
-From a0f9ea3549ee1c0f8868ee85fcee2cc5d9ae35a3 Mon Sep 17 00:00:00 2001
+From 4372eca788ce9cda724536e0c2d9a19e2ed638e3 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Fri, 20 May 2022 11:06:32 +0700
+Date: Tue, 21 Jun 2022 20:56:59 +0700
 Subject: [PATCH] libffi-3.4.2 e2k support
 
 LCC >= 1.25.18 or LCC >= 1.26.04 is required
@@ -8,12 +8,12 @@ for __clear_cache() to work properly
 ---
  Makefile.am                          |   3 +
  configure.host                       |   5 +
- src/e2k/ffi.c                        | 392 +++++++++++++++++++++++++++
+ src/e2k/ffi.c                        | 389 +++++++++++++++++++++++++++
  src/e2k/ffitarget.h                  |  63 +++++
  testsuite/lib/libffi.exp             |   7 +
  testsuite/libffi.complex/complex.exp |   7 +
  testsuite/libffi.go/static-chain.h   |   2 +
- 7 files changed, 479 insertions(+)
+ 7 files changed, 476 insertions(+)
  create mode 100644 src/e2k/ffi.c
  create mode 100644 src/e2k/ffitarget.h
 
@@ -49,10 +49,10 @@ index 2682671..38eb214 100644
  # ... but some of the cases above share configury.
 diff --git a/src/e2k/ffi.c b/src/e2k/ffi.c
 new file mode 100644
-index 0000000..d5e4555
+index 0000000..50a7788
 --- /dev/null
 +++ b/src/e2k/ffi.c
-@@ -0,0 +1,392 @@
+@@ -0,0 +1,389 @@
 +/* -----------------------------------------------------------------------
 +   ffi.c - Elbrus 2000 Foreign Function Interface
 +
@@ -118,23 +118,19 @@ index 0000000..d5e4555
 +  return FFI_OK;
 +}
 +
-+#define COPY8(i) frame[i] = ret.r[i];
-+#define COPY16(i) COPY8(i) COPY8(i+1)
-+#define COPY32(i) COPY16(i) COPY16(i+2)
++#define REP8(X) X(0) X(1) X(2) X(3) X(4) X(5) X(6) X(7)
++#define DEF_ARG(i) long arg##i,
++#define SAVE_ARG1(i) if (asize > i * 8) iarg_copy.r[i] = arg##i;
++#define COPY_RET1(i) if (rsize > i * 8) frame[i] = ret.r[i];
++
 +#define COPY_RET \
 +  if (rvalue) { \
-+    switch ((rsize + 7) >> 3) { \
-+    case 1: COPY8(0) break; \
-+    case 2: COPY16(0) break; \
-+    case 3: COPY16(0) COPY8(2) break; \
-+    case 4: COPY32(0) break; \
-+    case 5: COPY32(0) COPY8(4) break; \
-+    case 6: COPY32(0) COPY16(4) break; \
-+    case 7: COPY32(0) COPY16(4) COPY8(6) break; \
-+    case 8: COPY32(0) COPY32(4) break; \
-+    } \
++    if (rsize <= sizeof(ret)) { REP8(COPY_RET1) } \
 +    memcpy(rvalue, frame, rsize); \
 +  }
++
++#define CLOSURE_ARGS REP8(DEF_ARG)
++#define SAVE_ARGS REP8(SAVE_ARG1)
 +
 +void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue)
 +{
@@ -194,14 +190,15 @@ index 0000000..d5e4555
 +  COPY_RET
 +}
 +
-+static regs_t ffi_closure_e2k(regs_t iarg, regs_t sarg)
++static regs_t ffi_closure_e2k(CLOSURE_ARGS regs_t sarg)
 +{
 +  register void *env __asm__("g16");
 +  ffi_closure *closure = env;
++  ffi_cif *cif = closure->cif;
++  regs_t *ret, iarg_copy; long asize = cif->bytes;
 +  /* Must be saved early to prevent the compiler
 +     from saving "iarg" in the caller's stack frame. */
-+  regs_t *ret, iarg_copy = iarg;
-+  ffi_cif *cif = closure->cif;
++  SAVE_ARGS
 +  void **args; char *ptr; long i, size, align, *dst, nargs;
 +  ffi_type **arg_types;
 +
@@ -363,16 +360,16 @@ index 0000000..d5e4555
 +}
 +
 +/* with ffi_go_closure, user_data = closure */
-+static regs_t ffi_go_closure_e2k(regs_t iarg, regs_t sarg)
++static regs_t ffi_go_closure_e2k(CLOSURE_ARGS regs_t sarg)
 +{
 +  register void *env __asm__("g16");
 +  ffi_go_closure *closure = env;
-+  /* copy from ffi_go_closure */
-+
++  /* copy from ffi_closure */
++  ffi_cif *cif = closure->cif;
++  regs_t *ret, iarg_copy; long asize = cif->bytes;
 +  /* Must be saved early to prevent the compiler
 +     from saving "iarg" in the caller's stack frame. */
-+  regs_t *ret, iarg_copy = iarg;
-+  ffi_cif *cif = closure->cif;
++  SAVE_ARGS
 +  void **args; char *ptr; long i, size, align, *dst, nargs;
 +  ffi_type **arg_types;
 +
@@ -404,7 +401,7 @@ index 0000000..d5e4555
 +
 +  closure->fun(cif, ret, args, closure);
 +
-+  /* copy from ffi_go_closure */
++  /* copy from ffi_closure */
 +  switch (cif->rtype->type)
 +    {
 +    case FFI_TYPE_SINT8:
@@ -563,4 +560,3 @@ index 3675b40..ce056c0 100644
  #endif
 -- 
 2.34.1
-
