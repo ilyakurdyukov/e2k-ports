@@ -1,6 +1,6 @@
-From 4372eca788ce9cda724536e0c2d9a19e2ed638e3 Mon Sep 17 00:00:00 2001
+From 7aa12741a072fc698cabe51d0d2e69c6179b633c Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Tue, 21 Jun 2022 20:56:59 +0700
+Date: Thu, 23 Jun 2022 17:21:40 +0700
 Subject: [PATCH] libffi-3.4.2 e2k support
 
 LCC >= 1.25.18 or LCC >= 1.26.04 is required
@@ -8,12 +8,12 @@ for __clear_cache() to work properly
 ---
  Makefile.am                          |   3 +
  configure.host                       |   5 +
- src/e2k/ffi.c                        | 389 +++++++++++++++++++++++++++
- src/e2k/ffitarget.h                  |  63 +++++
+ src/e2k/ffi.c                        | 438 +++++++++++++++++++++++++++
+ src/e2k/ffitarget.h                  |  63 ++++
  testsuite/lib/libffi.exp             |   7 +
  testsuite/libffi.complex/complex.exp |   7 +
  testsuite/libffi.go/static-chain.h   |   2 +
- 7 files changed, 476 insertions(+)
+ 7 files changed, 525 insertions(+)
  create mode 100644 src/e2k/ffi.c
  create mode 100644 src/e2k/ffitarget.h
 
@@ -49,14 +49,14 @@ index 2682671..38eb214 100644
  # ... but some of the cases above share configury.
 diff --git a/src/e2k/ffi.c b/src/e2k/ffi.c
 new file mode 100644
-index 0000000..50a7788
+index 0000000..3906228
 --- /dev/null
 +++ b/src/e2k/ffi.c
-@@ -0,0 +1,389 @@
+@@ -0,0 +1,438 @@
 +/* -----------------------------------------------------------------------
 +   ffi.c - Elbrus 2000 Foreign Function Interface
 +
-+   Copyright 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
++   Copyright 2021-2022 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
 +
 +   Permission is hereby granted, free of charge, to any person obtaining
 +   a copy of this software and associated documentation files (the
@@ -87,6 +87,10 @@ index 0000000..50a7788
 +#include <stdint.h>
 +
 +#ifdef __e2k__
++
++#ifndef __ptr64__
++#error
++#endif
 +
 +#define MAX(a, b) ((a) > (b) ? (a) : (b))
 +#define ALIGN(a, b) (((a) + (b) - 1) & -(b))
@@ -119,25 +123,48 @@ index 0000000..50a7788
 +}
 +
 +#define REP8(X) X(0) X(1) X(2) X(3) X(4) X(5) X(6) X(7)
-+#define DEF_ARG(i) long arg##i,
-+#define SAVE_ARG1(i) if (asize > i * 8) iarg_copy.r[i] = arg##i;
-+#define COPY_RET1(i) if (rsize > i * 8) frame[i] = ret.r[i];
-+
-+#define COPY_RET \
-+  if (rvalue) { \
-+    if (rsize <= sizeof(ret)) { REP8(COPY_RET1) } \
-+    memcpy(rvalue, frame, rsize); \
++#define RET_CASE(i) \
++  case i + 1: { \
++    typedef struct { long r[i + 1]; } ret##i; \
++    CALL_FN(*(ret##i*)frame =, ret##i) \
++    break; \
 +  }
 +
-+#define CLOSURE_ARGS REP8(DEF_ARG)
-+#define SAVE_ARGS REP8(SAVE_ARG1)
++#define COPY_RET \
++  if (!rvalue || !rsize) { \
++    CALL_FN((void), void) \
++    return; \
++  } else if (rsize == sizeof(uint32_t)) { \
++    CALL_FN(*(uint32_t*)rvalue =, int) \
++    return; \
++  } else if (rsize == sizeof(uint64_t)) { \
++    CALL_FN(*(uint64_t*)rvalue =, long) \
++    return; \
++  } \
++  switch ((rsize + 7) >> 3) { \
++    REP8(RET_CASE) \
++    default: { CALL_FN((void), void) } \
++  } \
++  { \
++    long i, i2, i1; uint32_t t4, t2, t1; \
++    _Pragma("ivdep") \
++    for (i = 0; i < rsize - 7; i += 8) \
++      *(uint64_t*)((char*)rvalue + i) = *(uint64_t*)((char*)frame + i); \
++    i2 = i + (rsize & 4); \
++    i1 = i + (rsize & 6); \
++    if (rsize & 4) t4 = *(uint32_t*)((char*)frame + i); \
++    if (rsize & 2) t2 = *(uint16_t*)((char*)frame + i2); \
++    if (rsize & 1) t1 = *(uint8_t*)((char*)frame + i1); \
++    if (rsize & 4) *(uint32_t*)((char*)rvalue + i) = t4; \
++    if (rsize & 2) *(uint16_t*)((char*)rvalue + i2) = t2;  \
++    if (rsize & 1) *(uint8_t*)((char*)rvalue + i1) = t1;  \
++  }
 +
 +void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue)
 +{
 +  long *frame, *dst, i, size, nargs = cif->nargs;
 +  long asize = cif->flags, rsize = cif->rtype->size;
 +  ffi_type **arg_types = cif->arg_types;
-+  regs_t ret;
 +
 +  dst = frame = (long*)alloca(asize) - ARG_REGS;
 +
@@ -172,7 +199,7 @@ index 0000000..50a7788
 +        case FFI_TYPE_SINT64:
 +        case FFI_TYPE_UINT64:
 +        case FFI_TYPE_DOUBLE:
-+          *dst = *(long*)src;
++          *dst = *(UINT64*)src;
 +          break;
 +        case FFI_TYPE_POINTER:
 +          *dst = *(uintptr_t*)src;
@@ -186,27 +213,26 @@ index 0000000..50a7788
 +      dst = (long*)((uintptr_t)dst + size);
 +    }
 +
-+  ret = (*(regs_t(*)(regs_t))fn)(*(regs_t*)frame);
++#define CALL_FN(ret, T) \
++  ret (*(T(*)(regs_t))fn)(*(regs_t*)frame);
 +  COPY_RET
++#undef CALL_FN
 +}
 +
-+static regs_t ffi_closure_e2k(CLOSURE_ARGS regs_t sarg)
++static regs_t ffi_closure_e2k()
 +{
 +  register void *env __asm__("g16");
++  register void *sarg __asm__("g17");
 +  ffi_closure *closure = env;
 +  ffi_cif *cif = closure->cif;
-+  regs_t *ret, iarg_copy; long asize = cif->bytes;
-+  /* Must be saved early to prevent the compiler
-+     from saving "iarg" in the caller's stack frame. */
-+  SAVE_ARGS
-+  void **args; char *ptr; long i, size, align, *dst, nargs;
++  regs_t *ret; void **args; char *ptr;
++  long i, size, align, *dst = sarg, nargs;
 +  ffi_type **arg_types;
 +
 +  args = alloca(cif->nargs * sizeof(void*));
 +  size = cif->rtype->size;
 +  if (size < sizeof(*ret)) size = sizeof(*ret);
 +  ret = alloca(size);
-+  dst = (long*)(&sarg - 1);
 +
 +  if (size & 7)
 +    *(long*)(((uintptr_t)ret + size) & -8) = 0;
@@ -221,11 +247,13 @@ index 0000000..50a7788
 +      ptr = (char*)FFI_ALIGN(dst, align);
 +      dst = (long*)(ptr + size);
 +
-+      if ((uintptr_t)dst <= (uintptr_t)&sarg)
-+        ptr += (char*)&iarg_copy - (char*)(&sarg - 1);
++      if ((uintptr_t)dst > (uintptr_t)sarg + 64)
++        ptr += 64;
 +
 +      args[i] = ptr;
 +    }
++  /* g17 may be changed during the call */
++  dst = sarg;
 +
 +  closure->fun(cif, ret, args, closure->user_data);
 +
@@ -244,7 +272,7 @@ index 0000000..50a7788
 +      size = cif->rtype->size;
 +      if (size > sizeof(*ret))
 +        {
-+          ptr = (char*)(&sarg - 1);
++          ptr = (char*)(dst + 8);
 +          for (i = 0; i < size; i += sizeof(long))
 +            *(long*)(ptr + i) = *(long*)((char*)ret + i);
 +        }
@@ -263,24 +291,49 @@ index 0000000..50a7788
 +  if (cif->abi != FFI_E2K)
 +    return FFI_BAD_ABI;
 +
-+/* copy from: ffcall/callback/trampoline_r/trampoline.c */
 +#define swaphilo(x) ((x) << 32 | (x) >> 32)
 +  /* function:
-+   *    nop 7
-+   *    movtd,sm <address>, %ctpr1; ipd 2
-+   *    addd 0, <data>, %g16
++   *   movtd,sm <address>, %ctpr1; ipd 2
++   *   addd 0, <data>, %g16
 +   *
-+   *    nop
++   *   nop 1
++   *   getsp -64, %g17
 +   *
-+   *    ct %ctpr1
++   *   std,sm %g17, 0, %r0
++   *   std,sm %g17, 8, %r1
++   *
++   *   std,sm %g17, 16, %r2
++   *   std,sm %g17, 24, %r3
++   *
++   *   std,sm %g17, 32, %r4
++   *   std,sm %g17, 40, %r5
++   *
++   *   nop 2
++   *   std,sm %g17, 48, %r6
++   *   std,sm %g17, 56, %r7
++   *
++   *   ct %ctpr1
 +   */
-+  *(long *)  (function + 0) = 0x800000000C0013B3L;
-+  *(long *)  (function + 8) = 0x11C0DCF0E1C0DED1L;
-+  *(long *)  (function +16) = swaphilo((unsigned long) address);
-+  *(long *)  (function +24) = swaphilo((unsigned long) data);
-+  *(long *)  (function +32) = 0;
-+  *(long *)  (function +40) = 0xC000042000001001L;
-+/* copy end */
++  {
++    long *p = (long*)function;
++    p[0] = 0x800000000C001033;
++    p[1] = 0x11C0DCF0E1C0DED1;
++    p[2] = swaphilo((unsigned long) address);
++    p[3] = swaphilo((unsigned long) data);
++    p[4] = 0x58ECD4F104100091;
++    p[5] = 0xFFC0000001C00000;
++    p += 6;
++    p[0] = 0xA7F1D48090000012;
++    p[1] = 0x00000008A7F1D081;
++    p[2] = 0xA7F1D48290000012;
++    p[3] = 0x00100018A7F1D083;
++    p[4] = 0xA7F1D48490000012;
++    p[5] = 0x00200028A7F1D085;
++    p[6] = 0xA7F1D48690000112;
++    p[7] = 0x00300038A7F1D087;
++    p[8] = 0xC000042000001001;
++    /* size = (6+9)*8 = 120 */
++  }
 +
 +  closure->cif = cif;
 +  closure->fun = fun;
@@ -300,7 +353,6 @@ index 0000000..50a7788
 +  long *frame, *dst, i, size, nargs = cif->nargs;
 +  long asize = cif->flags, rsize = cif->rtype->size;
 +  ffi_type **arg_types = cif->arg_types;
-+  regs_t ret;
 +
 +  dst = frame = (long*)alloca(asize) - ARG_REGS;
 +
@@ -335,7 +387,7 @@ index 0000000..50a7788
 +        case FFI_TYPE_SINT64:
 +        case FFI_TYPE_UINT64:
 +        case FFI_TYPE_DOUBLE:
-+          *dst = *(long*)src;
++          *dst = *(UINT64*)src;
 +          break;
 +        case FFI_TYPE_POINTER:
 +          *dst = *(uintptr_t*)src;
@@ -349,35 +401,30 @@ index 0000000..50a7788
 +      dst = (long*)((uintptr_t)dst + size);
 +    }
 +  /* copy end */
-+  {
-+    register void *chain_reg __asm__("g16") = closure;
-+    ret = (*(regs_t(*)(regs_t))fn)(*(regs_t*)frame);
-+    __asm__ __volatile__ ("" : : "r"(chain_reg) : "memory");
-+  }
-+  /* copy from ffi_call */
++#define CALL_FN(ret, T) \
++  register void *chain_reg __asm__("g16") = closure; \
++  ret (*(T(*)(regs_t))fn)(*(regs_t*)frame); \
++  __asm__ __volatile__ ("" : : "r"(chain_reg) : "memory");
 +  COPY_RET
-+  /* copy end */
++#undef CALL_FN
 +}
 +
 +/* with ffi_go_closure, user_data = closure */
-+static regs_t ffi_go_closure_e2k(CLOSURE_ARGS regs_t sarg)
++static regs_t ffi_go_closure_e2k()
 +{
 +  register void *env __asm__("g16");
++  register long *sarg __asm__("g17");
 +  ffi_go_closure *closure = env;
 +  /* copy from ffi_closure */
 +  ffi_cif *cif = closure->cif;
-+  regs_t *ret, iarg_copy; long asize = cif->bytes;
-+  /* Must be saved early to prevent the compiler
-+     from saving "iarg" in the caller's stack frame. */
-+  SAVE_ARGS
-+  void **args; char *ptr; long i, size, align, *dst, nargs;
++  regs_t *ret; void **args; char *ptr;
++  long i, size, align, *dst = sarg, nargs;
 +  ffi_type **arg_types;
 +
 +  args = alloca(cif->nargs * sizeof(void*));
 +  size = cif->rtype->size;
 +  if (size < sizeof(*ret)) size = sizeof(*ret);
 +  ret = alloca(size);
-+  dst = (long*)(&sarg - 1);
 +
 +  if (size & 7)
 +    *(long*)(((uintptr_t)ret + size) & -8) = 0;
@@ -392,11 +439,13 @@ index 0000000..50a7788
 +      ptr = (char*)FFI_ALIGN(dst, align);
 +      dst = (long*)(ptr + size);
 +
-+      if ((uintptr_t)dst <= (uintptr_t)&sarg)
-+        ptr += (char*)&iarg_copy - (char*)(&sarg - 1);
++      if ((uintptr_t)dst > (uintptr_t)sarg + 64)
++        ptr += 64;
 +
 +      args[i] = ptr;
 +    }
++  /* g17 may be changed during the call */
++  dst = sarg;
 +  /* copy end */
 +
 +  closure->fun(cif, ret, args, closure);
@@ -417,7 +466,7 @@ index 0000000..50a7788
 +      size = cif->rtype->size;
 +      if (size > sizeof(*ret))
 +        {
-+          ptr = (char*)(&sarg - 1);
++          ptr = (char*)(dst + 8);
 +          for (i = 0; i < size; i += sizeof(long))
 +            *(long*)(ptr + i) = *(long*)((char*)ret + i);
 +        }
@@ -444,7 +493,7 @@ index 0000000..50a7788
 +#endif /* __e2k__ */
 diff --git a/src/e2k/ffitarget.h b/src/e2k/ffitarget.h
 new file mode 100644
-index 0000000..b6ed34b
+index 0000000..5e14e95
 --- /dev/null
 +++ b/src/e2k/ffitarget.h
 @@ -0,0 +1,63 @@
@@ -506,7 +555,7 @@ index 0000000..b6ed34b
 +
 +#define FFI_CLOSURES 1
 +#define FFI_GO_CLOSURES 1
-+#define FFI_TRAMPOLINE_SIZE 48
++#define FFI_TRAMPOLINE_SIZE 120
 +#define FFI_NATIVE_RAW_API 0
 +
 +#endif
