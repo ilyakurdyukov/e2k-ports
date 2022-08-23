@@ -1,6 +1,6 @@
-From 7aa12741a072fc698cabe51d0d2e69c6179b633c Mon Sep 17 00:00:00 2001
+From 47855b8e7c07787c50f815e02ab25cb99e85d23b Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Thu, 23 Jun 2022 17:21:40 +0700
+Date: Tue, 23 Aug 2022 12:22:52 +0700
 Subject: [PATCH] libffi-3.4.2 e2k support
 
 LCC >= 1.25.18 or LCC >= 1.26.04 is required
@@ -8,12 +8,12 @@ for __clear_cache() to work properly
 ---
  Makefile.am                          |   3 +
  configure.host                       |   5 +
- src/e2k/ffi.c                        | 438 +++++++++++++++++++++++++++
+ src/e2k/ffi.c                        | 452 +++++++++++++++++++++++++++
  src/e2k/ffitarget.h                  |  63 ++++
  testsuite/lib/libffi.exp             |   7 +
  testsuite/libffi.complex/complex.exp |   7 +
  testsuite/libffi.go/static-chain.h   |   2 +
- 7 files changed, 525 insertions(+)
+ 7 files changed, 539 insertions(+)
  create mode 100644 src/e2k/ffi.c
  create mode 100644 src/e2k/ffitarget.h
 
@@ -49,10 +49,10 @@ index 2682671..38eb214 100644
  # ... but some of the cases above share configury.
 diff --git a/src/e2k/ffi.c b/src/e2k/ffi.c
 new file mode 100644
-index 0000000..3906228
+index 0000000..8aa2ff9
 --- /dev/null
 +++ b/src/e2k/ffi.c
-@@ -0,0 +1,438 @@
+@@ -0,0 +1,452 @@
 +/* -----------------------------------------------------------------------
 +   ffi.c - Elbrus 2000 Foreign Function Interface
 +
@@ -114,7 +114,21 @@ index 0000000..3906228
 +  size = cif->rtype->size;
 +  bytes = MAX(bytes, size);
 +  bytes = MAX(bytes, sizeof(regs_t));
-+  cif->flags = ALIGN(bytes, 16) - sizeof(regs_t);
++  bytes = ALIGN(bytes, 16) - sizeof(regs_t);
++
++  switch (cif->rtype->type)
++    {
++    case FFI_TYPE_INT:
++    case FFI_TYPE_SINT8:
++    case FFI_TYPE_UINT8:
++    case FFI_TYPE_SINT16:
++    case FFI_TYPE_UINT16:
++    case FFI_TYPE_SINT32:
++    case FFI_TYPE_UINT32:
++      bytes |= 1;
++    }
++
++  cif->flags = bytes;
 +
 +  if (cif->abi != FFI_DEFAULT_ABI)
 +    return FFI_BAD_ABI;
@@ -133,12 +147,6 @@ index 0000000..3906228
 +#define COPY_RET \
 +  if (!rvalue || !rsize) { \
 +    CALL_FN((void), void) \
-+    return; \
-+  } else if (rsize == sizeof(uint32_t)) { \
-+    CALL_FN(*(uint32_t*)rvalue =, int) \
-+    return; \
-+  } else if (rsize == sizeof(uint64_t)) { \
-+    CALL_FN(*(uint64_t*)rvalue =, long) \
 +    return; \
 +  } \
 +  switch ((rsize + 7) >> 3) { \
@@ -160,13 +168,17 @@ index 0000000..3906228
 +    if (rsize & 1) *(uint8_t*)((char*)rvalue + i1) = t1;  \
 +  }
 +
++#define CLEAN_FRAME(i) frame[i] = 0;
++
 +void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue)
 +{
-+  long *frame, *dst, i, size, nargs = cif->nargs;
-+  long asize = cif->flags, rsize = cif->rtype->size;
++  long *frame, *dst, i, size, nargs = cif->nargs, asize = cif->flags;
++  long rsize = asize & 1 ? sizeof(ffi_arg) : cif->rtype->size;
 +  ffi_type **arg_types = cif->arg_types;
 +
-+  dst = frame = (long*)alloca(asize) - ARG_REGS;
++  dst = frame = (long*)alloca(asize & -16) - ARG_REGS;
++
++  REP8(CLEAN_FRAME)
 +
 +  for (i = 0; i < nargs; i++)
 +    {
@@ -350,11 +362,13 @@ index 0000000..3906228
 +    void **avalue, void *closure)
 +{
 +  /* copy from ffi_call */
-+  long *frame, *dst, i, size, nargs = cif->nargs;
-+  long asize = cif->flags, rsize = cif->rtype->size;
++  long *frame, *dst, i, size, nargs = cif->nargs, asize = cif->flags;
++  long rsize = asize & 1 ? sizeof(ffi_arg) : cif->rtype->size;
 +  ffi_type **arg_types = cif->arg_types;
 +
-+  dst = frame = (long*)alloca(asize) - ARG_REGS;
++  dst = frame = (long*)alloca(asize & -16) - ARG_REGS;
++
++  REP8(CLEAN_FRAME)
 +
 +  for (i = 0; i < nargs; i++)
 +    {
@@ -609,3 +623,4 @@ index 3675b40..ce056c0 100644
  #endif
 -- 
 2.34.1
+
