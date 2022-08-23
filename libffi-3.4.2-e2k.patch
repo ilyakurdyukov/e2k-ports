@@ -1,6 +1,6 @@
-From 47855b8e7c07787c50f815e02ab25cb99e85d23b Mon Sep 17 00:00:00 2001
+From 32c6393fc3c59c4bac63d23798c74e1399c08858 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Tue, 23 Aug 2022 12:22:52 +0700
+Date: Tue, 23 Aug 2022 19:03:06 +0700
 Subject: [PATCH] libffi-3.4.2 e2k support
 
 LCC >= 1.25.18 or LCC >= 1.26.04 is required
@@ -8,12 +8,12 @@ for __clear_cache() to work properly
 ---
  Makefile.am                          |   3 +
  configure.host                       |   5 +
- src/e2k/ffi.c                        | 452 +++++++++++++++++++++++++++
+ src/e2k/ffi.c                        | 505 +++++++++++++++++++++++++++
  src/e2k/ffitarget.h                  |  63 ++++
  testsuite/lib/libffi.exp             |   7 +
  testsuite/libffi.complex/complex.exp |   7 +
  testsuite/libffi.go/static-chain.h   |   2 +
- 7 files changed, 539 insertions(+)
+ 7 files changed, 592 insertions(+)
  create mode 100644 src/e2k/ffi.c
  create mode 100644 src/e2k/ffitarget.h
 
@@ -49,10 +49,10 @@ index 2682671..38eb214 100644
  # ... but some of the cases above share configury.
 diff --git a/src/e2k/ffi.c b/src/e2k/ffi.c
 new file mode 100644
-index 0000000..8aa2ff9
+index 0000000..6fb583f
 --- /dev/null
 +++ b/src/e2k/ffi.c
-@@ -0,0 +1,452 @@
+@@ -0,0 +1,505 @@
 +/* -----------------------------------------------------------------------
 +   ffi.c - Elbrus 2000 Foreign Function Interface
 +
@@ -96,6 +96,7 @@ index 0000000..8aa2ff9
 +#define ALIGN(a, b) (((a) + (b) - 1) & -(b))
 +
 +#define ARG_REGS 8
++#define ALLOCA_EXTRA 4
 +typedef struct { long r[ARG_REGS]; } regs_t;
 +
 +ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
@@ -114,7 +115,7 @@ index 0000000..8aa2ff9
 +  size = cif->rtype->size;
 +  bytes = MAX(bytes, size);
 +  bytes = MAX(bytes, sizeof(regs_t));
-+  bytes = ALIGN(bytes, 16) - sizeof(regs_t);
++  bytes = ALIGN(bytes, 16) - ALLOCA_EXTRA * sizeof(long);
 +
 +  switch (cif->rtype->type)
 +    {
@@ -137,23 +138,16 @@ index 0000000..8aa2ff9
 +}
 +
 +#define REP8(X) X(0) X(1) X(2) X(3) X(4) X(5) X(6) X(7)
-+#define RET_CASE(i) \
-+  case i + 1: { \
-+    typedef struct { long r[i + 1]; } ret##i; \
-+    CALL_FN(*(ret##i*)frame =, ret##i) \
-+    break; \
-+  }
-+
-+#define COPY_RET \
-+  if (!rvalue || !rsize) { \
-+    CALL_FN((void), void) \
-+    return; \
-+  } \
-+  switch ((rsize + 7) >> 3) { \
-+    REP8(RET_CASE) \
-+    default: { CALL_FN((void), void) } \
-+  } \
++#define MAKE_CALL(extra1, extra2) \
 +  { \
++    extra1; \
++    if (!rvalue || !rsize || rsize > sizeof(regs_t)) \
++      ffi_call_e2k_noret(fn); \
++    else \
++      ffi_call_e2k(fn); \
++    extra2; \
++  } \
++  if (rvalue && rsize) { \
 +    long i, i2, i1; uint32_t t4, t2, t1; \
 +    _Pragma("ivdep") \
 +    for (i = 0; i < rsize - 7; i += 8) \
@@ -168,7 +162,75 @@ index 0000000..8aa2ff9
 +    if (rsize & 1) *(uint8_t*)((char*)rvalue + i1) = t1;  \
 +  }
 +
-+#define CLEAN_FRAME(i) frame[i] = 0;
++#define ASM_FN_START(name) \
++  "\t.global " #name "\n" \
++  "\t.type " #name ",@function\n" \
++  "\t.align 8\n" \
++  #name ":\n"
++
++#define ASM_FN_END(name) \
++  "\t.size " #name ", .- " #name "\n"
++
++#define ASM_FFI_CALL_E2K(a, b, c, d) \
++  ASM_FN_START(ffi_call_e2k) a b d \
++  ASM_FN_END(ffi_call_e2k) \
++  ASM_FN_START(ffi_call_e2k_noret) a c d \
++  ASM_FN_END(ffi_call_e2k_noret) \
++
++asm(
++ASM_FFI_CALL_E2K(
++"\t{\n"
++"\t  nop 4\n"
++"\t  setwd wsz = 8, nfx = 1, dbl = 0\n"
++"\t  setbn rbs = 4, rsz = 3, rcur = 0\n"
++"\t  movtd,sm %r0, %ctpr1; ipd 2\n"
++"\t}\n"
++"\t{\n"
++"\t  nop 1\n"
++"\t  getsp 0, %r0\n"
++"\t}\n"
++"\t{\n"
++"\t  ldd,sm %r0, 0, %b[0]\n"
++"\t  ldd,sm %r0, 8, %b[1]\n"
++"\t  ldd,sm %r0, 16, %b[2]\n"
++"\t  ldd,sm %r0, 24, %b[3]\n"
++"\t}\n"
++"\t{\n"
++"\t  ldd,sm %r0, 32, %b[4]\n"
++"\t  ldd,sm %r0, 40, %b[5]\n"
++"\t  ldd,sm %r0, 48, %b[6]\n"
++"\t  ldd,sm %r0, 56, %b[7]\n"
++"\t}\n"
++"\t  call %ctpr1, wbs = 4\n"
++,
++"\t{\n"
++"\t  return %ctpr3; ipd 2\n"
++"\t  std,sm %r0, 0, %b[0]\n"
++"\t  std,sm %r0, 8, %b[1]\n"
++"\t}\n"
++"\t{\n"
++"\t  std,sm %r0, 16, %b[2]\n"
++"\t  std,sm %r0, 24, %b[3]\n"
++"\t}\n"
++"\t{\n"
++"\t  std,sm %r0, 32, %b[4]\n"
++"\t  std,sm %r0, 40, %b[5]\n"
++"\t}\n"
++"\t{\n"
++"\t  nop 2\n"
++"\t  std,sm %r0, 48, %b[6]\n"
++"\t  std,sm %r0, 56, %b[7]\n"
++"\t}\n"
++,
++"\t{\n"
++"\t  nop 5\n"
++"\t  return %ctpr3; ipd 2\n"
++"\t}\n"
++,
++"\t  ct %ctpr3\n"));
++
++void ffi_call_e2k(void (*fn)(void));
++void ffi_call_e2k_noret(void (*fn)(void));
 +
 +void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue)
 +{
@@ -176,9 +238,7 @@ index 0000000..8aa2ff9
 +  long rsize = asize & 1 ? sizeof(ffi_arg) : cif->rtype->size;
 +  ffi_type **arg_types = cif->arg_types;
 +
-+  dst = frame = (long*)alloca(asize & -16) - ARG_REGS;
-+
-+  REP8(CLEAN_FRAME)
++  dst = frame = (long*)alloca(asize & -16) - ALLOCA_EXTRA;
 +
 +  for (i = 0; i < nargs; i++)
 +    {
@@ -225,10 +285,7 @@ index 0000000..8aa2ff9
 +      dst = (long*)((uintptr_t)dst + size);
 +    }
 +
-+#define CALL_FN(ret, T) \
-+  ret (*(T(*)(regs_t))fn)(*(regs_t*)frame);
-+  COPY_RET
-+#undef CALL_FN
++  MAKE_CALL((void)0, (void)0)
 +}
 +
 +static regs_t ffi_closure_e2k()
@@ -366,9 +423,7 @@ index 0000000..8aa2ff9
 +  long rsize = asize & 1 ? sizeof(ffi_arg) : cif->rtype->size;
 +  ffi_type **arg_types = cif->arg_types;
 +
-+  dst = frame = (long*)alloca(asize & -16) - ARG_REGS;
-+
-+  REP8(CLEAN_FRAME)
++  dst = frame = (long*)alloca(asize & -16) - ALLOCA_EXTRA;
 +
 +  for (i = 0; i < nargs; i++)
 +    {
@@ -415,12 +470,10 @@ index 0000000..8aa2ff9
 +      dst = (long*)((uintptr_t)dst + size);
 +    }
 +  /* copy end */
-+#define CALL_FN(ret, T) \
-+  register void *chain_reg __asm__("g16") = closure; \
-+  ret (*(T(*)(regs_t))fn)(*(regs_t*)frame); \
-+  __asm__ __volatile__ ("" : : "r"(chain_reg) : "memory");
-+  COPY_RET
-+#undef CALL_FN
++  MAKE_CALL(
++    register void *chain_reg __asm__("g16") = closure,
++    __asm__ __volatile__ ("" : : "r"(chain_reg) : "memory")
++  )
 +}
 +
 +/* with ffi_go_closure, user_data = closure */
