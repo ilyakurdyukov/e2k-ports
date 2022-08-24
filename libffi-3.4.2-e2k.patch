@@ -1,6 +1,6 @@
-From 32c6393fc3c59c4bac63d23798c74e1399c08858 Mon Sep 17 00:00:00 2001
+From 4eea0aa2937de72d6909d1804579e7d422359881 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Tue, 23 Aug 2022 19:03:06 +0700
+Date: Wed, 24 Aug 2022 14:05:43 +0700
 Subject: [PATCH] libffi-3.4.2 e2k support
 
 LCC >= 1.25.18 or LCC >= 1.26.04 is required
@@ -8,12 +8,12 @@ for __clear_cache() to work properly
 ---
  Makefile.am                          |   3 +
  configure.host                       |   5 +
- src/e2k/ffi.c                        | 505 +++++++++++++++++++++++++++
+ src/e2k/ffi.c                        | 540 +++++++++++++++++++++++++++
  src/e2k/ffitarget.h                  |  63 ++++
  testsuite/lib/libffi.exp             |   7 +
  testsuite/libffi.complex/complex.exp |   7 +
  testsuite/libffi.go/static-chain.h   |   2 +
- 7 files changed, 592 insertions(+)
+ 7 files changed, 627 insertions(+)
  create mode 100644 src/e2k/ffi.c
  create mode 100644 src/e2k/ffitarget.h
 
@@ -49,10 +49,10 @@ index 2682671..38eb214 100644
  # ... but some of the cases above share configury.
 diff --git a/src/e2k/ffi.c b/src/e2k/ffi.c
 new file mode 100644
-index 0000000..6fb583f
+index 0000000..9fd246a
 --- /dev/null
 +++ b/src/e2k/ffi.c
-@@ -0,0 +1,505 @@
+@@ -0,0 +1,540 @@
 +/* -----------------------------------------------------------------------
 +   ffi.c - Elbrus 2000 Foreign Function Interface
 +
@@ -139,15 +139,13 @@ index 0000000..6fb583f
 +
 +#define REP8(X) X(0) X(1) X(2) X(3) X(4) X(5) X(6) X(7)
 +#define MAKE_CALL(extra1, extra2) \
++	if (!rvalue) rsize = 0; \
 +  { \
 +    extra1; \
-+    if (!rvalue || !rsize || rsize > sizeof(regs_t)) \
-+      ffi_call_e2k_noret(fn); \
-+    else \
-+      ffi_call_e2k(fn); \
++    ffi_call_e2k(fn, rsize > sizeof(regs_t) ? 0 : rsize, rvalue); \
 +    extra2; \
 +  } \
-+  if (rvalue && rsize) { \
++  if (rsize > sizeof(regs_t)) { \
 +    long i, i2, i1; uint32_t t4, t2, t1; \
 +    _Pragma("ivdep") \
 +    for (i = 0; i < rsize - 7; i += 8) \
@@ -178,59 +176,96 @@ index 0000000..6fb583f
 +  ASM_FN_END(ffi_call_e2k_noret) \
 +
 +asm(
-+ASM_FFI_CALL_E2K(
++ASM_FN_START(ffi_call_e2k) 
 +"\t{\n"
-+"\t  nop 4\n"
 +"\t  setwd wsz = 8, nfx = 1, dbl = 0\n"
 +"\t  setbn rbs = 4, rsz = 3, rcur = 0\n"
 +"\t  movtd,sm %r0, %ctpr1; ipd 2\n"
++"\t  shld 1, 5, %r3\n"
 +"\t}\n"
 +"\t{\n"
 +"\t  nop 1\n"
-+"\t  getsp 0, %r0\n"
++"\t  getsp,0 0, %r0\n"
++"\t  andnd %r1, 7, %r4\n"
++"\t  andnd %r1, 3, %r5\n"
++"\t  andnd %r1, 1, %r6\n"
 +"\t}\n"
 +"\t{\n"
-+"\t  ldd,sm %r0, 0, %b[0]\n"
-+"\t  ldd,sm %r0, 8, %b[1]\n"
-+"\t  ldd,sm %r0, 16, %b[2]\n"
-+"\t  ldd,sm %r0, 24, %b[3]\n"
++"\t  ldd,sm 0, %r0, %b[0]\n"
++"\t  ldd,sm 8, %r0, %b[1]\n"
++"\t  ldd,sm 16, %r0, %b[2]\n"
++"\t  ldd,sm 24, %r0, %b[3]\n"
++"\t  addd %r0, %r3, %r7\n"
 +"\t}\n"
 +"\t{\n"
-+"\t  ldd,sm %r0, 32, %b[4]\n"
-+"\t  ldd,sm %r0, 40, %b[5]\n"
-+"\t  ldd,sm %r0, 48, %b[6]\n"
-+"\t  ldd,sm %r0, 56, %b[7]\n"
-+"\t}\n"
-+"\t  call %ctpr1, wbs = 4\n"
-+,
-+"\t{\n"
-+"\t  return %ctpr3; ipd 2\n"
-+"\t  std,sm %r0, 0, %b[0]\n"
-+"\t  std,sm %r0, 8, %b[1]\n"
++"\t  ldd,sm 0, %r7, %b[4]\n"
++"\t  ldd,sm 8, %r7, %b[5]\n"
++"\t  ldd,sm 16, %r7, %b[6]\n"
++"\t  ldd,sm 24, %r7, %b[7]\n"
++"\t  subd %r1, %r3, %r0\n"
 +"\t}\n"
 +"\t{\n"
-+"\t  std,sm %r0, 16, %b[2]\n"
-+"\t  std,sm %r0, 24, %b[3]\n"
-+"\t}\n"
-+"\t{\n"
-+"\t  std,sm %r0, 32, %b[4]\n"
-+"\t  std,sm %r0, 40, %b[5]\n"
++"\t  cmpldb 7, %r1, %pred0\n"
++"\t  cmpldb 15, %r1, %pred1\n"
++"\t  cmpldb 23, %r1, %pred2\n"
++"\t  cmpldb 31, %r1, %pred3\n"
++"\t  andd %r1, 6, %r7\n"
 +"\t}\n"
 +"\t{\n"
 +"\t  nop 2\n"
-+"\t  std,sm %r0, 48, %b[6]\n"
-+"\t  std,sm %r0, 56, %b[7]\n"
++"\t  cmpldb 7, %r0, %pred4\n"
++"\t  cmpldb 15, %r0, %pred5\n"
++"\t  cmpldb 23, %r0, %pred6\n"
++"\t  cmpldb 31, %r0, %pred7\n"
++"\t  shld %r7, 3, %r7\n"
 +"\t}\n"
-+,
 +"\t{\n"
-+"\t  nop 5\n"
-+"\t  return %ctpr3; ipd 2\n"
++"\t  call %ctpr1, wbs = 4; ipd 3\n"
++"\t  addd %r2, %r3, %r0\n"
 +"\t}\n"
-+,
-+"\t  ct %ctpr3\n"));
++"\t{\n"
++"\t  return %ctpr3; ipd 2\n"
++"\t  addd,1,sm %b[6], 0, %b[7] ? ~%pred6\n"
++"\t  std,sm 24, %r0, %b[7] ? %pred7\n"
++"\t  std,sm 16, %r0, %b[6] ? %pred6\n"
++"\t}\n"
++"\t{\n"
++"\t  cmpandesb %r1, 4, %pred9\n"
++"\t  addd,0,sm %b[5], 0, %b[7] ? ~%pred5\n"
++"\t  addd,1,sm %b[4], 0, %b[7] ? ~%pred4\n"
++"\t  std,sm 8, %r0, %b[5] ? %pred5\n"
++"\t  std,sm 0, %r0, %b[4] ? %pred4\n"
++"\t}\n"
++"\t{\n"
++"\t  cmpandesb %r1, 2, %pred10\n"
++"\t  addd,0,sm %b[3], 0, %b[7] ? ~%pred3\n"
++"\t  addd,1,sm %b[2], 0, %b[7] ? ~%pred2\n"
++"\t  std,sm 24, %r2, %b[3] ? %pred3\n"
++"\t  std,sm 16, %r2, %b[2] ? %pred2\n"
++"\t}\n"
++"\t{\n"
++"\t  cmpandesb %r1, 1, %pred11\n"
++"\t  addd,0,sm %b[1], 0, %b[7] ? ~%pred1\n"
++"\t  addd,1,sm %b[0], 0, %b[7] ? ~%pred0\n"
++"\t  std,sm 8, %r2, %b[1] ? %pred1\n"
++"\t  std,sm 0, %r2, %b[0] ? %pred0\n"
++"\t}\n"
++"\t{\n"
++"\t  shrd,sm %b[7], %r7, %r7\n"
++"\t  stw,sm %r2, %r4, %b[7] ? ~%pred9\n"
++"\t  shrd,sm %b[7], %r3, %b[7] ? ~%pred9\n"
++"\t}\n"
++"\t{\n"
++"\t  sth,sm %r2, %r5, %b[7] ? ~%pred10\n"
++"\t  stb,sm %r2, %r6, %r7 ? ~%pred11\n"
++"\t}\n"
++"\t{\n"
++"\t  ct %ctpr3; ipd 3\n"
++"\t}\n"
++ASM_FN_END(ffi_call_e2k)
++);
 +
-+void ffi_call_e2k(void (*fn)(void));
-+void ffi_call_e2k_noret(void (*fn)(void));
++void ffi_call_e2k(void (*fn)(void), long rsize, void *rvalue);
 +
 +void ffi_call(ffi_cif *cif, void (*fn)(void), void *rvalue, void **avalue)
 +{
