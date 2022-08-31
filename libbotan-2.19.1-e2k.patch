@@ -1,16 +1,20 @@
-From 9004bd41293d511d200ec2e9c6fb17f8a5e92681 Mon Sep 17 00:00:00 2001
+From 7c1edc83e2620bfbdc1911aa7e8fca2ace76969b Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Thu, 3 Jun 2021 21:21:43 +0700
-Subject: [PATCH] libbotan-2.18.0 e2k support
+Date: Wed, 31 Aug 2022 16:04:35 +0700
+Subject: [PATCH] libbotan-2.19.1 e2k support
 
 ---
- src/build-data/arch/e2k.txt    | 11 +++++++++
- src/build-data/detect_arch.cpp |  3 +++
- src/lib/filters/filter.h       |  4 ++++
- src/lib/utils/cpuid/cpuid.cpp  |  7 ++++++
- src/lib/utils/cpuid/cpuid.h    | 44 +++++++++++++++++++++++++++++++++-
- src/lib/utils/os_utils.cpp     |  8 +++++++
- 6 files changed, 76 insertions(+), 1 deletion(-)
+ src/build-data/arch/e2k.txt            | 11 +++++++
+ src/build-data/detect_arch.cpp         |  3 ++
+ src/lib/block/aes/aes_vperm/info.txt   |  3 ++
+ src/lib/filters/filter.h               |  4 +++
+ src/lib/misc/zfec/zfec_vperm/info.txt  |  3 ++
+ src/lib/utils/cpuid/cpuid.cpp          |  7 ++++
+ src/lib/utils/cpuid/cpuid.h            | 44 +++++++++++++++++++++++++-
+ src/lib/utils/ghash/ghash_cpu/info.txt |  3 ++
+ src/lib/utils/os_utils.cpp             |  8 +++++
+ src/lib/utils/simd/info.txt            |  2 ++
+ 10 files changed, 87 insertions(+), 1 deletion(-)
  create mode 100644 src/build-data/arch/e2k.txt
 
 diff --git a/src/build-data/arch/e2k.txt b/src/build-data/arch/e2k.txt
@@ -31,12 +35,12 @@ index 0000000..b2cafe7
 +ssse3
 +</isa_extensions>
 diff --git a/src/build-data/detect_arch.cpp b/src/build-data/detect_arch.cpp
-index 4de5892..ad73c3a 100644
+index 3a4bf8e..4d23cc9 100644
 --- a/src/build-data/detect_arch.cpp
 +++ b/src/build-data/detect_arch.cpp
-@@ -70,6 +70,9 @@
-      RISCV32
-   #endif
+@@ -73,6 +73,9 @@
+ #elif defined(__loongarch64)
+   LOONGARCH64
  
 +#elif defined(__e2k__)
 +  E2K
@@ -44,6 +48,27 @@ index 4de5892..ad73c3a 100644
  #else
    UNKNOWN
  
+diff --git a/src/lib/block/aes/aes_vperm/info.txt b/src/lib/block/aes/aes_vperm/info.txt
+index 0b7eaba..4ee7038 100644
+--- a/src/lib/block/aes/aes_vperm/info.txt
++++ b/src/lib/block/aes/aes_vperm/info.txt
+@@ -9,6 +9,8 @@ x86_32:sse2
+ x86_64:sse2
+ x86_32:ssse3
+ x86_64:ssse3
++e2k:sse2
++e2k:ssse3
+ arm32:neon
+ arm64:neon
+ ppc32:altivec
+@@ -18,6 +20,7 @@ ppc64:altivec
+ <arch>
+ x86_32
+ x86_64
++e2k
+ arm32
+ arm64
+ ppc32
 diff --git a/src/lib/filters/filter.h b/src/lib/filters/filter.h
 index 94b9c6c..81d262b 100644
 --- a/src/lib/filters/filter.h
@@ -60,6 +85,27 @@ index 94b9c6c..81d262b 100644
        friend class Threaded_Fork;
        using Filter::m_write_queue;
        using Filter::total_ports;
+diff --git a/src/lib/misc/zfec/zfec_vperm/info.txt b/src/lib/misc/zfec/zfec_vperm/info.txt
+index c0731ca..dc398e1 100644
+--- a/src/lib/misc/zfec/zfec_vperm/info.txt
++++ b/src/lib/misc/zfec/zfec_vperm/info.txt
+@@ -7,6 +7,8 @@ x86_32:sse2
+ x86_64:sse2
+ x86_32:ssse3
+ x86_64:ssse3
++e2k:sse2
++e2k:ssse3
+ arm32:neon
+ arm64:neon
+ </isa>
+@@ -14,6 +16,7 @@ arm64:neon
+ <arch>
+ x86_32
+ x86_64
++e2k
+ arm32
+ arm64
+ </arch>
 diff --git a/src/lib/utils/cpuid/cpuid.cpp b/src/lib/utils/cpuid/cpuid.cpp
 index e76e12e..d98b60d 100644
 --- a/src/lib/utils/cpuid/cpuid.cpp
@@ -139,6 +185,27 @@ index 04d0bbd..effcd41 100644
           return has_ssse3();
  #elif defined(BOTAN_TARGET_CPU_IS_ARM_FAMILY)
           return has_neon();
+diff --git a/src/lib/utils/ghash/ghash_cpu/info.txt b/src/lib/utils/ghash/ghash_cpu/info.txt
+index 1f56377..97ab5e5 100644
+--- a/src/lib/utils/ghash/ghash_cpu/info.txt
++++ b/src/lib/utils/ghash/ghash_cpu/info.txt
+@@ -15,6 +15,8 @@ x86_32:aesni
+ x86_64:sse2
+ x86_64:ssse3
+ x86_64:aesni
++e2k:sse2
++e2k:ssse3
+ arm64:neon
+ arm64:armv8crypto
+ ppc64:powercrypto
+@@ -23,6 +25,7 @@ ppc64:powercrypto
+ <arch>
+ x86_32
+ x86_64
++e2k
+ arm64
+ ppc64
+ </arch>
 diff --git a/src/lib/utils/os_utils.cpp b/src/lib/utils/os_utils.cpp
 index f5151da..f21aaf4 100644
 --- a/src/lib/utils/os_utils.cpp
@@ -165,6 +232,26 @@ index f5151da..f21aaf4 100644
  #elif defined(BOTAN_USE_GCC_INLINE_ASM)
  
  #if defined(BOTAN_TARGET_CPU_IS_X86_FAMILY)
+diff --git a/src/lib/utils/simd/info.txt b/src/lib/utils/simd/info.txt
+index 4a7044a..c70f3a2 100644
+--- a/src/lib/utils/simd/info.txt
++++ b/src/lib/utils/simd/info.txt
+@@ -10,6 +10,7 @@ simd_32.h
+ x86_32:sse2
+ x86_64:sse2
+ x32:sse2
++e2k:sse2
+ arm32:neon
+ arm64:neon
+ ppc32:altivec
+@@ -20,6 +21,7 @@ ppc64:altivec
+ x86_32
+ x86_64
+ x32
++e2k
+ arm32
+ arm64
+ ppc32
 -- 
-2.17.1
+2.34.1
 
