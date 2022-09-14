@@ -1,9 +1,9 @@
-From 40bd2950c7ccdd8d46ec9159849eb9378f2c9174 Mon Sep 17 00:00:00 2001
+From 938278bb250f0eaafe0c8e0aaf655de924b71254 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Wed, 26 Jan 2022 23:03:10 +0700
-Subject: [PATCH] qt6-base-6.2.2 e2k support
+Date: Wed, 14 Sep 2022 16:44:44 +0700
+Subject: [PATCH] qt6-base-6.2.4 e2k support
 
-using LCC 1.25.20 and -mno-sse4.2
+using LCC 1.25.23 and -mno-sse4.2
 ---
  cmake/QtCompilerFlags.cmake                   |  2 +
  config.tests/x86_simd/main.cpp                |  6 +++
@@ -17,7 +17,8 @@ using LCC 1.25.20 and -mno-sse4.2
  src/corelib/global/qsimd.cpp                  | 10 ++++-
  src/corelib/global/qsimd.h                    | 11 ++++++
  src/corelib/global/qsimd_p.h                  |  4 +-
- src/corelib/kernel/qmetatype.h                | 16 ++++++++
+ src/corelib/kernel/qmetatype.h                | 19 +++++++++
+ src/corelib/kernel/qproperty.h                |  2 +-
  src/corelib/thread/qfuture_impl.h             |  4 ++
  src/corelib/tools/qhash.h                     |  5 +++
  src/corelib/tools/qhashfunctions.h            |  4 ++
@@ -28,16 +29,16 @@ using LCC 1.25.20 and -mno-sse4.2
  .../gl_integrations/xcb_egl/qxcbeglcontext.h  |  3 ++
  .../auto/corelib/text/qlocale/tst_qlocale.cpp |  2 +-
  .../gui/painting/qpainter/tst_qpainter.cpp    |  2 +-
- 23 files changed, 157 insertions(+), 9 deletions(-)
+ 24 files changed, 161 insertions(+), 10 deletions(-)
 
 diff --git a/cmake/QtCompilerFlags.cmake b/cmake/QtCompilerFlags.cmake
-index a376ac00..c53e172f 100644
+index 0954ba95..6ff53647 100644
 --- a/cmake/QtCompilerFlags.cmake
 +++ b/cmake/QtCompilerFlags.cmake
-@@ -10,6 +10,8 @@ if (MSVC)
-     list(APPEND _qt_compiler_warning_flags_off -W0)
- else()
-     list(APPEND _qt_compiler_warning_flags_on -Wall -Wextra)
+@@ -14,6 +14,8 @@ else()
+     else()
+         list(APPEND _qt_compiler_warning_flags_on -Wall -Wextra)
+     endif()
 +    # False warnings of this type from EDG frontend are very annoying. 
 +    list(APPEND _qt_compiler_warning_flags_on -Wno-return-type)
      list(APPEND _qt_compiler_warning_flags_off -w)
@@ -61,10 +62,10 @@ index 0e7ebed8..089b1cd1 100644
  attribute_target("sse2") void test_sse2()
  {
 diff --git a/configure.cmake b/configure.cmake
-index 4d21afe0..f2482068 100644
+index 251da236..6e679abc 100644
 --- a/configure.cmake
 +++ b/configure.cmake
-@@ -648,6 +648,7 @@ qt_feature("sse2" PRIVATE
+@@ -695,6 +695,7 @@ qt_feature("sse2" PRIVATE
      LABEL "SSE2"
      CONDITION ( ( (  TEST_architecture_arch STREQUAL i386 )
          OR ( TEST_architecture_arch STREQUAL x86_64 ) ) AND TEST_subarch_sse2 ) OR QT_FORCE_FEATURE_sse2 OR WASM
@@ -180,7 +181,7 @@ index 584f1f79..bf2420c7 100644
  #  undef QT_COMPILER_SUPPORTS_SSE3
  #  undef QT_COMPILER_SUPPORTS_SSSE3
 diff --git a/src/corelib/global/qlogging.cpp b/src/corelib/global/qlogging.cpp
-index 6be78ba4..3cbfd78f 100644
+index 5d9c5c99..be6ea78f 100644
 --- a/src/corelib/global/qlogging.cpp
 +++ b/src/corelib/global/qlogging.cpp
 @@ -1274,7 +1274,7 @@ void QMessagePattern::setPattern(const QString &pattern)
@@ -301,7 +302,7 @@ index 118a62e6..e9ad7a46 100644
  #if defined(Q_PROCESSOR_ARM)
      CpuFeatureNEON          = 2,
 diff --git a/src/corelib/kernel/qmetatype.h b/src/corelib/kernel/qmetatype.h
-index 11edf70e..9180e949 100644
+index e20118f4..fbc45542 100644
 --- a/src/corelib/kernel/qmetatype.h
 +++ b/src/corelib/kernel/qmetatype.h
 @@ -1225,6 +1225,7 @@ int qRegisterNormalizedMetaType(const QT_PREPEND_NAMESPACE(QByteArray) &normaliz
@@ -346,11 +347,34 @@ index 11edf70e..9180e949 100644
              return QMetaType::registerConverter<T, QIterable<QMetaSequence>>(o);
          }
          return true;
+@@ -2393,6 +2409,9 @@ struct is_complete_helper
+ {
+     template<typename U>
+     static auto check(U *) -> std::integral_constant<bool, sizeof(U) != 0>;
++#ifdef __EDG__
++    static auto check(void *) -> std::false_type;
++#endif
+     static auto check(...) -> std::false_type;
+     using type = decltype(check(static_cast<T *>(nullptr)));
+ };
+diff --git a/src/corelib/kernel/qproperty.h b/src/corelib/kernel/qproperty.h
+index 39528706..1686abd1 100644
+--- a/src/corelib/kernel/qproperty.h
++++ b/src/corelib/kernel/qproperty.h
+@@ -58,7 +58,7 @@
+ #endif
+ #endif
+ 
+-#if !defined(QT_PROPERTY_COLLECT_BINDING_LOCATION) && __has_include(<experimental/source_location>) && __cplusplus >= 201703L && !defined(Q_CLANG_QDOC)
++#if !defined(QT_PROPERTY_COLLECT_BINDING_LOCATION) && __has_include(<experimental/source_location>) && __cplusplus >= 201703L && !defined(Q_CLANG_QDOC) && !defined(__EDG__)
+ #include <experimental/source_location>
+ #if defined(__cpp_lib_experimental_source_location)
+ #define QT_SOURCE_LOCATION_NAMESPACE std::experimental
 diff --git a/src/corelib/thread/qfuture_impl.h b/src/corelib/thread/qfuture_impl.h
-index e455a747..95830421 100644
+index 57c4fb39..b924e8bc 100644
 --- a/src/corelib/thread/qfuture_impl.h
 +++ b/src/corelib/thread/qfuture_impl.h
-@@ -794,7 +794,11 @@ namespace QtFuture {
+@@ -826,7 +826,11 @@ namespace QtFuture {
  template<class Signal>
  using ArgsType = typename QtPrivate::ArgResolver<Signal>::AllArgs;
  
@@ -363,7 +387,7 @@ index e455a747..95830421 100644
  {
      using ArgsType = ArgsType<Signal>;
 diff --git a/src/corelib/tools/qhash.h b/src/corelib/tools/qhash.h
-index 14e9cc45..72d6f241 100644
+index 3190a2e3..f9cc147e 100644
 --- a/src/corelib/tools/qhash.h
 +++ b/src/corelib/tools/qhash.h
 @@ -65,6 +65,11 @@ namespace QHashPrivate {
@@ -379,7 +403,7 @@ index 14e9cc45..72d6f241 100644
  constexpr inline bool HasQHashOverload<T, std::enable_if_t<
      std::is_convertible_v<decltype(qHash(std::declval<const T &>(), std::declval<size_t>())), size_t>
 diff --git a/src/corelib/tools/qhashfunctions.h b/src/corelib/tools/qhashfunctions.h
-index 4f8e4066..9f35be2a 100644
+index a3e16006..f7792d99 100644
 --- a/src/corelib/tools/qhashfunctions.h
 +++ b/src/corelib/tools/qhashfunctions.h
 @@ -234,11 +234,15 @@ struct QHashCombineCommutative
@@ -399,7 +423,7 @@ index 4f8e4066..9f35be2a 100644
  // workaround for a MSVC ICE,
  // https://developercommunity.visualstudio.com/content/problem/996540/internal-compiler-error-on-msvc-1924-when-doing-sf.html
 diff --git a/src/corelib/tools/qlist.h b/src/corelib/tools/qlist.h
-index c58ad5bd..d89363ba 100644
+index 2dda8db4..b56ff42e 100644
 --- a/src/corelib/tools/qlist.h
 +++ b/src/corelib/tools/qlist.h
 @@ -293,7 +293,14 @@ public:
@@ -449,10 +473,10 @@ index f50d4f63..3aa9ec6d 100644
  #endif
  void qt_memfill24(quint24 *dest, quint24 color, qsizetype count)
 diff --git a/src/gui/platform/unix/qunixnativeinterface.cpp b/src/gui/platform/unix/qunixnativeinterface.cpp
-index c4a3ad37..5e140233 100644
+index e010c390..e1a7f3bf 100644
 --- a/src/gui/platform/unix/qunixnativeinterface.cpp
 +++ b/src/gui/platform/unix/qunixnativeinterface.cpp
-@@ -101,14 +101,24 @@ QT_DEFINE_PRIVATE_NATIVE_INTERFACE(QGLXIntegration);
+@@ -102,14 +102,24 @@ QT_DEFINE_PRIVATE_NATIVE_INTERFACE(QGLXIntegration);
  
  QOpenGLContext *QNativeInterface::QGLXContext::fromNative(GLXContext configBasedContext, QOpenGLContext *shareContext)
  {
@@ -477,7 +501,7 @@ index c4a3ad37..5e140233 100644
  }
  #endif // QT_CONFIG(xcb_glx_plugin)
  
-@@ -148,8 +158,13 @@ QT_DEFINE_PRIVATE_NATIVE_INTERFACE(QEGLIntegration);
+@@ -150,8 +160,13 @@ QT_DEFINE_PRIVATE_NATIVE_INTERFACE(QEGLIntegration);
  
  QOpenGLContext *QNativeInterface::QEGLContext::fromNative(EGLContext context, EGLDisplay display, QOpenGLContext *shareContext)
  {
@@ -532,5 +556,5 @@ index 45490ef8..d4bc9bbf 100644
  
  static const QString fpeExceptionString(int exception)
 -- 
-2.17.1
+2.34.1
 
