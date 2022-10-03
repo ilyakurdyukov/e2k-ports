@@ -1,0 +1,60 @@
+From 833085c8bc27910ef3940a8f6ec7859a64db5668 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Mon, 3 Oct 2022 11:01:27 +0700
+Subject: [PATCH] zstd-1.5.2 e2k support
+
+---
+ lib/common/mem.h    | 7 ++++++-
+ lib/common/xxhash.h | 4 ++++
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/lib/common/mem.h b/lib/common/mem.h
+index 85581c3..88fcf88 100644
+--- a/lib/common/mem.h
++++ b/lib/common/mem.h
+@@ -31,7 +31,9 @@ extern "C" {
+ #   include <stdlib.h>  /* _byteswap_ulong */
+ #   include <intrin.h>  /* _byteswap_* */
+ #endif
+-#if defined(__GNUC__)
++#if defined(__EDG__)
++#  define MEM_STATIC static __inline __attribute__((always_inline))
++#elif defined(__GNUC__)
+ #  define MEM_STATIC static __inline __attribute__((unused))
+ #elif defined (__cplusplus) || (defined (__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) /* C99 */)
+ #  define MEM_STATIC static inline
+@@ -146,6 +148,9 @@ MEM_STATIC size_t MEM_swapST(size_t in);
+  * See http://fastcompression.blogspot.fr/2015/08/accessing-unaligned-memory.html for details.
+  * Prefer these methods in priority order (0 > 1 > 2)
+  */
++#if !defined(MEM_FORCE_MEMORY_ACCESS) && defined(__e2k__)
++#define MEM_FORCE_MEMORY_ACCESS 2
++#endif
+ #ifndef MEM_FORCE_MEMORY_ACCESS   /* can be defined externally, on command line for example */
+ #  if defined(__INTEL_COMPILER) || defined(__GNUC__) || defined(__ICCARM__)
+ #    define MEM_FORCE_MEMORY_ACCESS 1
+diff --git a/lib/common/xxhash.h b/lib/common/xxhash.h
+index 8ebbfdd..e59c7fe 100644
+--- a/lib/common/xxhash.h
++++ b/lib/common/xxhash.h
+@@ -1396,6 +1396,9 @@ XXH3_128bits_reset_withSecretandSeed(XXH3_state_t* statePtr,
+  * @}
+  */
+ 
++#if !defined(XXH_FORCE_MEMORY_ACCESS) && defined(__e2k__)
++#define XXH_FORCE_MEMORY_ACCESS 2
++#endif
+ #ifndef XXH_FORCE_MEMORY_ACCESS   /* can be defined externally, on command line for example */
+    /* prefer __packed__ structures (method 1) for gcc on armv7+ and mips */
+ #  if !defined(__clang__) && \
+@@ -1418,6 +1421,7 @@ XXH3_128bits_reset_withSecretandSeed(XXH3_state_t* statePtr,
+ 
+ #ifndef XXH_FORCE_ALIGN_CHECK  /* can be defined externally */
+ #  if defined(__i386)  || defined(__x86_64__) || defined(__aarch64__) \
++   || defined(__e2k__) \
+    || defined(_M_IX86) || defined(_M_X64)     || defined(_M_ARM64) /* visual */
+ #    define XXH_FORCE_ALIGN_CHECK 0
+ #  else
+-- 
+2.34.1
+
