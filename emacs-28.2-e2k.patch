@@ -1,0 +1,76 @@
+From 3e35f2e26830e43068c61aeabae00c0f66e3b12e Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Tue, 11 Oct 2022 16:43:30 +0700
+Subject: [PATCH] emacs-28.2 e2k support
+
+Avoid using -O3, it crashes with SIGILL in lucid_event_type_list_p, works with -O2.
+---
+ src/alloc.c    | 24 ++++++++++++++++++++++++
+ src/bytecode.c |  2 +-
+ src/lisp.h     |  2 ++
+ 3 files changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/src/alloc.c b/src/alloc.c
+index 1fe5b8f..50df705 100644
+--- a/src/alloc.c
++++ b/src/alloc.c
+@@ -5059,6 +5059,30 @@ typedef union
+    *(p) = NEAR_STACK_TOP (&sentry + (stack_bottom < &sentry.c))
+ #endif
+ 
++#ifdef __e2k__
++#include <sys/syscall.h>
++#include <asm/e2k_syswork.h>
++static void e2k_getregstack(void **pstart, void **pend) {
++  char *start; long ps_size, ps_idx = 0;
++  if (syscall(__NR_access_hw_stacks, E2K_GET_PROCEDURE_STACK_SIZE,
++      NULL, NULL, 0, &ps_size) < 0)
++    fatal("[e2k] ps size failed");
++  if (!(start = malloc(ps_size)))
++    fatal("[e2k] ps alloc failed");
++  if (syscall(__NR_access_hw_stacks, E2K_READ_PROCEDURE_STACK_EX,
++      &ps_idx, start, ps_size, NULL) < 0)
++    fatal("[e2k] ps read failed");
++  *pstart = start;
++  *pend = start + ps_size;
++}
++#define GC_MARK_SECONDARY_STACK() { \
++  void *start, *end; \
++  e2k_getregstack(&start, &end); \
++  mark_memory(start, end); \
++  free(start); \
++}
++#endif
++
+ /* Mark live Lisp objects on the C stack.
+ 
+    There are several system-dependent problems to consider when
+diff --git a/src/bytecode.c b/src/bytecode.c
+index 472992b..c16a28f 100644
+--- a/src/bytecode.c
++++ b/src/bytecode.c
+@@ -46,7 +46,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
+    indirect threaded, using GCC's computed goto extension.  This code,
+    as currently implemented, is incompatible with BYTE_CODE_SAFE and
+    BYTE_CODE_METER.  */
+-#if (defined __GNUC__ && !defined __STRICT_ANSI__ \
++#if (defined __GNUC__ && !defined(__EDG__) && !defined __STRICT_ANSI__ \
+      && !BYTE_CODE_SAFE && !defined BYTE_CODE_METER)
+ #define BYTE_CODE_THREADED
+ #endif
+diff --git a/src/lisp.h b/src/lisp.h
+index 0cad97c..da29e18 100644
+--- a/src/lisp.h
++++ b/src/lisp.h
+@@ -3823,6 +3823,8 @@ extern void flush_stack_call_func1 (void (*func) (void *arg), void *arg);
+ #  else
+ #   define __builtin_unwind_init() asm ("ta 3")
+ #  endif
++# elif defined(__e2k__)
++#  define __builtin_unwind_init() asm volatile ("flushr")
+ # else
+ #  define __builtin_unwind_init() ((void) 0)
+ # endif
+-- 
+2.34.1
+
