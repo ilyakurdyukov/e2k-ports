@@ -1,6 +1,6 @@
-From 938278bb250f0eaafe0c8e0aaf655de924b71254 Mon Sep 17 00:00:00 2001
+From b1dc9f03d4ce2b3a2c03ec6a5a13cd0b64027c87 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Wed, 14 Sep 2022 16:44:44 +0700
+Date: Sun, 23 Oct 2022 10:59:50 +0700
 Subject: [PATCH] qt6-base-6.2.4 e2k support
 
 using LCC 1.25.23 and -mno-sse4.2
@@ -17,8 +17,10 @@ using LCC 1.25.23 and -mno-sse4.2
  src/corelib/global/qsimd.cpp                  | 10 ++++-
  src/corelib/global/qsimd.h                    | 11 ++++++
  src/corelib/global/qsimd_p.h                  |  4 +-
- src/corelib/kernel/qmetatype.h                | 19 +++++++++
+ src/corelib/kernel/qmetatype.h                | 22 +++++++++++
+ src/corelib/kernel/qmetatype_p.h              |  4 ++
  src/corelib/kernel/qproperty.h                |  2 +-
+ src/corelib/text/qstring.cpp                  |  5 +++
  src/corelib/thread/qfuture_impl.h             |  4 ++
  src/corelib/tools/qhash.h                     |  5 +++
  src/corelib/tools/qhashfunctions.h            |  4 ++
@@ -29,7 +31,7 @@ using LCC 1.25.23 and -mno-sse4.2
  .../gl_integrations/xcb_egl/qxcbeglcontext.h  |  3 ++
  .../auto/corelib/text/qlocale/tst_qlocale.cpp |  2 +-
  .../gui/painting/qpainter/tst_qpainter.cpp    |  2 +-
- 24 files changed, 161 insertions(+), 10 deletions(-)
+ 26 files changed, 173 insertions(+), 10 deletions(-)
 
 diff --git a/cmake/QtCompilerFlags.cmake b/cmake/QtCompilerFlags.cmake
 index 0954ba95..6ff53647 100644
@@ -302,7 +304,7 @@ index 118a62e6..e9ad7a46 100644
  #if defined(Q_PROCESSOR_ARM)
      CpuFeatureNEON          = 2,
 diff --git a/src/corelib/kernel/qmetatype.h b/src/corelib/kernel/qmetatype.h
-index e20118f4..fbc45542 100644
+index e20118f4..8930a540 100644
 --- a/src/corelib/kernel/qmetatype.h
 +++ b/src/corelib/kernel/qmetatype.h
 @@ -1225,6 +1225,7 @@ int qRegisterNormalizedMetaType(const QT_PREPEND_NAMESPACE(QByteArray) &normaliz
@@ -347,16 +349,43 @@ index e20118f4..fbc45542 100644
              return QMetaType::registerConverter<T, QIterable<QMetaSequence>>(o);
          }
          return true;
-@@ -2393,6 +2409,9 @@ struct is_complete_helper
+@@ -1955,6 +1971,8 @@ public:
+             begin++;
+         while (begin != end && is_space(*(end - 1)))
+             end--;
++        // because in qmetatype.cpp: {nullptr, 0, QMetaType::UnknownType}
++        if (begin == end) return len;
+ 
+         // Convert 'char const *' into 'const char *'. Start at index 1,
+         // not 0, because 'const char *' is already OK.
+@@ -2392,7 +2410,11 @@ template<typename T, typename ODR_VIOLATION_PREVENTER>
+ struct is_complete_helper
  {
      template<typename U>
-     static auto check(U *) -> std::integral_constant<bool, sizeof(U) != 0>;
 +#ifdef __EDG__
-+    static auto check(void *) -> std::false_type;
++    static auto check(U *) -> std::integral_constant<bool, sizeof(U) ? true : false>;
++#else
+     static auto check(U *) -> std::integral_constant<bool, sizeof(U) != 0>;
 +#endif
      static auto check(...) -> std::false_type;
      using type = decltype(check(static_cast<T *>(nullptr)));
  };
+diff --git a/src/corelib/kernel/qmetatype_p.h b/src/corelib/kernel/qmetatype_p.h
+index d3b3138a..7693032f 100644
+--- a/src/corelib/kernel/qmetatype_p.h
++++ b/src/corelib/kernel/qmetatype_p.h
+@@ -221,7 +221,11 @@ template<> struct TypeDefinition<QIcon> { static const bool IsAvailable = false;
+ #endif
+ 
+ template<typename T>
++#ifdef __EDG__
++constexpr const QT_PREPEND_NAMESPACE(QtPrivate::QMetaTypeInterface) *getInterfaceFromType()
++#else
+ static const QT_PREPEND_NAMESPACE(QtPrivate::QMetaTypeInterface) *getInterfaceFromType()
++#endif
+ {
+     if constexpr (QtMetaTypePrivate::TypeDefinition<T>::IsAvailable) {
+         return &QT_PREPEND_NAMESPACE(QtPrivate::QMetaTypeInterfaceWrapper)<T>::metaType;
 diff --git a/src/corelib/kernel/qproperty.h b/src/corelib/kernel/qproperty.h
 index 39528706..1686abd1 100644
 --- a/src/corelib/kernel/qproperty.h
@@ -370,6 +399,22 @@ index 39528706..1686abd1 100644
  #include <experimental/source_location>
  #if defined(__cpp_lib_experimental_source_location)
  #define QT_SOURCE_LOCATION_NAMESPACE std::experimental
+diff --git a/src/corelib/text/qstring.cpp b/src/corelib/text/qstring.cpp
+index 58426442..3d4ea82d 100644
+--- a/src/corelib/text/qstring.cpp
++++ b/src/corelib/text/qstring.cpp
+@@ -139,6 +139,11 @@ extern "C" void qt_fromlatin1_mips_asm_unroll8 (char16_t*, const char*, uint);
+ extern "C" void qt_toLatin1_mips_dsp_asm(uchar *dst, const char16_t *src, int length);
+ #endif
+ 
++#ifdef __e2k__
++// LCC can do better without
++#undef __SSE2__
++#endif
++
+ // internal
+ qsizetype qFindStringBoyerMoore(QStringView haystack, qsizetype from, QStringView needle, Qt::CaseSensitivity cs);
+ static inline qsizetype qFindChar(QStringView str, QChar ch, qsizetype from, Qt::CaseSensitivity cs) noexcept;
 diff --git a/src/corelib/thread/qfuture_impl.h b/src/corelib/thread/qfuture_impl.h
 index 57c4fb39..b924e8bc 100644
 --- a/src/corelib/thread/qfuture_impl.h
