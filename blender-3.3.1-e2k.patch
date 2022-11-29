@@ -1,7 +1,7 @@
-From fa790b4c918c53e93ad6f93bba848f2f71c89efc Mon Sep 17 00:00:00 2001
+From 5f6823042dfe558f9bd74b7cd2ca99cbaac5e306 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Mon, 19 Sep 2022 13:54:31 +0700
-Subject: [PATCH] blender-3.2.2 e2k support
+Date: Tue, 29 Nov 2022 17:46:32 +0700
+Subject: [PATCH] blender-3.3.1 e2k support
 
 LCC 1.25 needs std::from_chars implementation in <charconv>
 ---
@@ -18,6 +18,7 @@ LCC 1.25 needs std::from_chars implementation in <charconv>
  source/blender/blenkernel/intern/volume.cc    |  3 +++
  .../blenlib/BLI_enumerable_thread_specific.hh |  7 ++++++
  source/blender/blenlib/BLI_hash.hh            |  3 +++
+ source/blender/blenlib/BLI_memory_utils.hh    |  1 +
  source/blender/blenlib/BLI_utildefines.h      |  2 +-
  source/blender/blenlib/BLI_virtual_array.hh   |  3 +++
  .../operations/COM_DilateErodeOperation.cc    |  4 ++--
@@ -26,7 +27,7 @@ LCC 1.25 needs std::from_chars implementation in <charconv>
  .../blender/editors/space_node/node_draw.cc   |  2 +-
  .../geometry/nodes/node_geo_extrude_mesh.cc   | 23 +++++++++++++++----
  .../simulation/intern/implicit_blender.c      |  6 +++--
- 21 files changed, 88 insertions(+), 23 deletions(-)
+ 22 files changed, 89 insertions(+), 23 deletions(-)
 
 diff --git a/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp b/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
 index d2641c5..a0af3a4 100644
@@ -45,7 +46,7 @@ index d2641c5..a0af3a4 100644
  #define SSE4_DP(a, b) _mm_dp_ps(a, b, 0x7f)
  #define SSE4_DP_FP(a, b) _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7f))
 diff --git a/intern/cycles/util/defines.h b/intern/cycles/util/defines.h
-index 115a747..c501cdb 100644
+index 56a41a1..c684421 100644
 --- a/intern/cycles/util/defines.h
 +++ b/intern/cycles/util/defines.h
 @@ -12,7 +12,7 @@
@@ -58,10 +59,10 @@ index 115a747..c501cdb 100644
  #endif
  
 diff --git a/intern/cycles/util/math_float3.h b/intern/cycles/util/math_float3.h
-index 365c322..9d108d2 100644
+index c408ead..153db4a 100644
 --- a/intern/cycles/util/math_float3.h
 +++ b/intern/cycles/util/math_float3.h
-@@ -267,7 +267,7 @@ ccl_device_inline float distance(const float3 &a, const float3 &b)
+@@ -269,7 +269,7 @@ ccl_device_inline float distance(const float3 &a, const float3 &b)
  
  ccl_device_inline float dot(const float3 &a, const float3 &b)
  {
@@ -70,7 +71,7 @@ index 365c322..9d108d2 100644
    return _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7F));
  #  else
    return a.x * b.x + a.y * b.y + a.z * b.z;
-@@ -291,7 +291,7 @@ ccl_device_inline float3 cross(const float3 &a, const float3 &b)
+@@ -297,7 +297,7 @@ ccl_device_inline float3 cross(const float3 &a, const float3 &b)
  
  ccl_device_inline float3 normalize(const float3 &a)
  {
@@ -79,7 +80,7 @@ index 365c322..9d108d2 100644
    __m128 norm = _mm_sqrt_ps(_mm_dp_ps(a.m128, a.m128, 0x7F));
    return float3(_mm_div_ps(a.m128, norm));
  #  else
-@@ -391,7 +391,7 @@ ccl_device_inline float max3(float3 a)
+@@ -413,7 +413,7 @@ ccl_device_inline float reduce_max(float3 a)
  
  ccl_device_inline float len(const float3 a)
  {
@@ -89,10 +90,10 @@ index 365c322..9d108d2 100644
  #else
    return sqrtf(dot(a, a));
 diff --git a/intern/cycles/util/math_float4.h b/intern/cycles/util/math_float4.h
-index ae9dfe7..b8fbe0e 100644
+index c272187..9af7143 100644
 --- a/intern/cycles/util/math_float4.h
 +++ b/intern/cycles/util/math_float4.h
-@@ -243,7 +243,7 @@ ccl_device_inline float distance(const float4 &a, const float4 &b)
+@@ -247,7 +247,7 @@ ccl_device_inline float distance(const float4 &a, const float4 &b)
  
  ccl_device_inline float dot(const float4 &a, const float4 &b)
  {
@@ -174,12 +175,12 @@ index a2fff94..201a1fe 100644
  #  else
    ssef t = a * b;
 diff --git a/intern/cycles/util/system.cpp b/intern/cycles/util/system.cpp
-index a13ad95..c6e902d 100644
+index 3183ac0..2e97a30 100644
 --- a/intern/cycles/util/system.cpp
 +++ b/intern/cycles/util/system.cpp
-@@ -236,6 +236,12 @@ bool system_cpu_support_avx2()
-   return caps.sse && caps.sse2 && caps.sse3 && caps.ssse3 && caps.sse41 && caps.avx && caps.f16c &&
-          caps.avx2 && caps.fma3 && caps.bmi1 && caps.bmi2;
+@@ -227,6 +227,12 @@ bool system_cpu_support_avx2()
+   CPUCapabilities &caps = system_cpu_capabilities();
+   return caps.avx2;
  }
 +#elif defined(__e2k__)
 +bool system_cpu_support_sse2()  { return true; }
@@ -243,10 +244,10 @@ index c8c4700..1566526 100644
    for (int y = 0; y < height; y++) {
      for (int x = 0; x < width; x++) {
 diff --git a/source/blender/blenkernel/intern/volume.cc b/source/blender/blenkernel/intern/volume.cc
-index 307466d..66a9211 100644
+index d776240..9c23da0 100644
 --- a/source/blender/blenkernel/intern/volume.cc
 +++ b/source/blender/blenkernel/intern/volume.cc
-@@ -1497,6 +1497,9 @@ struct CreateGridOp {
+@@ -1529,6 +1529,9 @@ struct CreateGridOp {
      else {
        return GridType::create();
      }
@@ -289,8 +290,20 @@ index 25d7cd6..ceced74 100644
    }
  
    template<typename U> uint64_t operator()(const U &value) const
+diff --git a/source/blender/blenlib/BLI_memory_utils.hh b/source/blender/blenlib/BLI_memory_utils.hh
+index c2ad3ea..3f78750 100644
+--- a/source/blender/blenlib/BLI_memory_utils.hh
++++ b/source/blender/blenlib/BLI_memory_utils.hh
+@@ -12,6 +12,7 @@
+ #include <memory>
+ #include <new>
+ #include <type_traits>
++#include <cstddef> // std::byte
+ 
+ #include "BLI_utildefines.h"
+ #include "MEM_guardedalloc.h"
 diff --git a/source/blender/blenlib/BLI_utildefines.h b/source/blender/blenlib/BLI_utildefines.h
-index b8407a5..2656bac 100644
+index 7f9470a..8005e97 100644
 --- a/source/blender/blenlib/BLI_utildefines.h
 +++ b/source/blender/blenlib/BLI_utildefines.h
 @@ -493,7 +493,7 @@ extern "C" {
@@ -303,10 +316,10 @@ index b8407a5..2656bac 100644
      ((sizeof(struct { int isnt_array : ((const void *)&(arr) == &(arr)[0]); }) * 0) + \
       (sizeof(arr) / sizeof(*(arr))))
 diff --git a/source/blender/blenlib/BLI_virtual_array.hh b/source/blender/blenlib/BLI_virtual_array.hh
-index 7aa221f..9f9d55a 100644
+index 438fcc4..4b465e5 100644
 --- a/source/blender/blenlib/BLI_virtual_array.hh
 +++ b/source/blender/blenlib/BLI_virtual_array.hh
-@@ -590,6 +590,9 @@ template<typename T> struct VArrayAnyExtraInfo {
+@@ -574,6 +574,9 @@ template<typename T> struct VArrayAnyExtraInfo {
        BLI_assert_unreachable();
        return {};
      }
@@ -352,7 +365,7 @@ index 69e2edb..12b141c 100644
        *it.out = functor(*it.in(0), *it.in(1));
        clamp_when_enabled(it.out);
 diff --git a/source/blender/editors/interface/interface_template_attribute_search.cc b/source/blender/editors/interface/interface_template_attribute_search.cc
-index dc8f568..b811d6f 100644
+index 0a68490..561bd70 100644
 --- a/source/blender/editors/interface/interface_template_attribute_search.cc
 +++ b/source/blender/editors/interface/interface_template_attribute_search.cc
 @@ -1,5 +1,9 @@
@@ -366,7 +379,7 @@ index dc8f568..b811d6f 100644
   * \ingroup edinterface
   */
 diff --git a/source/blender/editors/space_node/node_draw.cc b/source/blender/editors/space_node/node_draw.cc
-index 738d482..38319d3 100644
+index 2cee7c4..7477f7f 100644
 --- a/source/blender/editors/space_node/node_draw.cc
 +++ b/source/blender/editors/space_node/node_draw.cc
 @@ -5,7 +5,7 @@
@@ -379,21 +392,21 @@ index 738d482..38319d3 100644
  
  #include "MEM_guardedalloc.h"
 diff --git a/source/blender/nodes/geometry/nodes/node_geo_extrude_mesh.cc b/source/blender/nodes/geometry/nodes/node_geo_extrude_mesh.cc
-index 75c29ca..f009363 100644
+index acf85e7..3ca74b9 100644
 --- a/source/blender/nodes/geometry/nodes/node_geo_extrude_mesh.cc
 +++ b/source/blender/nodes/geometry/nodes/node_geo_extrude_mesh.cc
-@@ -280,7 +280,9 @@ static void extrude_mesh_vertices(MeshComponent &component,
-     new_edges[i_selection] = new_loose_edge(selection[i_selection], new_vert_range[i_selection]);
-   }
+@@ -281,7 +281,9 @@ static void extrude_mesh_vertices(MeshComponent &component,
  
--  component.attribute_foreach([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
-+  component.attribute_foreach([&,
+   MutableAttributeAccessor attributes = *component.attributes_for_write();
+ 
+-  attributes.for_all([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
++  attributes.for_all([&,
 +    &vert_to_edge_map=vert_to_edge_map, &selection=selection
 +  ](const AttributeIDRef &id, const AttributeMetaData meta_data) {
      if (!ELEM(meta_data.domain, ATTR_DOMAIN_POINT, ATTR_DOMAIN_EDGE)) {
        return true;
      }
-@@ -531,7 +533,12 @@ static void extrude_mesh_edges(MeshComponent &component,
+@@ -534,7 +536,12 @@ static void extrude_mesh_edges(MeshComponent &component,
        return true; /* Impossible to write the "normal" attribute. */
      }
  
@@ -405,9 +418,9 @@ index 75c29ca..f009363 100644
 +      &orig_vert_size=orig_vert_size, &polys=polys, &loops=loops, &new_loops=new_loops
 +    ](auto dummy) {
        using T = decltype(dummy);
-       MutableSpan<T> data = attribute.as_span().typed<T>();
-       switch (attribute.domain()) {
-@@ -909,7 +916,12 @@ static void extrude_mesh_face_regions(MeshComponent &component,
+       MutableSpan<T> data = attribute.span.typed<T>();
+       switch (attribute.domain) {
+@@ -914,7 +921,12 @@ static void extrude_mesh_face_regions(MeshComponent &component,
        return true; /* Impossible to write the "normal" attribute. */
      }
  
@@ -419,9 +432,9 @@ index 75c29ca..f009363 100644
 +      &orig_vert_size=orig_vert_size, &loops=loops, &new_loops=new_loops
 +    ](auto dummy) {
        using T = decltype(dummy);
-       MutableSpan<T> data = attribute.as_span().typed<T>();
-       switch (attribute.domain()) {
-@@ -1161,7 +1173,10 @@ static void extrude_individual_mesh_faces(MeshComponent &component,
+       MutableSpan<T> data = attribute.span.typed<T>();
+       switch (attribute.domain) {
+@@ -1168,7 +1180,10 @@ static void extrude_individual_mesh_faces(MeshComponent &component,
        return true; /* Impossible to write the "normal" attribute. */
      }
  
@@ -431,8 +444,8 @@ index 75c29ca..f009363 100644
 +      &loops=loops, &index_offsets=index_offsets
 +    ](auto dummy) {
        using T = decltype(dummy);
-       MutableSpan<T> data = attribute.as_span().typed<T>();
-       switch (attribute.domain()) {
+       MutableSpan<T> data = attribute.span.typed<T>();
+       switch (attribute.domain) {
 diff --git a/source/blender/simulation/intern/implicit_blender.c b/source/blender/simulation/intern/implicit_blender.c
 index 4193ef2..849950e 100644
 --- a/source/blender/simulation/intern/implicit_blender.c
