@@ -1,0 +1,66 @@
+From 4dfd329ea093a5526c6923394c5e925f67f85cbc Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Sat, 10 Dec 2022 11:32:39 +0700
+Subject: [PATCH] libdc1394-2.2.5 e2k support
+
+Also run these sed commands:
+sed -E -i 's/u\.(reset|response|resource)/u->\1/g' dc1394/juju/control.c
+sed -i 's/iso\.i/iso->i/g' dc1394/juju/capture.c
+---
+ dc1394/juju/capture.c | 7 ++++---
+ dc1394/juju/control.c | 7 ++++---
+ 2 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/dc1394/juju/capture.c b/dc1394/juju/capture.c
+index e9da6e3..44d22e2 100644
+--- a/dc1394/juju/capture.c
++++ b/dc1394/juju/capture.c
+@@ -321,8 +321,9 @@ dc1394_juju_capture_dequeue (platform_camera_t * craw,
+ 
+     struct {
+         struct fw_cdev_event_iso_interrupt i;
+-		__u32 headers[craw->packets_per_frame*2 + 16]; // HPK 20161209
+-    } iso;
++    } *iso;
++    size_t buf_size = sizeof(*iso) + sizeof(__u32) * (craw->packets_per_frame*2 + 16);
++    char buffer[buf_size]; iso = (void*)buffer;
+ 
+     if ( (policy<DC1394_CAPTURE_POLICY_MIN) || (policy>DC1394_CAPTURE_POLICY_MAX) )
+         return DC1394_INVALID_CAPTURE_POLICY;
+@@ -344,7 +345,7 @@ dc1394_juju_capture_dequeue (platform_camera_t * craw,
+             return DC1394_SUCCESS;
+         }
+ 
+-        len = read (craw->iso_fd, &iso, sizeof iso);
++        len = read (craw->iso_fd, iso, buf_size);
+         if (len < 0) {
+             dc1394_log_error("Juju: dequeue failed to read a response: %m");
+             return DC1394_FAILURE;
+diff --git a/dc1394/juju/control.c b/dc1394/juju/control.c
+index c730d3c..092ee1f 100644
+--- a/dc1394/juju/control.c
++++ b/dc1394/juju/control.c
+@@ -283,16 +283,17 @@ juju_handle_event (platform_camera_t * cam)
+     union {
+         struct {
+             struct fw_cdev_event_response r;
+-            __u32 buffer[cam->max_response_quads];
+         } response;
+         struct fw_cdev_event_bus_reset reset;
+         struct fw_cdev_event_iso_resource resource;
+-    } u;
++    } *u;
++    size_t buf_size = sizeof(*u) + sizeof(__u32) * cam->max_response_quads;
++    char buffer[buf_size]; u = (void*)buffer;
+     int len, i;
+     juju_response_info *resp_info;
+     juju_iso_info *iso_info;
+ 
+-    len = read (cam->fd, &u, sizeof u);
++    len = read (cam->fd, u, buf_size);
+     if (len < 0) {
+         dc1394_log_error("juju: Read failed: %m");
+         return -1;
+-- 
+2.34.1
+
