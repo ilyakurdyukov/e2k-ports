@@ -1,6 +1,6 @@
-From 99c92c94a761f5db0b634e66d48e6fabecbff986 Mon Sep 17 00:00:00 2001
+From 60880454995579767f97d81a0c859e860d2317f2 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Sun, 26 Mar 2023 23:18:06 +0700
+Date: Mon, 27 Mar 2023 00:16:29 +0700
 Subject: [PATCH] telegram-desktop-4.3.1 e2k support
 
 Using LCC 1.26.16, there is no <compare> header in this version, it can be taken from GCC.
@@ -9,7 +9,6 @@ Using LCC 1.26.16, there is no <compare> header in this version, it can be taken
  .../data/data_download_manager.cpp            |  4 ++
  .../Telegram/SourceFiles/data/data_peer_id.h  |  4 ++
  .../linux/notifications_manager_linux.cpp     |  5 +++
- .../tests/suggestiontest/Makefile.orig        | 11 ------
  .../range-v3/include/concepts/swap.hpp        |  4 ++
  .../include/range/v3/detail/adl_get.hpp       |  4 ++
  .../include/range/v3/detail/config.hpp        |  2 +-
@@ -25,8 +24,7 @@ Using LCC 1.26.16, there is no <compare> header in this version, it can be taken
  .../crl/common/crl_common_object_async.h      |  3 +-
  tdesktop/Telegram/lib_rpl/rpl/event_stream.h  |  2 +-
  .../Telegram/lib_ui/ui/image/image_prepare.h  |  8 ++++
- 20 files changed, 106 insertions(+), 17 deletions(-)
- delete mode 100644 tdesktop/Telegram/ThirdParty/hunspell/tests/suggestiontest/Makefile.orig
+ 19 files changed, 106 insertions(+), 6 deletions(-)
 
 diff --git a/tdesktop/Telegram/SourceFiles/chat_helpers/stickers_emoji_pack.cpp b/tdesktop/Telegram/SourceFiles/chat_helpers/stickers_emoji_pack.cpp
 index b56b700..65dd2d3 100644
@@ -94,23 +92,6 @@ index 1d96b11..d09d895 100644
  
  namespace Platform {
  namespace Notifications {
-diff --git a/tdesktop/Telegram/ThirdParty/hunspell/tests/suggestiontest/Makefile.orig b/tdesktop/Telegram/ThirdParty/hunspell/tests/suggestiontest/Makefile.orig
-deleted file mode 100644
-index b699c61..0000000
---- a/tdesktop/Telegram/ThirdParty/hunspell/tests/suggestiontest/Makefile.orig
-+++ /dev/null
-@@ -1,11 +0,0 @@
--all:
--	./prepare
--	./test
--
--single:
--	./prepare2
--	./test
--
--clean:
--	rm *.[1-5] result.*
--
 diff --git a/tdesktop/Telegram/ThirdParty/range-v3/include/concepts/swap.hpp b/tdesktop/Telegram/ThirdParty/range-v3/include/concepts/swap.hpp
 index dd70864..6361d41 100644
 --- a/tdesktop/Telegram/ThirdParty/range-v3/include/concepts/swap.hpp
