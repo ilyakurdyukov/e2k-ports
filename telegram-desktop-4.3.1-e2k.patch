@@ -1,0 +1,488 @@
+From 99c92c94a761f5db0b634e66d48e6fabecbff986 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Sun, 26 Mar 2023 23:18:06 +0700
+Subject: [PATCH] telegram-desktop-4.3.1 e2k support
+
+Using LCC 1.26.16, there is no <compare> header in this version, it can be taken from GCC.
+---
+ .../chat_helpers/stickers_emoji_pack.cpp      |  4 ++
+ .../data/data_download_manager.cpp            |  4 ++
+ .../Telegram/SourceFiles/data/data_peer_id.h  |  4 ++
+ .../linux/notifications_manager_linux.cpp     |  5 +++
+ .../tests/suggestiontest/Makefile.orig        | 11 ------
+ .../range-v3/include/concepts/swap.hpp        |  4 ++
+ .../include/range/v3/detail/adl_get.hpp       |  4 ++
+ .../include/range/v3/detail/config.hpp        |  2 +-
+ .../include/range/v3/iterator/concepts.hpp    |  4 ++
+ .../include/range/v3/range/access.hpp         |  8 ++++
+ .../include/range/v3/view/adaptor.hpp         |  4 ++
+ .../range-v3/include/range/v3/view/concat.hpp | 38 +++++++++++++++++++
+ .../include/range/v3/view/zip_with.hpp        |  4 ++
+ .../platform/linux/base_last_input_linux.cpp  |  4 +-
+ .../linux/base_linux_dbus_utilities.cpp       |  2 +-
+ .../Telegram/lib_base/base/qt/qt_compare.h    |  4 ++
+ tdesktop/Telegram/lib_base/base/weak_ptr.h    |  4 ++
+ .../crl/common/crl_common_object_async.h      |  3 +-
+ tdesktop/Telegram/lib_rpl/rpl/event_stream.h  |  2 +-
+ .../Telegram/lib_ui/ui/image/image_prepare.h  |  8 ++++
+ 20 files changed, 106 insertions(+), 17 deletions(-)
+ delete mode 100644 tdesktop/Telegram/ThirdParty/hunspell/tests/suggestiontest/Makefile.orig
+
+diff --git a/tdesktop/Telegram/SourceFiles/chat_helpers/stickers_emoji_pack.cpp b/tdesktop/Telegram/SourceFiles/chat_helpers/stickers_emoji_pack.cpp
+index b56b700..65dd2d3 100644
+--- a/tdesktop/Telegram/SourceFiles/chat_helpers/stickers_emoji_pack.cpp
++++ b/tdesktop/Telegram/SourceFiles/chat_helpers/stickers_emoji_pack.cpp
+@@ -234,7 +234,11 @@ EmojiPtr EmojiPack::chooseInteractionEmoji(
+ 			return original;
+ 		}
+ 	}
++#ifdef __EDG__
++	const auto kHearts = {
++#else
+ 	static const auto kHearts = {
++#endif
+ 		QString::fromUtf8("\xf0\x9f\x92\x9b"),
+ 		QString::fromUtf8("\xf0\x9f\x92\x99"),
+ 		QString::fromUtf8("\xf0\x9f\x92\x9a"),
+diff --git a/tdesktop/Telegram/SourceFiles/data/data_download_manager.cpp b/tdesktop/Telegram/SourceFiles/data/data_download_manager.cpp
+index e5861c4..ac4c12e 100644
+--- a/tdesktop/Telegram/SourceFiles/data/data_download_manager.cpp
++++ b/tdesktop/Telegram/SourceFiles/data/data_download_manager.cpp
+@@ -1124,7 +1124,11 @@ rpl::producer<Ui::DownloadBarContent> MakeDownloadBarContent() {
+ 		const auto notify = [=, &manager] {
+ 			auto content = Ui::DownloadBarContent();
+ 			auto single = (const Data::DownloadObject*) nullptr;
++#ifdef __EDG__
++			for (const Data::DownloadingId *id : manager.loadingList()) { 
++#else
+ 			for (const auto id : manager.loadingList()) {
++#endif
+ 				if (id->hiddenByView) {
+ 					break;
+ 				}
+diff --git a/tdesktop/Telegram/SourceFiles/data/data_peer_id.h b/tdesktop/Telegram/SourceFiles/data/data_peer_id.h
+index 1f99d95..e338263 100644
+--- a/tdesktop/Telegram/SourceFiles/data/data_peer_id.h
++++ b/tdesktop/Telegram/SourceFiles/data/data_peer_id.h
+@@ -29,9 +29,13 @@ struct ChatIdType {
+ 	constexpr ChatIdType(MTPlong value) noexcept : bare(value.v) {
+ 	}
+ 
++#ifdef __EDG__
++	auto operator<=>(const ChatIdType&) const = default;
++#else
+ 	friend inline constexpr auto operator<=>(
+ 		ChatIdType,
+ 		ChatIdType) = default;
++#endif
+ 
+ 	[[nodiscard]] constexpr explicit operator bool() const noexcept {
+ 		return (bare != 0);
+diff --git a/tdesktop/Telegram/SourceFiles/platform/linux/notifications_manager_linux.cpp b/tdesktop/Telegram/SourceFiles/platform/linux/notifications_manager_linux.cpp
+index 1d96b11..d09d895 100644
+--- a/tdesktop/Telegram/SourceFiles/platform/linux/notifications_manager_linux.cpp
++++ b/tdesktop/Telegram/SourceFiles/platform/linux/notifications_manager_linux.cpp
+@@ -26,6 +26,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ 
+ #include <glibmm.h>
+ #include <giomm.h>
++#ifdef __EDG__
++inline bool operator==(const Glib::ustring &lhs, const Glib::ustring &rhs) {
++  return lhs.compare(rhs) == 0;
++}
++#endif
+ 
+ namespace Platform {
+ namespace Notifications {
+diff --git a/tdesktop/Telegram/ThirdParty/hunspell/tests/suggestiontest/Makefile.orig b/tdesktop/Telegram/ThirdParty/hunspell/tests/suggestiontest/Makefile.orig
+deleted file mode 100644
+index b699c61..0000000
+--- a/tdesktop/Telegram/ThirdParty/hunspell/tests/suggestiontest/Makefile.orig
++++ /dev/null
+@@ -1,11 +0,0 @@
+-all:
+-	./prepare
+-	./test
+-
+-single:
+-	./prepare2
+-	./test
+-
+-clean:
+-	rm *.[1-5] result.*
+-
+diff --git a/tdesktop/Telegram/ThirdParty/range-v3/include/concepts/swap.hpp b/tdesktop/Telegram/ThirdParty/range-v3/include/concepts/swap.hpp
+index dd70864..6361d41 100644
+--- a/tdesktop/Telegram/ThirdParty/range-v3/include/concepts/swap.hpp
++++ b/tdesktop/Telegram/ThirdParty/range-v3/include/concepts/swap.hpp
+@@ -183,7 +183,11 @@ namespace concepts
+ 
+         template<typename T, typename U = T>
+         CPP_INLINE_VAR constexpr bool is_adl_swappable_v =
++#ifdef __EDG__
++            false; /* somehow broken with std::thread */
++#else
+             !META_IS_SAME(decltype(adl_swap_detail::try_adl_swap_<T, U>(42)), nope);
++#endif
+ 
+         struct swap_fn
+         {
+diff --git a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/detail/adl_get.hpp b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/detail/adl_get.hpp
+index c1d9953..a1ca0a2 100644
+--- a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/detail/adl_get.hpp
++++ b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/detail/adl_get.hpp
+@@ -99,6 +99,7 @@ namespace ranges
+             (
+                 return detail::adl_get<I>(static_cast<U const &>(wb))
+             )
++#ifndef __EDG__
+             template<std::size_t I, typename U = TupleLike>
+             friend constexpr auto CPP_auto_fun(get)(
+                 forward_tuple_interface<TupleLike> &&wb)
+@@ -111,6 +112,7 @@ namespace ranges
+             (
+                 return detail::adl_get<I>(static_cast<U const &&>(wb))
+             )
++#endif
+             template<typename T, typename U = TupleLike>
+             friend constexpr auto CPP_auto_fun(get)(
+                 forward_tuple_interface<TupleLike> &wb)
+@@ -123,6 +125,7 @@ namespace ranges
+             (
+                 return detail::adl_get<T>(static_cast<U const &>(wb))
+             )
++#ifndef __EDG__
+             template<typename T, typename U = TupleLike>
+             friend constexpr auto CPP_auto_fun(get)(
+                 forward_tuple_interface<TupleLike> &&wb)
+@@ -135,6 +138,7 @@ namespace ranges
+             (
+                 return detail::adl_get<T>(static_cast<U const &&>(wb))
+             )
++#endif
+             // clang-format on
+         };
+     } // namespace _tuple_wrapper_
+diff --git a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/detail/config.hpp b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/detail/config.hpp
+index 069bb3e..f7316b8 100644
+--- a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/detail/config.hpp
++++ b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/detail/config.hpp
+@@ -731,7 +731,7 @@ namespace ranges
+ #endif // RANGES_CONSTEXPR_IF
+ 
+ #if !defined(RANGES_BROKEN_CPO_LOOKUP) && !defined(RANGES_DOXYGEN_INVOKED) && \
+-    (defined(RANGES_WORKAROUND_GCC_UNFILED0) || defined(RANGES_WORKAROUND_MSVC_895622))
++    (defined(RANGES_WORKAROUND_GCC_UNFILED0) || defined(RANGES_WORKAROUND_MSVC_895622) || defined(__EDG__))
+ #define RANGES_BROKEN_CPO_LOOKUP 1
+ #endif
+ #ifndef RANGES_BROKEN_CPO_LOOKUP
+diff --git a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/iterator/concepts.hpp b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/iterator/concepts.hpp
+index e938be3..dce6bde 100644
+--- a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/iterator/concepts.hpp
++++ b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/iterator/concepts.hpp
+@@ -293,8 +293,12 @@ namespace ranges
+         (
+             s - i,
+             i - s,
++#ifdef __EDG__
++            true /* doesn't work with QList */
++#else
+             concepts::requires_<same_as<iter_difference_t<I>, decltype(s - i)>>,
+             concepts::requires_<same_as<iter_difference_t<I>, decltype(i - s)>>
++#endif
+         ));
+     template(typename S, typename I)(
+     concept (sized_sentinel_for_)(S, I),
+diff --git a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/range/access.hpp b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/range/access.hpp
+index ca6eb6f..2d54e47 100644
+--- a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/range/access.hpp
++++ b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/range/access.hpp
+@@ -122,7 +122,11 @@ namespace ranges
+             struct _non_member_result_
+             {
+                 template<typename R>
++#ifdef __EDG__
++                using invoke = decltype(detail::_decay_copy((declval(R &))));
++#else
+                 using invoke = decltype(detail::_decay_copy(begin(declval(R &))));
++#endif
+             };
+ 
+             template<typename R>
+@@ -229,7 +233,11 @@ namespace ranges
+             struct _non_member_result_
+             {
+                 template<typename R>
++#ifdef __EDG__
++                using invoke = decltype(detail::_decay_copy((declval(R &))));
++#else
+                 using invoke = decltype(detail::_decay_copy(end(declval(R &))));
++#endif
+             };
+ 
+             template<typename R>
+diff --git a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/view/adaptor.hpp b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/view/adaptor.hpp
+index 0297d7f..a3151d3 100644
+--- a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/view/adaptor.hpp
++++ b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/view/adaptor.hpp
+@@ -556,7 +556,11 @@ namespace ranges
+             return view_adaptor::end_cursor_(derived());
+         }
+ 
++#ifdef __EDG__
++    public:
++#else
+     protected:
++#endif
+         ~view_adaptor() = default;
+ 
+     public:
+diff --git a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/view/concat.hpp b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/view/concat.hpp
+index 0e6caf5..91bd9bb 100644
+--- a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/view/concat.hpp
++++ b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/view/concat.hpp
+@@ -118,9 +118,15 @@ namespace ranges
+             void satisfy(meta::size_t<N>)
+             {
+                 RANGES_EXPECT(its_.index() == N);
++#ifdef __EDG__
++                if(ranges::get<N>(its_) == ranges::end(std::get<N>(rng_->rngs_)))
++                {
++                    ranges::emplace<N + 1>(its_, ranges::begin(std::get<N + 1>(rng_->rngs_)));
++#else
+                 if(ranges::get<N>(its_) == end(std::get<N>(rng_->rngs_)))
+                 {
+                     ranges::emplace<N + 1>(its_, begin(std::get<N + 1>(rng_->rngs_)));
++#endif
+                     this->satisfy(meta::size_t<N + 1>{});
+                 }
+             }
+@@ -136,7 +142,11 @@ namespace ranges
+                     requires input_iterator<I>)
+                 void operator()(indexed_element<I, N> it) const
+                 {
++#ifdef __EDG__
++                    RANGES_ASSERT(it.get() != ranges::end(std::get<N>(pos->rng_->rngs_)));
++#else
+                     RANGES_ASSERT(it.get() != end(std::get<N>(pos->rng_->rngs_)));
++#endif
+                     ++it.get();
+                     pos->satisfy(meta::size_t<N>{});
+                 }
+@@ -149,7 +159,11 @@ namespace ranges
+                     requires bidirectional_iterator<I>)
+                 void operator()(indexed_element<I, 0> it) const
+                 {
++#ifdef __EDG__
++                    RANGES_ASSERT(it.get() != ranges::begin(std::get<0>(pos->rng_->rngs_)));
++#else
+                     RANGES_ASSERT(it.get() != begin(std::get<0>(pos->rng_->rngs_)));
++#endif
+                     --it.get();
+                 }
+                 template(typename I, std::size_t N)(
+@@ -157,7 +171,11 @@ namespace ranges
+                     requires (N != 0) AND bidirectional_iterator<I>)
+                 void operator()(indexed_element<I, N> it) const
+                 {
++#ifdef __EDG__
++                    if(it.get() == ranges::begin(std::get<N>(pos->rng_->rngs_)))
++#else
+                     if(it.get() == begin(std::get<N>(pos->rng_->rngs_)))
++#endif
+                     {
+                         auto && rng = std::get<N - 1>(pos->rng_->rngs_);
+                         ranges::emplace<N - 1>(
+@@ -247,14 +265,22 @@ namespace ranges
+                         return distance(ranges::get<N>(from.its_),
+                                         ranges::get<N>(to.its_));
+                     return distance(ranges::get<N>(from.its_),
++#ifdef __EDG__
++                                    ranges::end(std::get<N>(from.rng_->rngs_))) +
++#else
+                                     end(std::get<N>(from.rng_->rngs_))) +
++#endif
+                            cursor::distance_to_(meta::size_t<N + 1>{}, from, to);
+                 }
+                 if(from.its_.index() < N && to.its_.index() > N)
+                     return distance(std::get<N>(from.rng_->rngs_)) +
+                            cursor::distance_to_(meta::size_t<N + 1>{}, from, to);
+                 RANGES_EXPECT(to.its_.index() == N);
++#ifdef __EDG__
++                return distance(ranges::begin(std::get<N>(from.rng_->rngs_)),
++#else
+                 return distance(begin(std::get<N>(from.rng_->rngs_)),
++#endif
+                                 ranges::get<N>(to.its_));
+             }
+ 
+@@ -265,13 +291,21 @@ namespace ranges
+             cursor() = default;
+             cursor(concat_view_t * rng, begin_tag)
+               : rng_(rng)
++#ifdef __EDG__
++              , its_{emplaced_index<0>, ranges::begin(std::get<0>(rng->rngs_))}
++#else
+               , its_{emplaced_index<0>, begin(std::get<0>(rng->rngs_))}
++#endif
+             {
+                 this->satisfy(meta::size_t<0>{});
+             }
+             cursor(concat_view_t * rng, end_tag)
+               : rng_(rng)
++#ifdef __EDG__
++              , its_{emplaced_index<cranges - 1>, ranges::end(std::get<cranges - 1>(rng->rngs_))}
++#else
+               , its_{emplaced_index<cranges - 1>, end(std::get<cranges - 1>(rng->rngs_))}
++#endif
+             {}
+             template(bool Other)(
+                 /// \pre
+@@ -294,8 +328,12 @@ namespace ranges
+             auto equal(cursor const & pos) const //
+                 -> CPP_ret(bool)(
+                     /// \pre
++#ifdef __EDG__
++                    )
++#else
+                     requires //
+                         equality_comparable<variant<iterator_t<constify_if<Rngs>>...>>)
++#endif
+             {
+                 return its_ == pos.its_;
+             }
+diff --git a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/view/zip_with.hpp b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/view/zip_with.hpp
+index 699f423..5c33fbb 100644
+--- a/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/view/zip_with.hpp
++++ b/tdesktop/Telegram/ThirdParty/range-v3/include/range/v3/view/zip_with.hpp
+@@ -123,7 +123,11 @@ namespace ranges
+         using zip_cardinality = std::integral_constant<
+             cardinality,
+             State::value >= 0 && Value::value >= 0
++#ifdef __EDG__
++                ? State::value < Value::value ? State::value : Value::value
++#else
+                 ? min_(State::value, Value::value)
++#endif
+                 : State::value >=0 && Value::value == infinite
+                     ? State::value
+                     : State::value == infinite && Value::value >= 0
+diff --git a/tdesktop/Telegram/lib_base/base/platform/linux/base_last_input_linux.cpp b/tdesktop/Telegram/lib_base/base/platform/linux/base_last_input_linux.cpp
+index ef5529e..d69f544 100644
+--- a/tdesktop/Telegram/lib_base/base/platform/linux/base_last_input_linux.cpp
++++ b/tdesktop/Telegram/lib_base/base/platform/linux/base_last_input_linux.cpp
+@@ -103,7 +103,7 @@ std::optional<crl::time> FreedesktopDBusLastUserInputTime() {
+ 			"org.freedesktop.DBus.Error.AccessDenied",
+ 		};
+ 
+-		const auto errorName = Gio::DBus::ErrorUtils::get_remote_error(e);
++		const auto errorName = Gio::DBus::ErrorUtils::get_remote_error(e).c_str();
+ 		if (ranges::contains(NotSupportedErrors, errorName)) {
+ 			NotSupported = true;
+ 			return std::nullopt;
+@@ -163,7 +163,7 @@ std::optional<crl::time> MutterDBusLastUserInputTime() {
+ 			"org.freedesktop.DBus.Error.AccessDenied",
+ 		};
+ 
+-		const auto errorName = Gio::DBus::ErrorUtils::get_remote_error(e);
++		const auto errorName = Gio::DBus::ErrorUtils::get_remote_error(e).c_str();
+ 		if (ranges::contains(NotSupportedErrors, errorName)) {
+ 			NotSupported = true;
+ 			return std::nullopt;
+diff --git a/tdesktop/Telegram/lib_base/base/platform/linux/base_linux_dbus_utilities.cpp b/tdesktop/Telegram/lib_base/base/platform/linux/base_linux_dbus_utilities.cpp
+index b43f2d2..db58ac1 100644
+--- a/tdesktop/Telegram/lib_base/base/platform/linux/base_linux_dbus_utilities.cpp
++++ b/tdesktop/Telegram/lib_base/base/platform/linux/base_linux_dbus_utilities.cpp
+@@ -92,7 +92,7 @@ uint RegisterServiceWatcher(
+ 				const auto newOwner = GlibVariantCast<Glib::ustring>(
+ 					parameters.get_child(2));
+ 
+-				if (name != service) {
++				if (name.compare(service) != 0) {
+ 					return;
+ 				}
+ 
+diff --git a/tdesktop/Telegram/lib_base/base/qt/qt_compare.h b/tdesktop/Telegram/lib_base/base/qt/qt_compare.h
+index 5b205d9..e3cdc32 100644
+--- a/tdesktop/Telegram/lib_base/base/qt/qt_compare.h
++++ b/tdesktop/Telegram/lib_base/base/qt/qt_compare.h
+@@ -14,7 +14,11 @@
+ #if !defined(__apple_build_version__) || (__apple_build_version__ > 12000032)
+ 
+ template <typename P>
++#ifdef __EDG__
++[[nodiscard]] constexpr inline std::strong_ordering operator<=>(
++#else
+ [[nodiscard]] inline std::strong_ordering operator<=>(
++#endif
+ 		const gsl::not_null<P> &a,
+ 		const gsl::not_null<P> &b) noexcept {
+ 	return a.get() <=> b.get();
+diff --git a/tdesktop/Telegram/lib_base/base/weak_ptr.h b/tdesktop/Telegram/lib_base/base/weak_ptr.h
+index eee923d..b88c2db 100644
+--- a/tdesktop/Telegram/lib_base/base/weak_ptr.h
++++ b/tdesktop/Telegram/lib_base/base/weak_ptr.h
+@@ -221,9 +221,13 @@ public:
+ 		return get();
+ 	}
+ 
++#ifdef __EDG__
++	auto operator<=>(const weak_ptr&) const noexcept = default;
++#else
+ 	friend inline auto operator<=>(
+ 		weak_ptr,
+ 		weak_ptr) noexcept = default;
++#endif
+ 
+ 	void reset(T *value = nullptr) {
+ 		if (get() != value) {
+diff --git a/tdesktop/Telegram/lib_crl/crl/common/crl_common_object_async.h b/tdesktop/Telegram/lib_crl/crl/common/crl_common_object_async.h
+index 45842ea..699b40d 100644
+--- a/tdesktop/Telegram/lib_crl/crl/common/crl_common_object_async.h
++++ b/tdesktop/Telegram/lib_crl/crl/common/crl_common_object_async.h
+@@ -401,7 +401,8 @@ object_async<Policy, Type>::object_async(Args &&...args)
+ 	} else if constexpr (with_weak_construct) {
+ 		_data->construct(weak(), std::forward<Args>(args)...);
+ 	} else {
+-		static_assert(false_t(args...), "Could not find a constructor.");
++		// this code doesn't work with false_t, because it's defined as a struct in the same namespace
++		static_assert(this_code_is_garbage(args...), "Could not find a constructor.");
+ 	}
+ }
+ 
+diff --git a/tdesktop/Telegram/lib_rpl/rpl/event_stream.h b/tdesktop/Telegram/lib_rpl/rpl/event_stream.h
+index 219931f..6a1c03c 100644
+--- a/tdesktop/Telegram/lib_rpl/rpl/event_stream.h
++++ b/tdesktop/Telegram/lib_rpl/rpl/event_stream.h
+@@ -54,7 +54,7 @@ public:
+ 		return make_producer<Value, Error>([weak = make_weak()](
+ 				const auto &consumer) {
+ 			if (const auto strong = weak.lock()) {
+-				auto result = [weak, consumer] {
++				auto result = [consumer, weak] {
+ 					if (const auto strong = weak.lock()) {
+ 						const auto it = std::find(
+ 							strong->consumers.begin(),
+diff --git a/tdesktop/Telegram/lib_ui/ui/image/image_prepare.h b/tdesktop/Telegram/lib_ui/ui/image/image_prepare.h
+index 3ede8dc..364a316 100644
+--- a/tdesktop/Telegram/lib_ui/ui/image/image_prepare.h
++++ b/tdesktop/Telegram/lib_ui/ui/image/image_prepare.h
+@@ -86,7 +86,15 @@ struct CornersMaskRef {
+ 	}
+ 	friend inline constexpr bool operator==(
+ 		CornersMaskRef a,
++#ifdef __EDG__
++		CornersMaskRef b) noexcept {
++		for (auto i = 0; i != 4; ++i)
++			if (a.p[i] != b.p[i]) return false;
++		return true;
++	}
++#else
+ 		CornersMaskRef b) noexcept = default;
++#endif
+ };
+ 
+ [[nodiscard]] const std::array<QImage, 4> &CornersMask(
+-- 
+2.34.1
+
