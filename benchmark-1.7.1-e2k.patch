@@ -1,40 +1,37 @@
-From 2cab7229fc3bdfb13035a5aa795af17c29436f13 Mon Sep 17 00:00:00 2001
+From 0a1d917e47dbd5a943049eb8fa0f4fc6c516c318 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Thu, 10 Jun 2021 14:15:07 +0700
-Subject: [PATCH] benchmark-1.5.2 e2k support
+Date: Wed, 3 May 2023 15:17:10 +0700
+Subject: [PATCH] benchmark-1.7.1 e2k support
 
 ---
- include/benchmark/benchmark.h | 7 +++++++
- src/cycleclock.h              | 6 ++++++
- 2 files changed, 13 insertions(+)
+ include/benchmark/benchmark.h | 11 ++++++++++-
+ src/cycleclock.h              |  6 ++++++
+ 2 files changed, 16 insertions(+), 1 deletion(-)
 
 diff --git a/include/benchmark/benchmark.h b/include/benchmark/benchmark.h
-index 01f1262..ac344f4 100644
+index fefe9b2..455c320 100644
 --- a/include/benchmark/benchmark.h
 +++ b/include/benchmark/benchmark.h
-@@ -310,6 +310,12 @@ BENCHMARK_UNUSED static int stream_init_anchor = InitializeStreams();
+@@ -439,7 +439,16 @@ inline BENCHMARK_ALWAYS_INLINE void ClobberMemory() {
  // intended to add little to no overhead.
  // See: https://youtu.be/nXaxk27zwlk?t=2441
  #ifndef BENCHMARK_HAS_NO_INLINE_ASSEMBLY
-+#ifdef __e2k__
+-#if !defined(__GNUC__) || defined(__llvm__) || defined(__INTEL_COMPILER)
++#if defined(__e2k__) && defined(__EDG__)
 +template <class Tp>
 +inline BENCHMARK_ALWAYS_INLINE void DoNotOptimize(Tp const& value) {
 +  asm volatile("" : : "r"(&reinterpret_cast<char const volatile&>(value)) : "memory");
 +}
-+#else
++template <class Tp>
++inline BENCHMARK_ALWAYS_INLINE void DoNotOptimize(Tp& value) {
++  asm volatile("" : : "r"(&reinterpret_cast<char volatile&>(value)) : "memory");
++}
++#elif !defined(__GNUC__) || defined(__llvm__) || defined(__INTEL_COMPILER)
  template <class Tp>
  inline BENCHMARK_ALWAYS_INLINE void DoNotOptimize(Tp const& value) {
    asm volatile("" : : "r,m"(value) : "memory");
-@@ -323,6 +329,7 @@ inline BENCHMARK_ALWAYS_INLINE void DoNotOptimize(Tp& value) {
-   asm volatile("" : "+m,r"(value) : : "memory");
- #endif
- }
-+#endif
- 
- // Force the compiler to flush pending writes to global memory. Acts as an
- // effective read/write barrier
 diff --git a/src/cycleclock.h b/src/cycleclock.h
-index 179c67c..14c212b 100644
+index df6ffa5..f64e00e 100644
 --- a/src/cycleclock.h
 +++ b/src/cycleclock.h
 @@ -41,6 +41,10 @@ extern "C" uint64_t __rdtsc();
@@ -48,8 +45,8 @@ index 179c67c..14c212b 100644
  #if !defined(BENCHMARK_OS_WINDOWS) || defined(BENCHMARK_OS_MINGW)
  #include <sys/time.h>
  #include <time.h>
-@@ -116,6 +120,8 @@ inline BENCHMARK_ALWAYS_INLINE int64_t Now() {
-   _asm rdtsc
+@@ -122,6 +126,8 @@ inline BENCHMARK_ALWAYS_INLINE int64_t Now() {
+   return virtual_timer_value;
  #elif defined(COMPILER_MSVC)
    return __rdtsc();
 +#elif defined(__e2k__)
@@ -58,5 +55,5 @@ index 179c67c..14c212b 100644
    // Native Client validator on x86/x86-64 allows RDTSC instructions,
    // and this case is handled above. Native Client validator on ARM
 -- 
-2.17.1
+2.34.1
 
