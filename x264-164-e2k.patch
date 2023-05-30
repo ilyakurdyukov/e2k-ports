@@ -1,37 +1,37 @@
-From ffae99eacd5b57a9cfe7213fa9635d44c32226b9 Mon Sep 17 00:00:00 2001
+From bcac03930d8f5193665086201493e6096ec0cf93 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Wed, 17 Mar 2021 15:36:08 +0700
-Subject: [PATCH] x264-148 e2k support
+Date: Tue, 30 May 2023 23:24:57 +0700
+Subject: [PATCH] x264-164 e2k support
 
 ---
- Makefile               |    6 +
+ Makefile               |   10 +
  common/common.h        |   12 +
  common/cpu.c           |    9 +
  common/dct.c           |   43 ++
- common/deblock.c       |   12 +
- common/e2k/dct.c       |  828 ++++++++++++++++++++++++
- common/e2k/dct.h       |   73 +++
+ common/deblock.c       |   11 +
+ common/e2k/dct.c       |  829 ++++++++++++++++++++++++
+ common/e2k/dct.h       |   69 ++
  common/e2k/deblock.c   |  236 +++++++
- common/e2k/deblock.h   |   36 ++
+ common/e2k/deblock.h   |   32 +
  common/e2k/e2kcommon.h |  253 ++++++++
  common/e2k/mc.c        | 1401 ++++++++++++++++++++++++++++++++++++++++
- common/e2k/mc.h        |   34 +
- common/e2k/pixel.c     | 1168 +++++++++++++++++++++++++++++++++
- common/e2k/pixel.h     |   34 +
+ common/e2k/mc.h        |   30 +
+ common/e2k/pixel.c     | 1169 +++++++++++++++++++++++++++++++++
+ common/e2k/pixel.h     |   30 +
  common/e2k/predict.c   |  187 ++++++
- common/e2k/predict.h   |   36 ++
- common/e2k/quant.c     |  439 +++++++++++++
- common/e2k/quant.h     |   77 +++
+ common/e2k/predict.h   |   32 +
+ common/e2k/quant.c     |  436 +++++++++++++
+ common/e2k/quant.h     |   73 +++
  common/mc.c            |    7 +
  common/pixel.c         |    9 +
  common/predict.c       |    8 +
  common/quant.c         |   33 +
  config.guess           |    3 +
  config.sub             |    2 +-
- configure              |    7 +-
+ configure              |   11 +-
  tools/checkasm.c       |   17 +-
  x264.h                 |    3 +
- 27 files changed, 4970 insertions(+), 3 deletions(-)
+ 27 files changed, 4952 insertions(+), 3 deletions(-)
  create mode 100644 common/e2k/dct.c
  create mode 100644 common/e2k/dct.h
  create mode 100644 common/e2k/deblock.c
@@ -47,27 +47,31 @@ Subject: [PATCH] x264-148 e2k support
  create mode 100644 common/e2k/quant.h
 
 diff --git a/Makefile b/Makefile
-index d0b1633..69d256b 100644
+index 0ba46aa..f95021f 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -114,6 +114,12 @@ SRCS += common/ppc/mc.c common/ppc/pixel.c common/ppc/dct.c \
- endif
+@@ -137,6 +137,16 @@ SRCS_X += common/ppc/dct.c \
+           common/ppc/quant.c
  endif
  
 +# Elbrus optims
 +ifeq ($(SYS_ARCH),E2K)
-+SRCS += common/e2k/mc.c common/e2k/pixel.c common/e2k/dct.c \
-+        common/e2k/quant.c common/e2k/deblock.c common/e2k/predict.c
++SRCS_X += common/e2k/dct.c \
++          common/e2k/deblock.c \
++          common/e2k/mc.c \
++          common/e2k/pixel.c \
++          common/e2k/predict.c \
++          common/e2k/quant.c
 +endif
 +
  # NEON optims
  ifeq ($(SYS_ARCH),ARM)
- ifneq ($(AS),)
+ SRCASM_X  = common/arm/bitstream-a.S \
 diff --git a/common/common.h b/common/common.h
-index c7850ca..110db24 100644
+index ebc87ce..fe22ac7 100644
 --- a/common/common.h
 +++ b/common/common.h
-@@ -1016,6 +1016,18 @@ static int ALWAYS_INLINE x264_predictor_clip( int16_t (*dst)[2], int16_t (*mvc)[
+@@ -808,6 +808,18 @@ static ALWAYS_INLINE int x264_predictor_clip( int16_t (*dst)[2], int16_t (*mvc)[
  #include "x86/util.h"
  #endif
  
@@ -87,10 +91,10 @@ index c7850ca..110db24 100644
  
  #endif
 diff --git a/common/cpu.c b/common/cpu.c
-index 636a40c..66375be 100644
+index 41a4c1d..dcd8731 100644
 --- a/common/cpu.c
 +++ b/common/cpu.c
-@@ -83,6 +83,8 @@ const x264_cpu_name_t x264_cpu_names[] =
+@@ -89,6 +89,8 @@ const x264_cpu_name_t x264_cpu_names[] =
      {"UnalignedStack",  X264_CPU_STACK_MOD4},
  #elif ARCH_PPC
      {"Altivec",         X264_CPU_ALTIVEC},
@@ -99,7 +103,7 @@ index 636a40c..66375be 100644
  #elif ARCH_ARM
      {"ARMv6",           X264_CPU_ARMV6},
      {"NEON",            X264_CPU_NEON},
-@@ -371,6 +373,13 @@ uint32_t x264_cpu_detect( void )
+@@ -360,6 +362,13 @@ uint32_t x264_cpu_detect( void )
  }
  #endif
  
@@ -110,24 +114,24 @@ index 636a40c..66375be 100644
 +    return X264_CPU_E2K;
 +}
 +
- #elif ARCH_ARM
+ #elif HAVE_ARMV6
  
  void x264_cpu_neon_test( void );
 diff --git a/common/dct.c b/common/dct.c
-index a270c4c..35bba38 100644
+index 90997ca..6a3a8d4 100644
 --- a/common/dct.c
 +++ b/common/dct.c
 @@ -32,6 +32,9 @@
- #if ARCH_PPC
+ #if HAVE_ALTIVEC
  #   include "ppc/dct.h"
  #endif
 +#if ARCH_E2K
 +#   include "e2k/dct.h"
 +#endif
- #if ARCH_ARM
+ #if HAVE_ARMV6
  #   include "arm/dct.h"
  #endif
-@@ -735,6 +738,30 @@ void x264_dct_init( int cpu, x264_dct_function_t *dctf )
+@@ -682,6 +685,30 @@ void x264_dct_init( uint32_t cpu, x264_dct_function_t *dctf )
      }
  #endif
  
@@ -155,10 +159,10 @@ index a270c4c..35bba38 100644
 +    }
 +#endif
 +
- #if HAVE_ARMV6 || ARCH_AARCH64
+ #if HAVE_ARMV6 || HAVE_AARCH64
      if( cpu&X264_CPU_NEON )
      {
-@@ -1035,6 +1062,14 @@ void x264_zigzag_init( int cpu, x264_zigzag_function_t *pf_progressive, x264_zig
+@@ -996,6 +1023,14 @@ void x264_zigzag_init( uint32_t cpu, x264_zigzag_function_t *pf_progressive, x26
          pf_progressive->scan_8x8  = x264_zigzag_scan_8x8_frame_altivec;
      }
  #endif
@@ -170,10 +174,10 @@ index a270c4c..35bba38 100644
 +        pf_progressive->scan_8x8  = x264_zigzag_scan_8x8_frame_e2k;
 +    }
 +#endif
- #if HAVE_ARMV6 || ARCH_AARCH64
+ #if HAVE_ARMV6 || HAVE_AARCH64
      if( cpu&X264_CPU_NEON )
      {
-@@ -1110,6 +1145,14 @@ void x264_zigzag_init( int cpu, x264_zigzag_function_t *pf_progressive, x264_zig
+@@ -1081,6 +1116,14 @@ void x264_zigzag_init( uint32_t cpu, x264_zigzag_function_t *pf_progressive, x26
      }
  #endif // HAVE_ALTIVEC
  
@@ -189,21 +193,20 @@ index a270c4c..35bba38 100644
      if( cpu&X264_CPU_MSA )
      {
 diff --git a/common/deblock.c b/common/deblock.c
-index 659fb35..b5b4990 100644
+index 2607b98..f8649ab 100644
 --- a/common/deblock.c
 +++ b/common/deblock.c
-@@ -731,6 +731,10 @@ void x264_deblock_v_luma_altivec( uint8_t *pix, intptr_t stride, int alpha, int
- void x264_deblock_h_luma_altivec( uint8_t *pix, intptr_t stride, int alpha, int beta, int8_t *tc0 );
- #endif // ARCH_PPC
- 
+@@ -671,6 +671,9 @@ void x264_macroblock_deblock( x264_t *h )
+ #if HAVE_ALTIVEC
+ #include "ppc/deblock.h"
+ #endif
 +#if ARCH_E2K
-+#   include "e2k/deblock.h"
++#include "e2k/deblock.h"
 +#endif
-+
- #if HAVE_ARMV6 || ARCH_AARCH64
- void x264_deblock_v_luma_neon  ( uint8_t *pix, intptr_t stride, int alpha, int beta, int8_t *tc0 );
- void x264_deblock_h_luma_neon  ( uint8_t *pix, intptr_t stride, int alpha, int beta, int8_t *tc0 );
-@@ -864,6 +868,14 @@ void x264_deblock_init( int cpu, x264_deblock_function_t *pf, int b_mbaff )
+ #if HAVE_ARMV6
+ #include "arm/deblock.h"
+ #endif
+@@ -783,6 +786,14 @@ void x264_deblock_init( uint32_t cpu, x264_deblock_function_t *pf, int b_mbaff )
      }
  #endif // HAVE_ALTIVEC
  
@@ -215,15 +218,15 @@ index 659fb35..b5b4990 100644
 +    }
 +#endif
 +
- #if HAVE_ARMV6 || ARCH_AARCH64
+ #if HAVE_ARMV6 || HAVE_AARCH64
      if( cpu&X264_CPU_NEON )
      {
 diff --git a/common/e2k/dct.c b/common/e2k/dct.c
 new file mode 100644
-index 0000000..57acc17
+index 0000000..e9709aa
 --- /dev/null
 +++ b/common/e2k/dct.c
-@@ -0,0 +1,828 @@
+@@ -0,0 +1,829 @@
 +/*****************************************************************************
 + * dct.c: e2k transform and zigzag
 + *****************************************************************************
@@ -253,6 +256,7 @@ index 0000000..57acc17
 +
 +#include "common/common.h"
 +#include "e2kcommon.h"
++#include "dct.h"
 +
 +#if !HIGH_BIT_DEPTH
 +#define VEC_DCT(a0,a1,a2,a3,b0,b1,b2,b3) \
@@ -1054,10 +1058,10 @@ index 0000000..57acc17
 +
 diff --git a/common/e2k/dct.h b/common/e2k/dct.h
 new file mode 100644
-index 0000000..e39b097
+index 0000000..bdf682a
 --- /dev/null
 +++ b/common/e2k/dct.h
-@@ -0,0 +1,73 @@
+@@ -0,0 +1,69 @@
 +/*****************************************************************************
 + * dct.h: e2k transform and zigzag
 + *****************************************************************************
@@ -1083,10 +1087,6 @@ index 0000000..e39b097
 +
 +#ifndef X264_E2K_DCT_H
 +#define X264_E2K_DCT_H
-+
-+#ifndef x264_template
-+#define x264_template(name) x264_##name
-+#endif
 +
 +#define x264_sub4x4_dct_e2k x264_template(sub4x4_dct_e2k)
 +void x264_sub4x4_dct_e2k(int16_t dct[16], uint8_t *pix1, uint8_t *pix2);
@@ -1375,10 +1375,10 @@ index 0000000..349578f
 +#endif // !HIGH_BIT_DEPTH
 diff --git a/common/e2k/deblock.h b/common/e2k/deblock.h
 new file mode 100644
-index 0000000..cc3489e
+index 0000000..87302e2
 --- /dev/null
 +++ b/common/e2k/deblock.h
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,32 @@
 +/*****************************************************************************
 + * deblock.h: e2k deblocking
 + *****************************************************************************
@@ -1404,10 +1404,6 @@ index 0000000..cc3489e
 +
 +#ifndef X264_E2K_DEBLOCK_H
 +#define X264_E2K_DEBLOCK_H
-+
-+#ifndef x264_template
-+#define x264_template(name) x264_##name
-+#endif
 +
 +#define x264_deblock_v_luma_e2k x264_template(deblock_v_luma_e2k)
 +void x264_deblock_v_luma_e2k(uint8_t *pix, intptr_t stride, int alpha, int beta, int8_t *tc0);
@@ -1676,7 +1672,7 @@ index 0000000..83d0a6c
 +#endif // X264_E2K_E2KCOMMON_H
 diff --git a/common/e2k/mc.c b/common/e2k/mc.c
 new file mode 100644
-index 0000000..90dacf0
+index 0000000..430b705
 --- /dev/null
 +++ b/common/e2k/mc.c
 @@ -0,0 +1,1401 @@
@@ -1708,8 +1704,8 @@ index 0000000..90dacf0
 + *****************************************************************************/
 +
 +#include "common/common.h"
-+#include "mc.h"
 +#include "e2kcommon.h"
++#include "mc.h"
 +
 +#if !HIGH_BIT_DEPTH
 +static ALWAYS_INLINE void pixel_avg2_w4_e2k(uint8_t * restrict dst,  intptr_t i_dst,
@@ -3071,8 +3067,8 @@ index 0000000..90dacf0
 +
 +    pf->weight = mc_weight_wtab_e2k;
 +
-+    pf->plane_copy_swap = x264_plane_copy_swap_e2k;
-+    pf->plane_copy_interleave = x264_plane_copy_interleave_e2k;
++    pf->plane_copy_swap = plane_copy_swap_e2k;
++    pf->plane_copy_interleave = plane_copy_interleave_e2k;
 +    pf->store_interleave_chroma = store_interleave_chroma_e2k;
 +    pf->plane_copy_deinterleave = plane_copy_deinterleave_e2k;
 +    pf->plane_copy_deinterleave_rgb = plane_copy_deinterleave_rgb_e2k;
@@ -3083,10 +3079,10 @@ index 0000000..90dacf0
 +}
 diff --git a/common/e2k/mc.h b/common/e2k/mc.h
 new file mode 100644
-index 0000000..3663e74
+index 0000000..3e0c8e1
 --- /dev/null
 +++ b/common/e2k/mc.h
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,30 @@
 +/*****************************************************************************
 + * mc.h: e2k motion compensation
 + *****************************************************************************
@@ -3113,20 +3109,16 @@ index 0000000..3663e74
 +#ifndef X264_E2K_MC_H
 +#define X264_E2K_MC_H
 +
-+#ifndef x264_template
-+#define x264_template(name) x264_##name
-+#endif
-+
 +#define x264_mc_init_e2k x264_template(mc_init_e2k)
 +void x264_mc_init_e2k( x264_mc_functions_t *pf );
 +
 +#endif
 diff --git a/common/e2k/pixel.c b/common/e2k/pixel.c
 new file mode 100644
-index 0000000..020f7fb
+index 0000000..e68fbda
 --- /dev/null
 +++ b/common/e2k/pixel.c
-@@ -0,0 +1,1168 @@
+@@ -0,0 +1,1169 @@
 +/*****************************************************************************
 + * pixel.c: e2k pixel metrics
 + *****************************************************************************
@@ -3156,6 +3148,7 @@ index 0000000..020f7fb
 +
 +#include "common/common.h"
 +#include "e2kcommon.h"
++#include "pixel.h"
 +
 +#if !HIGH_BIT_DEPTH
 +/***********************************************************************
@@ -4297,10 +4290,10 @@ index 0000000..020f7fb
 +}
 diff --git a/common/e2k/pixel.h b/common/e2k/pixel.h
 new file mode 100644
-index 0000000..0d5adbc
+index 0000000..d7c8a97
 --- /dev/null
 +++ b/common/e2k/pixel.h
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,30 @@
 +/*****************************************************************************
 + * pixel.h: e2k pixel metrics
 + *****************************************************************************
@@ -4327,17 +4320,13 @@ index 0000000..0d5adbc
 +#ifndef X264_E2K_PIXEL_H
 +#define X264_E2K_PIXEL_H
 +
-+#ifndef x264_template
-+#define x264_template(name) x264_##name
-+#endif
-+
 +#define x264_pixel_init_e2k x264_template(pixel_init_e2k)
 +void x264_pixel_init_e2k(x264_pixel_function_t *pixf);
 +
 +#endif
 diff --git a/common/e2k/predict.c b/common/e2k/predict.c
 new file mode 100644
-index 0000000..f67790e
+index 0000000..0381e26
 --- /dev/null
 +++ b/common/e2k/predict.c
 @@ -0,0 +1,187 @@
@@ -4368,9 +4357,9 @@ index 0000000..f67790e
 + *****************************************************************************/
 +
 +#include "common/common.h"
++#include "e2kcommon.h"
 +#include "predict.h"
 +#include "pixel.h"
-+#include "e2kcommon.h"
 +
 +#if !HIGH_BIT_DEPTH
 +static void predict_8x8c_p_e2k(uint8_t *src) {
@@ -4530,10 +4519,10 @@ index 0000000..f67790e
 +}
 diff --git a/common/e2k/predict.h b/common/e2k/predict.h
 new file mode 100644
-index 0000000..4801055
+index 0000000..7b7f627
 --- /dev/null
 +++ b/common/e2k/predict.h
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,32 @@
 +/*****************************************************************************
 + * predict.h: e2k intra prediction
 + *****************************************************************************
@@ -4560,10 +4549,6 @@ index 0000000..4801055
 +#ifndef X264_E2K_PREDICT_H
 +#define X264_E2K_PREDICT_H
 +
-+#ifndef x264_template
-+#define x264_template(name) x264_##name
-+#endif
-+
 +#define x264_predict_16x16_init_e2k x264_template(predict_16x16_init_e2k)
 +void x264_predict_16x16_init_e2k(x264_predict_t pf[7]);
 +#define x264_predict_8x8c_init_e2k x264_template(predict_8x8c_init_e2k)
@@ -4572,10 +4557,10 @@ index 0000000..4801055
 +#endif
 diff --git a/common/e2k/quant.c b/common/e2k/quant.c
 new file mode 100644
-index 0000000..9993a80
+index 0000000..76a778d
 --- /dev/null
 +++ b/common/e2k/quant.c
-@@ -0,0 +1,439 @@
+@@ -0,0 +1,436 @@
 +/*****************************************************************************
 + * quant.c: e2k quantization
 + *****************************************************************************
@@ -4815,9 +4800,6 @@ index 0000000..9993a80
 +    }
 +}
 +
-+const uint8_t x264_decimate_table4[16];
-+const uint8_t x264_decimate_table8[16];
-+
 +static const uint8_t decimate_mask_table4[256] = {
 +     0,  3,  2,  6,  2,  5,  5,  9,  1,  5,  4,  8,  5,  8,  8, 12, 
 +     1,  4,  4,  8,  4,  7,  7, 11,  4,  8,  7, 11,  8, 11, 11, 15, 
@@ -5017,10 +4999,10 @@ index 0000000..9993a80
 +
 diff --git a/common/e2k/quant.h b/common/e2k/quant.h
 new file mode 100644
-index 0000000..77b63f0
+index 0000000..1050f9d
 --- /dev/null
 +++ b/common/e2k/quant.h
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,73 @@
 +/*****************************************************************************
 + * quant.h: e2k quantization
 + *****************************************************************************
@@ -5046,10 +5028,6 @@ index 0000000..77b63f0
 +
 +#ifndef X264_E2K_QUANT_H
 +#define X264_E2K_QUANT_H
-+
-+#ifndef x264_template
-+#define x264_template(name) x264_##name
-+#endif
 +
 +#define x264_quant_2x2_dc_e2k x264_template(quant_2x2_dc_e2k)
 +int x264_quant_2x2_dc_e2k(int16_t dct[4], int mf, int bias);
@@ -5099,20 +5077,20 @@ index 0000000..77b63f0
 +
 +#endif
 diff --git a/common/mc.c b/common/mc.c
-index 543a05c..bc45279 100644
+index d5e6d55..eb6b7be 100644
 --- a/common/mc.c
 +++ b/common/mc.c
 @@ -32,6 +32,9 @@
- #if ARCH_PPC
+ #if HAVE_ALTIVEC
  #include "ppc/mc.h"
  #endif
 +#if ARCH_E2K
 +#include "e2k/mc.h"
 +#endif
- #if ARCH_ARM
+ #if HAVE_ARMV6
  #include "arm/mc.h"
  #endif
-@@ -678,6 +681,10 @@ void x264_mc_init( int cpu, x264_mc_functions_t *pf, int cpu_independent )
+@@ -677,6 +680,10 @@ void x264_mc_init( uint32_t cpu, x264_mc_functions_t *pf, int cpu_independent )
      if( cpu&X264_CPU_ALTIVEC )
          x264_mc_init_altivec( pf );
  #endif
@@ -5124,20 +5102,20 @@ index 543a05c..bc45279 100644
      x264_mc_init_arm( cpu, pf );
  #endif
 diff --git a/common/pixel.c b/common/pixel.c
-index c5edc9e..c18e107 100644
+index 113df30..d4757e9 100644
 --- a/common/pixel.c
 +++ b/common/pixel.c
 @@ -34,6 +34,9 @@
- #if ARCH_PPC
+ #if HAVE_ALTIVEC
  #   include "ppc/pixel.h"
  #endif
 +#if ARCH_E2K
 +#   include "e2k/pixel.h"
 +#endif
- #if ARCH_ARM
+ #if HAVE_ARMV6
  #   include "arm/pixel.h"
  #   include "arm/predict.h"
-@@ -1494,6 +1497,12 @@ void x264_pixel_init( int cpu, x264_pixel_function_t *pixf )
+@@ -1506,6 +1509,12 @@ void x264_pixel_init( uint32_t cpu, x264_pixel_function_t *pixf )
          x264_pixel_init_altivec( pixf );
      }
  #endif
@@ -5151,20 +5129,20 @@ index c5edc9e..c18e107 100644
      pixf->ads[PIXEL_8x16] =
      pixf->ads[PIXEL_8x4] =
 diff --git a/common/predict.c b/common/predict.c
-index 8163f94..abb4e29 100644
+index 5a48198..f7e1f2f 100644
 --- a/common/predict.c
 +++ b/common/predict.c
 @@ -37,6 +37,9 @@
- #if ARCH_PPC
+ #if HAVE_ALTIVEC
  #   include "ppc/predict.h"
  #endif
 +#if ARCH_E2K
 +#   include "e2k/predict.h"
 +#endif
- #if ARCH_ARM
+ #if HAVE_ARMV6
  #   include "arm/predict.h"
  #endif
-@@ -902,6 +905,11 @@ void x264_predict_16x16_init( int cpu, x264_predict_t pf[7] )
+@@ -902,6 +905,11 @@ void x264_predict_16x16_init( uint32_t cpu, x264_predict_t pf[7] )
          x264_predict_16x16_init_altivec( pf );
  #endif
  
@@ -5177,20 +5155,20 @@ index 8163f94..abb4e29 100644
      x264_predict_16x16_init_arm( cpu, pf );
  #endif
 diff --git a/common/quant.c b/common/quant.c
-index 7eef140..14e931a 100644
+index 6b71225..b5cefa0 100644
 --- a/common/quant.c
 +++ b/common/quant.c
 @@ -34,6 +34,9 @@
- #if ARCH_PPC
+ #if HAVE_ALTIVEC
  #   include "ppc/quant.h"
  #endif
 +#if ARCH_E2K
 +#   include "e2k/quant.h"
 +#endif
- #if ARCH_ARM
+ #if HAVE_ARMV6
  #   include "arm/quant.h"
  #endif
-@@ -739,6 +742,36 @@ void x264_quant_init( x264_t *h, int cpu, x264_quant_function_t *pf )
+@@ -745,6 +748,36 @@ void x264_quant_init( x264_t *h, uint32_t cpu, x264_quant_function_t *pf )
      }
  #endif
  
@@ -5228,7 +5206,7 @@ index 7eef140..14e931a 100644
      if( cpu&X264_CPU_ARMV6 )
      {
 diff --git a/config.guess b/config.guess
-index 375fa2a..25ad63b 100755
+index d437be0..6535d3f 100755
 --- a/config.guess
 +++ b/config.guess
 @@ -914,6 +914,9 @@ EOF
@@ -5242,7 +5220,7 @@ index 375fa2a..25ad63b 100755
  	echo ${UNAME_MACHINE}-unknown-linux-gnu
  	exit ;;
 diff --git a/config.sub b/config.sub
-index 8df5511..3034132 100755
+index 72e9265..7076743 100755
 --- a/config.sub
 +++ b/config.sub
 @@ -266,7 +266,7 @@ case $basic_machine in
@@ -5255,35 +5233,39 @@ index 8df5511..3034132 100755
  	| h8300 | h8500 | hppa | hppa1.[01] | hppa2.0 | hppa2.0[nw] | hppa64 \
  	| hexagon \
 diff --git a/configure b/configure
-index 60ac551..9bdfac4 100755
+index e242e73..22e7583 100755
 --- a/configure
 +++ b/configure
-@@ -374,7 +374,7 @@ NL="
+@@ -409,7 +409,7 @@ NL="
  "
  
  # list of all preprocessor HAVE values we can define
--CONFIG_HAVE="MALLOC_H ALTIVEC ALTIVEC_H MMX ARMV6 ARMV6T2 NEON BEOSTHREAD POSIXTHREAD WIN32THREAD THREAD LOG2F SWSCALE \
-+CONFIG_HAVE="MALLOC_H E2K ALTIVEC ALTIVEC_H MMX ARMV6 ARMV6T2 NEON BEOSTHREAD POSIXTHREAD WIN32THREAD THREAD LOG2F SWSCALE \
+-CONFIG_HAVE="MALLOC_H ALTIVEC ALTIVEC_H MMX ARMV6 ARMV6T2 NEON AARCH64 BEOSTHREAD POSIXTHREAD WIN32THREAD THREAD LOG2F SWSCALE \
++CONFIG_HAVE="MALLOC_H E2K ALTIVEC ALTIVEC_H MMX ARMV6 ARMV6T2 NEON AARCH64 BEOSTHREAD POSIXTHREAD WIN32THREAD THREAD LOG2F SWSCALE \
               LAVF FFMS GPAC AVS GPL VECTOREXT INTERLACED CPU_COUNT OPENCL THP LSMASH X86_INLINE_ASM AS_FUNC INTEL_DISPATCHER \
-              MSA MMAP WINRT VSX"
+              MSA MMAP WINRT VSX ARM_INLINE_ASM STRTOK_R CLOCK_GETTIME BITDEPTH8 BITDEPTH10"
  
-@@ -751,6 +751,11 @@ case $host_cpu in
+@@ -814,6 +814,15 @@ case $host_cpu in
              fi
          fi
          ;;
 +    e2k)
 +        ARCH="E2K"
-+        define HAVE_E2K
-+        CFLAGS="$CFLAGS -msse4.1"
++        if [ $asm = auto ] ; then
++            define HAVE_E2K
++            CFLAGS="$CFLAGS -msse4.1"
++            AS="${AS-${CC}}"
++            AS_EXT=".c"
++        fi
 +        ;;
      sparc)
          ARCH="SPARC"
          ;;
 diff --git a/tools/checkasm.c b/tools/checkasm.c
-index 3db44cf..dcb2b85 100644
+index 829f3e2..f857e43 100644
 --- a/tools/checkasm.c
 +++ b/tools/checkasm.c
-@@ -90,6 +90,10 @@ static const char **intra_predict_8x16c_names = intra_predict_8x8c_names;
+@@ -100,6 +100,10 @@ static const char **intra_predict_8x16c_names = intra_predict_8x8c_names;
  
  #define set_func_name(...) snprintf( func_name, sizeof(func_name), __VA_ARGS__ )
  
@@ -5294,17 +5276,17 @@ index 3db44cf..dcb2b85 100644
  static inline uint32_t read_time(void)
  {
      uint32_t a = 0;
-@@ -99,6 +103,9 @@ static inline uint32_t read_time(void)
+@@ -109,6 +113,9 @@ static inline uint32_t read_time(void)
                    : "=a"(a) :: "edx", "memory" );
  #elif ARCH_PPC
      asm volatile( "mftb %0" : "=r"(a) :: "memory" );
 +#elif ARCH_E2K
 +    unsigned aux;
 +    a = __rdtscp(&aux);
- #elif ARCH_ARM     // ARMv7 only
+ #elif HAVE_ARM_INLINE_ASM    // ARMv7 only
      asm volatile( "mrc p15, 0, %0, c9, c13, 0" : "=r"(a) :: "memory" );
  #elif ARCH_AARCH64
-@@ -193,6 +200,8 @@ static void print_bench(void)
+@@ -207,6 +214,8 @@ static void print_bench(void)
                      b->cpu&X264_CPU_MMX ? "mmx" :
  #elif ARCH_PPC
                      b->cpu&X264_CPU_ALTIVEC ? "altivec" :
@@ -5313,7 +5295,7 @@ index 3db44cf..dcb2b85 100644
  #elif ARCH_ARM
                      b->cpu&X264_CPU_NEON ? "neon" :
                      b->cpu&X264_CPU_ARMV6 ? "armv6" :
-@@ -2862,6 +2871,12 @@ static int check_all_flags( void )
+@@ -2959,6 +2968,12 @@ static int check_all_flags( void )
          fprintf( stderr, "x264: ALTIVEC against C\n" );
          ret = check_all_funcs( 0, X264_CPU_ALTIVEC );
      }
@@ -5326,7 +5308,7 @@ index 3db44cf..dcb2b85 100644
  #elif ARCH_ARM
      if( cpu_detect & X264_CPU_NEON )
          x264_checkasm_call = x264_checkasm_call_neon;
-@@ -2894,7 +2909,7 @@ int main(int argc, char *argv[])
+@@ -2989,7 +3004,7 @@ REALIGN_STACK int main( int argc, char **argv )
  
      if( argc > 1 && !strncmp( argv[1], "--bench", 7 ) )
      {
@@ -5336,19 +5318,19 @@ index 3db44cf..dcb2b85 100644
          return 1;
  #endif
 diff --git a/x264.h b/x264.h
-index 18f5796..6dc5055 100644
+index 5aa2a8d..ce501ef 100644
 --- a/x264.h
 +++ b/x264.h
-@@ -156,6 +156,9 @@ typedef struct x264_nal_t
+@@ -172,6 +172,9 @@ typedef struct x264_nal_t
  /* PowerPC */
- #define X264_CPU_ALTIVEC         0x0000001
+ #define X264_CPU_ALTIVEC         0x0000001U
  
 +/* Elbrus */
-+#define X264_CPU_E2K             0x0000001
++#define X264_CPU_E2K             0x0000001U
 +
  /* ARM and AArch64 */
- #define X264_CPU_ARMV6           0x0000001
- #define X264_CPU_NEON            0x0000002  /* ARM NEON */
+ #define X264_CPU_ARMV6           0x0000001U
+ #define X264_CPU_NEON            0x0000002U  /* ARM NEON */
 -- 
-2.17.1
+2.34.1
 
