@@ -1,0 +1,122 @@
+From 2d9ed7ad38a69c2550f3b2f4205cea6b1578ed9c Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Wed, 21 Jun 2023 20:41:18 +0700
+Subject: [PATCH] zlib-ng-2.1.2 e2k support
+
+---
+ CMakeLists.txt                | 14 +++++++++++++-
+ arch/x86/x86_features.c       | 14 ++++++++++++++
+ cmake/detect-arch.cmake       |  2 ++
+ cmake/detect-intrinsics.cmake |  3 +++
+ fallback_builtins.h           |  7 ++++++-
+ 5 files changed, 38 insertions(+), 2 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 424fddf..bf4be2f 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -111,6 +111,18 @@ elseif(BASEARCH_S360_FOUND)
+     option(WITH_DFLTCC_DEFLATE "Build with DFLTCC intrinsics for compression on IBM Z" OFF)
+     option(WITH_DFLTCC_INFLATE "Build with DFLTCC intrinsics for decompression on IBM Z" OFF)
+     option(WITH_CRC32_VX "Build with vectorized CRC32 on IBM Z" ON)
++elseif(BASEARCH_X86_FOUND AND ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "e2k")
++    option(WITH_AVX2 "Build with AVX2" OFF)
++    option(WITH_AVX512 "Build with AVX512" OFF)
++    option(WITH_AVX512VNNI "Build with AVX512 VNNI extensions" OFF)
++    option(WITH_SSE2 "Build with SSE2" ON)
++    option(WITH_SSSE3 "Build with SSSE3" ON)
++    option(WITH_SSE42 "Build with SSE42" OFF)
++    option(WITH_PCLMULQDQ "Build with PCLMULQDQ" ON)
++    option(WITH_VPCLMULQDQ "Build with VPCLMULQDQ" OFF)
++    if(NOT WITH_AVX2)
++        add_compile_options(-mno-avx)
++    endif()
+ elseif(BASEARCH_X86_FOUND)
+     option(WITH_AVX2 "Build with AVX2" ON)
+     option(WITH_AVX512 "Build with AVX512" ON)
+@@ -861,7 +873,7 @@ if(WITH_OPTIM)
+                 set(WITH_SSSE3 OFF)
+             endif()
+         endif()
+-        if(WITH_PCLMULQDQ AND WITH_SSSE3 AND WITH_SSE42)
++        if(WITH_PCLMULQDQ AND WITH_SSSE3 AND (WITH_SSE42 OR ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "e2k"))
+             check_pclmulqdq_intrinsics()
+             if(HAVE_PCLMULQDQ_INTRIN AND HAVE_SSSE3_INTRIN)
+                 add_definitions(-DX86_PCLMULQDQ_CRC)
+diff --git a/arch/x86/x86_features.c b/arch/x86/x86_features.c
+index 3272e3f..bcbc5c4 100644
+--- a/arch/x86/x86_features.c
++++ b/arch/x86/x86_features.c
+@@ -10,6 +10,19 @@
+ #include "../../zbuild.h"
+ #include "x86_features.h"
+ 
++#ifdef __e2k__
++void Z_INTERNAL x86_check_features(struct x86_cpu_features *features) {
++    features->has_sse2 = 1;
++    features->has_ssse3 = 1;
++#if __iset__ >= 6
++    features->has_pclmulqdq = 1;
++#endif
++#ifdef __AVX2__
++    features->has_os_save_ymm = 1;
++    features->has_avx2 = 1;
++#endif
++}
++#else
+ #ifdef _WIN32
+ #  include <intrin.h>
+ #else
+@@ -95,3 +108,4 @@ void Z_INTERNAL x86_check_features(struct x86_cpu_features *features) {
+         }
+     }
+ }
++#endif
+diff --git a/cmake/detect-arch.cmake b/cmake/detect-arch.cmake
+index 21c237d..a68ce88 100644
+--- a/cmake/detect-arch.cmake
++++ b/cmake/detect-arch.cmake
+@@ -16,6 +16,8 @@ elseif(MSVC)
+     elseif ("${MSVC_C_ARCHITECTURE_ID}" STREQUAL "ARM64")
+         set(ARCH "aarch64")
+     endif()
++elseif(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "e2k")
++    set(ARCH "x86_64")
+ elseif(EMSCRIPTEN)
+     set(ARCH "wasm32")
+ elseif(CMAKE_CROSSCOMPILING)
+diff --git a/cmake/detect-intrinsics.cmake b/cmake/detect-intrinsics.cmake
+index e9e6d36..2dcd699 100644
+--- a/cmake/detect-intrinsics.cmake
++++ b/cmake/detect-intrinsics.cmake
+@@ -226,6 +226,9 @@ macro(check_pclmulqdq_intrinsics)
+         set(CMAKE_REQUIRED_FLAGS "${PCLMULFLAG} ${NATIVEFLAG}")
+         check_c_source_compile_or_run(
+             "#include <immintrin.h>
++            #if defined(__e2k__) && __iset__ < 6
++            #error
++            #endif
+             int main(void) {
+                 __m128i a = _mm_setzero_si128();
+                 __m128i b = _mm_setzero_si128();
+diff --git a/fallback_builtins.h b/fallback_builtins.h
+index 447f9ac..1e4af1e 100644
+--- a/fallback_builtins.h
++++ b/fallback_builtins.h
+@@ -53,7 +53,12 @@ static __forceinline int __builtin_ctzll(unsigned long long value) {
+ #ifdef __AVX2__
+ #include <immintrin.h>
+ 
+-#if (!defined(__clang__) && defined(__GNUC__) && __GNUC__ < 10) \
++#ifdef __e2k__
++#define _mm256_zextsi128_si256 _mm256_zextsi128_si256_redef
++static inline __m256i _mm256_zextsi128_si256(__m128i a) {
++    return _mm256_set_m128i(_mm_setzero_si128(), a);
++}
++#elif (!defined(__clang__) && defined(__GNUC__) && __GNUC__ < 10) \
+     || (defined(__apple_build_version__) && __apple_build_version__ < 9020039)
+ static inline __m256i _mm256_zextsi128_si256(__m128i a) {
+     __m128i r;
+-- 
+2.34.1
+
