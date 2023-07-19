@@ -1,14 +1,13 @@
-From d9755185411bb9ba21d7624fecab602c75f5dc89 Mon Sep 17 00:00:00 2001
+From 52303e851850d9e7e2aaa6121811ca998af1f9e5 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Tue, 11 Jul 2023 10:57:06 +0700
+Date: Wed, 19 Jul 2023 10:17:39 +0700
 Subject: [PATCH] oneTBB-2021.9 e2k support
 
 Compiled using LCC 1.26
 
-tests passed: 124/137
+tests passed: 125/137
 
 hanging (timeout 30 min):
-test_collaborative_call_once
 test_function_node
 test_multifunction_node
 test_async_node
@@ -24,13 +23,14 @@ test_malloc_used_by_lib (Subprocess aborted)
 test_malloc_lib_unload (Subprocess aborted)
 test_malloc_whitebox (Subprocess aborted)
 ---
- cmake/compilers/GNU.cmake            | 5 +++++
- include/oneapi/tbb/detail/_config.h  | 2 +-
- src/tbb/allocator.cpp                | 6 ++++++
- src/tbb/co_context.h                 | 9 +++++++++
- src/tbb/tools_api/ittnotify_config.h | 7 +++++++
- test/tbb/test_openmp.cpp             | 5 +++++
- 6 files changed, 33 insertions(+), 1 deletion(-)
+ cmake/compilers/GNU.cmake                    |  5 +++++
+ include/oneapi/tbb/collaborative_call_once.h | 10 ++++++++++
+ include/oneapi/tbb/detail/_config.h          |  2 +-
+ src/tbb/allocator.cpp                        |  6 ++++++
+ src/tbb/co_context.h                         |  9 +++++++++
+ src/tbb/tools_api/ittnotify_config.h         |  7 +++++++
+ test/tbb/test_openmp.cpp                     |  5 +++++
+ 7 files changed, 43 insertions(+), 1 deletion(-)
 
 diff --git a/cmake/compilers/GNU.cmake b/cmake/compilers/GNU.cmake
 index 34c10db..81a34e0 100644
@@ -48,6 +48,28 @@ index 34c10db..81a34e0 100644
  # TBB malloc settings
  set(TBBMALLOC_LIB_COMPILE_FLAGS -fno-rtti -fno-exceptions)
  set(TBB_OPENMP_FLAG -fopenmp)
+diff --git a/include/oneapi/tbb/collaborative_call_once.h b/include/oneapi/tbb/collaborative_call_once.h
+index db082f8..14a11e8 100644
+--- a/include/oneapi/tbb/collaborative_call_once.h
++++ b/include/oneapi/tbb/collaborative_call_once.h
+@@ -155,7 +155,17 @@ class collaborative_once_flag : no_copy {
+     template <typename Fn>
+     void do_collaborative_call_once(Fn&& f) {
+         std::uintptr_t expected = m_state.load(std::memory_order_acquire);
++#ifdef __e2k__
++        char stack_buf[max_nfs_size + sizeof(collaborative_once_runner)];
++        char *stack_ptr = &stack_buf[-(uintptr_t)stack_buf & (collaborative_once_references_mask - 1)];
++        collaborative_once_runner &runner = *new(stack_ptr) collaborative_once_runner();
++        struct runner_cleaner {
++            collaborative_once_runner &runner;
++            ~runner_cleaner() { runner.~collaborative_once_runner(); }
++        } cleaner = { runner };
++#else
+         collaborative_once_runner runner;
++#endif
+ 
+         do {
+             if (expected == state::uninitialized && m_state.compare_exchange_strong(expected, runner.to_bits())) {
 diff --git a/include/oneapi/tbb/detail/_config.h b/include/oneapi/tbb/detail/_config.h
 index 1d0b987..835f2be 100644
 --- a/include/oneapi/tbb/detail/_config.h
