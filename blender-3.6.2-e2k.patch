@@ -1,29 +1,32 @@
-From 46754eb1d0c45d0d86cb24f2e66f23e0840b6284 Mon Sep 17 00:00:00 2001
+From 6afae9d34b92e8a37f90fb859b7c2b49bc67ad25 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Thu, 23 Mar 2023 15:50:23 +0700
-Subject: [PATCH] blender-3.4.1 e2k support
+Date: Thu, 31 Aug 2023 17:13:05 +0700
+Subject: [PATCH] blender-3.6.2 e2k support
 
-Using LCC 1.26.16
+Using LCC 1.26.20
 ---
- .../btSequentialImpulseConstraintSolver.cpp               | 4 ++++
- intern/cycles/util/defines.h                              | 2 +-
- intern/cycles/util/math_float3.h                          | 6 +++---
- intern/cycles/util/math_float4.h                          | 2 +-
- intern/cycles/util/optimization.h                         | 8 ++++++++
- intern/cycles/util/simd.h                                 | 4 ++--
- intern/cycles/util/ssef.h                                 | 6 +++---
- intern/cycles/util/system.cpp                             | 6 ++++++
- intern/cycles/util/transform_inverse.h                    | 2 +-
- intern/libmv/libmv/build/build_config.h                   | 8 ++++++++
- .../libmv/libmv/simple_pipeline/camera_intrinsics_impl.h  | 6 ++++--
- source/blender/blenkernel/intern/volume.cc                | 3 +++
- source/blender/blenlib/BLI_enumerable_thread_specific.hh  | 7 +++++++
- source/blender/blenlib/BLI_hash.hh                        | 3 +++
- source/blender/blenlib/BLI_memory_utils.hh                | 1 +
- source/blender/blenlib/BLI_utildefines.h                  | 2 +-
- source/blender/blenlib/BLI_virtual_array.hh               | 3 +++
- .../interface/interface_template_attribute_search.cc      | 4 ++++
- 18 files changed, 63 insertions(+), 14 deletions(-)
+ .../btSequentialImpulseConstraintSolver.cpp      |  4 ++++
+ extern/cuew/include/cuew.h                       |  2 +-
+ extern/fast_float/fast_float.h                   |  2 +-
+ extern/hipew/include/hipew.h                     |  2 +-
+ intern/cycles/util/defines.h                     |  2 +-
+ intern/cycles/util/math_float3.h                 |  6 +++---
+ intern/cycles/util/math_float4.h                 |  2 +-
+ intern/cycles/util/optimization.h                |  8 ++++++++
+ intern/cycles/util/simd.h                        |  4 ++--
+ intern/cycles/util/system.cpp                    |  6 ++++++
+ intern/cycles/util/transform_inverse.h           |  2 +-
+ intern/libmv/libmv/build/build_config.h          |  8 ++++++++
+ .../simple_pipeline/camera_intrinsics_impl.h     |  6 ++++--
+ source/blender/blenkernel/intern/volume.cc       |  3 +++
+ .../blenlib/BLI_enumerable_thread_specific.hh    |  7 +++++++
+ source/blender/blenlib/BLI_hash.hh               |  3 +++
+ source/blender/blenlib/BLI_math_matrix_types.hh  | 16 ++++++++++++++++
+ source/blender/blenlib/BLI_memory_utils.hh       |  1 +
+ source/blender/blenlib/BLI_utildefines.h         |  2 +-
+ source/blender/blenlib/BLI_virtual_array.hh      |  3 +++
+ .../interface_template_attribute_search.cc       |  4 ++++
+ 21 files changed, 79 insertions(+), 14 deletions(-)
 
 diff --git a/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp b/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
 index d2641c5..a0af3a4 100644
@@ -41,8 +44,47 @@ index d2641c5..a0af3a4 100644
  
  #define SSE4_DP(a, b) _mm_dp_ps(a, b, 0x7f)
  #define SSE4_DP_FP(a, b) _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7f))
+diff --git a/extern/cuew/include/cuew.h b/extern/cuew/include/cuew.h
+index 278fb11..ab32d0c 100644
+--- a/extern/cuew/include/cuew.h
++++ b/extern/cuew/include/cuew.h
+@@ -127,7 +127,7 @@ typedef uint32_t cuuint32_t;
+ typedef uint64_t cuuint64_t;
+ #endif
+ 
+-#if defined(__x86_64) || defined(AMD64) || defined(_M_AMD64) || defined (__aarch64__) || defined(__ppc64__) || defined(__PPC64__)
++#if defined(__x86_64) || defined(AMD64) || defined(_M_AMD64) || defined (__aarch64__) || defined(__ppc64__) || defined(__PPC64__) || defined(__LP64__)
+ typedef unsigned long long CUdeviceptr;
+ #else
+ typedef unsigned int CUdeviceptr;
+diff --git a/extern/fast_float/fast_float.h b/extern/fast_float/fast_float.h
+index 479aecc..32337f9 100644
+--- a/extern/fast_float/fast_float.h
++++ b/extern/fast_float/fast_float.h
+@@ -2200,7 +2200,7 @@ struct pow5_tables {
+     298023223876953125UL, 1490116119384765625UL, 7450580596923828125UL,
+   };
+ #ifdef FASTFLOAT_64BIT_LIMB
+-  constexpr static limb large_power_of_5[] = {
++  constexpr static limb large_power_of_5[5] = {
+     1414648277510068013UL, 9180637584431281687UL, 4539964771860779200UL,
+     10482974169319127550UL, 198276706040285095UL};
+ #else
+diff --git a/extern/hipew/include/hipew.h b/extern/hipew/include/hipew.h
+index f82654f..b9c3b7e 100644
+--- a/extern/hipew/include/hipew.h
++++ b/extern/hipew/include/hipew.h
+@@ -86,7 +86,7 @@ typedef uint32_t hipuint32_t;
+ typedef uint64_t hipuint64_t;
+ #endif
+ 
+-#if defined(__x86_64) || defined(AMD64) || defined(_M_AMD64) || defined (__aarch64__) || defined(__ppc64__) || defined(__PPC64__)
++#if defined(__x86_64) || defined(AMD64) || defined(_M_AMD64) || defined (__aarch64__) || defined(__ppc64__) || defined(__PPC64__) || defined(__LP64__)
+ typedef unsigned long long hipDeviceptr_t;
+ #else
+ typedef unsigned int hipDeviceptr_t;
 diff --git a/intern/cycles/util/defines.h b/intern/cycles/util/defines.h
-index 1969529..da9f2b4 100644
+index d5be14c..a217455 100644
 --- a/intern/cycles/util/defines.h
 +++ b/intern/cycles/util/defines.h
 @@ -12,7 +12,7 @@
@@ -55,28 +97,19 @@ index 1969529..da9f2b4 100644
  #endif
  
 diff --git a/intern/cycles/util/math_float3.h b/intern/cycles/util/math_float3.h
-index eec7122..ef9489a 100644
+index 7376240..629cc57 100644
 --- a/intern/cycles/util/math_float3.h
 +++ b/intern/cycles/util/math_float3.h
-@@ -269,7 +269,7 @@ ccl_device_inline float distance(const float3 &a, const float3 &b)
+@@ -199,7 +199,7 @@ ccl_device_inline bool operator!=(const float3 a, const float3 b)
  
- ccl_device_inline float dot(const float3 &a, const float3 &b)
+ ccl_device_inline float dot(const float3 a, const float3 b)
  {
 -#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
 +#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
    return _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7F));
  #  else
    return a.x * b.x + a.y * b.y + a.z * b.z;
-@@ -297,7 +297,7 @@ ccl_device_inline float3 cross(const float3 &a, const float3 &b)
- 
- ccl_device_inline float3 normalize(const float3 &a)
- {
--#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
-+#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
-   __m128 norm = _mm_sqrt_ps(_mm_dp_ps(a.m128, a.m128, 0x7F));
-   return float3(_mm_div_ps(a.m128, norm));
- #  else
-@@ -413,7 +413,7 @@ ccl_device_inline float reduce_max(float3 a)
+@@ -219,7 +219,7 @@ ccl_device_inline float dot_xy(const float3 a, const float3 b)
  
  ccl_device_inline float len(const float3 a)
  {
@@ -85,13 +118,22 @@ index eec7122..ef9489a 100644
    return _mm_cvtss_f32(_mm_sqrt_ss(_mm_dp_ps(a.m128, a.m128, 0x7F)));
  #else
    return sqrtf(dot(a, a));
+@@ -263,7 +263,7 @@ ccl_device_inline float3 cross(const float3 a, const float3 b)
+ 
+ ccl_device_inline float3 normalize(const float3 a)
+ {
+-#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
++#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+   __m128 norm = _mm_sqrt_ps(_mm_dp_ps(a.m128, a.m128, 0x7F));
+   return float3(_mm_div_ps(a.m128, norm));
+ #  else
 diff --git a/intern/cycles/util/math_float4.h b/intern/cycles/util/math_float4.h
-index c272187..9af7143 100644
+index 1f5f391..11a5ef6 100644
 --- a/intern/cycles/util/math_float4.h
 +++ b/intern/cycles/util/math_float4.h
-@@ -247,7 +247,7 @@ ccl_device_inline float distance(const float4 &a, const float4 &b)
- 
- ccl_device_inline float dot(const float4 &a, const float4 &b)
+@@ -363,7 +363,7 @@ ccl_device_inline float reduce_max(const float4 a)
+ #if !defined(__KERNEL_METAL__)
+ ccl_device_inline float dot(const float4 a, const float4 b)
  {
 -#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
 +#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
@@ -99,10 +141,10 @@ index c272187..9af7143 100644
    __m128 t = vmulq_f32(a, b);
    return vaddvq_f32(t);
 diff --git a/intern/cycles/util/optimization.h b/intern/cycles/util/optimization.h
-index 19b9651..dc4f906 100644
+index b6194dc..6be3940 100644
 --- a/intern/cycles/util/optimization.h
 +++ b/intern/cycles/util/optimization.h
-@@ -57,6 +57,14 @@
+@@ -48,6 +48,14 @@
  #    define __KERNEL_SSE3__
  #    define __KERNEL_SSE41__
  
@@ -118,7 +160,7 @@ index 19b9651..dc4f906 100644
  
  #endif
 diff --git a/intern/cycles/util/simd.h b/intern/cycles/util/simd.h
-index 03783ab..92916e7 100644
+index 7da0a0f..5f9e6f2 100644
 --- a/intern/cycles/util/simd.h
 +++ b/intern/cycles/util/simd.h
 @@ -20,7 +20,7 @@
@@ -130,7 +172,7 @@ index 03783ab..92916e7 100644
  #  include <x86intrin.h>
  #elif defined(__KERNEL_NEON__)
  #  define SSE2NEON_PRECISE_MINMAX 1
-@@ -216,7 +216,7 @@ type shuffle_neon(const type &a, const type &b)
+@@ -224,7 +224,7 @@ type shuffle_neon(const type &a, const type &b)
  #  endif
  #endif
  
@@ -139,42 +181,11 @@ index 03783ab..92916e7 100644
  #  define _lzcnt_u32 __lzcnt32
  #  define _lzcnt_u64 __lzcnt64
  #endif
-diff --git a/intern/cycles/util/ssef.h b/intern/cycles/util/ssef.h
-index 1e2bfa9..bd15fa7 100644
---- a/intern/cycles/util/ssef.h
-+++ b/intern/cycles/util/ssef.h
-@@ -917,7 +917,7 @@ __forceinline ssef cross(const ssef &a, const ssef &b)
- 
- ccl_device_inline const ssef dot3_splat(const ssef &a, const ssef &b)
- {
--#  ifdef __KERNEL_SSE41__
-+#  if defined(__KERNEL_SSE41__) && !defined(__e2k__)
-   return _mm_dp_ps(a.m128, b.m128, 0x7f);
- #  else
-   ssef t = a * b;
-@@ -928,7 +928,7 @@ ccl_device_inline const ssef dot3_splat(const ssef &a, const ssef &b)
- /* squared length taking only specified axes into account */
- template<size_t X, size_t Y, size_t Z, size_t W> ccl_device_inline float len_squared(const ssef &a)
- {
--#  ifndef __KERNEL_SSE41__
-+#  if !defined(__KERNEL_SSE41__) || defined(__e2k__)
-   float4 &t = (float4 &)a;
-   return (X ? t.x * t.x : 0.0f) + (Y ? t.y * t.y : 0.0f) + (Z ? t.z * t.z : 0.0f) +
-          (W ? t.w * t.w : 0.0f);
-@@ -940,7 +940,7 @@ template<size_t X, size_t Y, size_t Z, size_t W> ccl_device_inline float len_squ
- 
- ccl_device_inline float dot3(const ssef &a, const ssef &b)
- {
--#  ifdef __KERNEL_SSE41__
-+#  if defined(__KERNEL_SSE41__) && !defined(__e2k__)
-   return extract<0>(ssef(_mm_dp_ps(a.m128, b.m128, 0x7f)));
- #  else
-   ssef t = a * b;
 diff --git a/intern/cycles/util/system.cpp b/intern/cycles/util/system.cpp
-index 3183ac0..2e97a30 100644
+index c1c4963..d40e29a 100644
 --- a/intern/cycles/util/system.cpp
 +++ b/intern/cycles/util/system.cpp
-@@ -227,6 +227,12 @@ bool system_cpu_support_avx2()
+@@ -215,6 +215,12 @@ bool system_cpu_support_avx2()
    CPUCapabilities &caps = system_cpu_capabilities();
    return caps.avx2;
  }
@@ -188,18 +199,18 @@ index 3183ac0..2e97a30 100644
  
  bool system_cpu_support_sse2()
 diff --git a/intern/cycles/util/transform_inverse.h b/intern/cycles/util/transform_inverse.h
-index bb410a6..5684c87 100644
+index 2faac57..69b359f 100644
 --- a/intern/cycles/util/transform_inverse.h
 +++ b/intern/cycles/util/transform_inverse.h
-@@ -24,7 +24,7 @@ ccl_device_forceinline float3 transform_inverse_cross(const float3 a, const floa
+@@ -29,7 +29,7 @@ ccl_device_forceinline float3 transform_inverse_cross(const float3 a_, const flo
  
- ccl_device_forceinline float transform_inverse_dot(const float3 a, const float3 b)
+ ccl_device_forceinline float transform_inverse_dot(const float3 a_, const float3 b_)
  {
--#ifdef __SSE4_1__
-+#if defined(__SSE4_1__) && !defined(__e2k__)
-   return _mm_cvtss_f32(_mm_dp_ps((const __m128 &)a, (const __m128 &)b, 0x7F));
- #endif
- 
+-#if defined(__KERNEL_SSE__) && defined(__KERNEL_SSE41__)
++#if defined(__KERNEL_SSE__) && defined(__KERNEL_SSE41__) && !defined(__e2k__)
+   const __m128 a = (const __m128 &)a_;
+   const __m128 b = (const __m128 &)b_;
+   return _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7F));
 diff --git a/intern/libmv/libmv/build/build_config.h b/intern/libmv/libmv/build/build_config.h
 index 1d87660..d00de4d 100644
 --- a/intern/libmv/libmv/build/build_config.h
@@ -253,10 +264,10 @@ index c8c4700..633ee11 100644
    for (int y = 0; y < height; y++) {
      for (int x = 0; x < width; x++) {
 diff --git a/source/blender/blenkernel/intern/volume.cc b/source/blender/blenkernel/intern/volume.cc
-index e81657f..8f537d1 100644
+index 1102102..98f7043 100644
 --- a/source/blender/blenkernel/intern/volume.cc
 +++ b/source/blender/blenkernel/intern/volume.cc
-@@ -1526,6 +1526,9 @@ struct CreateGridOp {
+@@ -1544,6 +1544,9 @@ struct CreateGridOp {
      else {
        return GridType::create();
      }
@@ -267,10 +278,10 @@ index e81657f..8f537d1 100644
  };
  #endif
 diff --git a/source/blender/blenlib/BLI_enumerable_thread_specific.hh b/source/blender/blenlib/BLI_enumerable_thread_specific.hh
-index a5bd79d..6efc0d5 100644
+index 1774230..f8ec93a 100644
 --- a/source/blender/blenlib/BLI_enumerable_thread_specific.hh
 +++ b/source/blender/blenlib/BLI_enumerable_thread_specific.hh
-@@ -32,7 +32,14 @@ namespace blender::threading {
+@@ -33,7 +33,14 @@ namespace blender::threading {
  #ifndef WITH_TBB
  namespace enumerable_thread_specific_utils {
  inline std::atomic<int> next_id = 0;
@@ -286,7 +297,7 @@ index a5bd79d..6efc0d5 100644
  #endif
  
 diff --git a/source/blender/blenlib/BLI_hash.hh b/source/blender/blenlib/BLI_hash.hh
-index 693d4a8..ba2d148 100644
+index 7be25b6..dcf9053 100644
 --- a/source/blender/blenlib/BLI_hash.hh
 +++ b/source/blender/blenlib/BLI_hash.hh
 @@ -92,6 +92,9 @@ template<typename T> struct DefaultHash {
@@ -299,11 +310,54 @@ index 693d4a8..ba2d148 100644
    }
  
    template<typename U> uint64_t operator()(const U &value) const
+diff --git a/source/blender/blenlib/BLI_math_matrix_types.hh b/source/blender/blenlib/BLI_math_matrix_types.hh
+index 46e098a..cfd75d8 100644
+--- a/source/blender/blenlib/BLI_math_matrix_types.hh
++++ b/source/blender/blenlib/BLI_math_matrix_types.hh
+@@ -427,7 +427,12 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
+     /* This is the reference implementation.
+      * Might be overloaded with vectorized / optimized code. */
+     row_type result(0);
++#ifdef __EDG__
++    const int nrow = NumRow;
++    unroll<NumCol>([&](auto c) { unroll<nrow>([&](auto r) { result[c] += b[c][r] * a[r]; }); });
++#else
+     unroll<NumCol>([&](auto c) { unroll<NumRow>([&](auto r) { result[c] += b[c][r] * a[r]; }); });
++#endif
+     return result;
+   }
+ 
+@@ -487,7 +492,14 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
+   friend std::ostream &operator<<(std::ostream &stream, const MatBase &mat)
+   {
+     stream << "(\n";
++#ifdef __EDG__
++    const int nrow = NumRow, ncol = NumCol;
++    unroll<NumCol>([&,nrow](auto i) {
++#define NumRow nrow
++#define NumCol ncol
++#else
+     unroll<NumCol>([&](auto i) {
++#endif
+       stream << "(";
+       unroll<NumRow>([&](auto j) {
+         /** NOTE: j and i are swapped to follow mathematical convention. */
+@@ -500,6 +512,10 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
+       if (i < NumCol - 1) {
+         stream << ",";
+       }
++#ifdef __EDG__
++#undef NumRow
++#undef NumCol
++#endif
+       stream << "\n";
+     });
+     stream << ")\n";
 diff --git a/source/blender/blenlib/BLI_memory_utils.hh b/source/blender/blenlib/BLI_memory_utils.hh
-index b6ffa6d..2cd1005 100644
+index 1eedd89..85cc6ac 100644
 --- a/source/blender/blenlib/BLI_memory_utils.hh
 +++ b/source/blender/blenlib/BLI_memory_utils.hh
-@@ -12,6 +12,7 @@
+@@ -10,6 +10,7 @@
  #include <memory>
  #include <new>
  #include <type_traits>
@@ -312,7 +366,7 @@ index b6ffa6d..2cd1005 100644
  #include "BLI_utildefines.h"
  #include "MEM_guardedalloc.h"
 diff --git a/source/blender/blenlib/BLI_utildefines.h b/source/blender/blenlib/BLI_utildefines.h
-index 9817787..bb2cd4b 100644
+index bfa5102..04e3ef9 100644
 --- a/source/blender/blenlib/BLI_utildefines.h
 +++ b/source/blender/blenlib/BLI_utildefines.h
 @@ -493,7 +493,7 @@ extern "C" {
@@ -325,10 +379,10 @@ index 9817787..bb2cd4b 100644
      ((sizeof(struct { int isnt_array : ((const void *)&(arr) == &(arr)[0]); }) * 0) + \
       (sizeof(arr) / sizeof(*(arr))))
 diff --git a/source/blender/blenlib/BLI_virtual_array.hh b/source/blender/blenlib/BLI_virtual_array.hh
-index 36f5065..35ed7e6 100644
+index 54a5ece..2529534 100644
 --- a/source/blender/blenlib/BLI_virtual_array.hh
 +++ b/source/blender/blenlib/BLI_virtual_array.hh
-@@ -571,6 +571,9 @@ template<typename T> struct VArrayAnyExtraInfo {
+@@ -504,6 +504,9 @@ template<typename T> struct VArrayAnyExtraInfo {
        BLI_assert_unreachable();
        return {};
      }
@@ -339,7 +393,7 @@ index 36f5065..35ed7e6 100644
  };
  
 diff --git a/source/blender/editors/interface/interface_template_attribute_search.cc b/source/blender/editors/interface/interface_template_attribute_search.cc
-index 55ca945..e2ffe8b 100644
+index 2ac8e96..a0437d4 100644
 --- a/source/blender/editors/interface/interface_template_attribute_search.cc
 +++ b/source/blender/editors/interface/interface_template_attribute_search.cc
 @@ -1,5 +1,9 @@
