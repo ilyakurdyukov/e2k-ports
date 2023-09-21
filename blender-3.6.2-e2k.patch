@@ -1,6 +1,6 @@
-From 6afae9d34b92e8a37f90fb859b7c2b49bc67ad25 Mon Sep 17 00:00:00 2001
+From a7ad2cc27d6105b4e089411e4a582915f85d0aad Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Thu, 31 Aug 2023 17:13:05 +0700
+Date: Thu, 21 Sep 2023 17:13:27 +0700
 Subject: [PATCH] blender-3.6.2 e2k support
 
 Using LCC 1.26.20
@@ -18,6 +18,10 @@ Using LCC 1.26.20
  intern/cycles/util/transform_inverse.h           |  2 +-
  intern/libmv/libmv/build/build_config.h          |  8 ++++++++
  .../simple_pipeline/camera_intrinsics_impl.h     |  6 ++++--
+ .../intern/geometry_component_curves.cc          |  2 +-
+ .../intern/geometry_component_instances.cc       |  2 +-
+ .../blenkernel/intern/geometry_component_mesh.cc |  2 +-
+ .../intern/geometry_component_pointcloud.cc      |  4 ++--
  source/blender/blenkernel/intern/volume.cc       |  3 +++
  .../blenlib/BLI_enumerable_thread_specific.hh    |  7 +++++++
  source/blender/blenlib/BLI_hash.hh               |  3 +++
@@ -26,7 +30,7 @@ Using LCC 1.26.20
  source/blender/blenlib/BLI_utildefines.h         |  2 +-
  source/blender/blenlib/BLI_virtual_array.hh      |  3 +++
  .../interface_template_attribute_search.cc       |  4 ++++
- 21 files changed, 79 insertions(+), 14 deletions(-)
+ 25 files changed, 84 insertions(+), 19 deletions(-)
 
 diff --git a/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp b/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
 index d2641c5..a0af3a4 100644
@@ -263,6 +267,68 @@ index c8c4700..633ee11 100644
  #endif
    for (int y = 0; y < height; y++) {
      for (int x = 0; x < width; x++) {
+diff --git a/source/blender/blenkernel/intern/geometry_component_curves.cc b/source/blender/blenkernel/intern/geometry_component_curves.cc
+index e20c130..954e4b7 100644
+--- a/source/blender/blenkernel/intern/geometry_component_curves.cc
++++ b/source/blender/blenkernel/intern/geometry_component_curves.cc
+@@ -565,9 +565,9 @@ static ComponentAttributeProviders create_attribute_providers_for_curve()
+ 
+ /** \} */
+ 
++static const ComponentAttributeProviders providers = create_attribute_providers_for_curve();
+ static AttributeAccessorFunctions get_curves_accessor_functions()
+ {
+-  static const ComponentAttributeProviders providers = create_attribute_providers_for_curve();
+   AttributeAccessorFunctions fn =
+       attribute_accessor_functions::accessor_functions_for_providers<providers>();
+   fn.domain_size = [](const void *owner, const eAttrDomain domain) {
+diff --git a/source/blender/blenkernel/intern/geometry_component_instances.cc b/source/blender/blenkernel/intern/geometry_component_instances.cc
+index 3af5d46..59044ef 100644
+--- a/source/blender/blenkernel/intern/geometry_component_instances.cc
++++ b/source/blender/blenkernel/intern/geometry_component_instances.cc
+@@ -210,9 +210,9 @@ static ComponentAttributeProviders create_attribute_providers_for_instances()
+   return ComponentAttributeProviders({&position, &id}, {&instance_custom_data});
+ }
+ 
++static const ComponentAttributeProviders providers = create_attribute_providers_for_instances();
+ static AttributeAccessorFunctions get_instances_accessor_functions()
+ {
+-  static const ComponentAttributeProviders providers = create_attribute_providers_for_instances();
+   AttributeAccessorFunctions fn =
+       attribute_accessor_functions::accessor_functions_for_providers<providers>();
+   fn.domain_size = [](const void *owner, const eAttrDomain domain) {
+diff --git a/source/blender/blenkernel/intern/geometry_component_mesh.cc b/source/blender/blenkernel/intern/geometry_component_mesh.cc
+index 3a2cbe7..08f3903 100644
+--- a/source/blender/blenkernel/intern/geometry_component_mesh.cc
++++ b/source/blender/blenkernel/intern/geometry_component_mesh.cc
+@@ -1242,9 +1242,9 @@ static ComponentAttributeProviders create_attribute_providers_for_mesh()
+                                       &face_custom_data});
+ }
+ 
++static const ComponentAttributeProviders providers = create_attribute_providers_for_mesh();
+ static AttributeAccessorFunctions get_mesh_accessor_functions()
+ {
+-  static const ComponentAttributeProviders providers = create_attribute_providers_for_mesh();
+   AttributeAccessorFunctions fn =
+       attribute_accessor_functions::accessor_functions_for_providers<providers>();
+   fn.domain_size = [](const void *owner, const eAttrDomain domain) {
+diff --git a/source/blender/blenkernel/intern/geometry_component_pointcloud.cc b/source/blender/blenkernel/intern/geometry_component_pointcloud.cc
+index f9261fd..859feef 100644
+--- a/source/blender/blenkernel/intern/geometry_component_pointcloud.cc
++++ b/source/blender/blenkernel/intern/geometry_component_pointcloud.cc
+@@ -163,10 +163,10 @@ static ComponentAttributeProviders create_attribute_providers_for_point_cloud()
+   return ComponentAttributeProviders({&position, &radius, &id}, {&point_custom_data});
+ }
+ 
++static const ComponentAttributeProviders providers =
++    create_attribute_providers_for_point_cloud();
+ static AttributeAccessorFunctions get_pointcloud_accessor_functions()
+ {
+-  static const ComponentAttributeProviders providers =
+-      create_attribute_providers_for_point_cloud();
+   AttributeAccessorFunctions fn =
+       attribute_accessor_functions::accessor_functions_for_providers<providers>();
+   fn.domain_size = [](const void *owner, const eAttrDomain domain) {
 diff --git a/source/blender/blenkernel/intern/volume.cc b/source/blender/blenkernel/intern/volume.cc
 index 1102102..98f7043 100644
 --- a/source/blender/blenkernel/intern/volume.cc
