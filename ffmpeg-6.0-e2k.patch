@@ -1,6 +1,6 @@
-From dbd5d579765880a15448d2465c0b9a6b5a7025d1 Mon Sep 17 00:00:00 2001
-From: Ilya Kurdyukov <ilyakurdyukov@altlinux.org>
-Date: Mon, 11 Sep 2023 23:45:04 +0700
+From 61748b309bc432b4e1f74bd374e7b788a63e5980 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Wed, 20 Sep 2023 17:30:19 +0700
 Subject: [PATCH] ffmpeg-6.0 e2k support
 
 ---
@@ -95,6 +95,7 @@ Subject: [PATCH] ffmpeg-6.0 e2k support
  libavcodec/vp9dsp.h                  |    1 +
  libavcodec/xvididct.c                |    2 +
  libavcodec/xvididct.h                |    2 +
+ libavfilter/vf_drawtext.c            |   12 +
  libavutil/cpu.c                      |    6 +
  libavutil/cpu.h                      |    2 +
  libavutil/cpu_internal.h             |    2 +
@@ -126,7 +127,7 @@ Subject: [PATCH] ffmpeg-6.0 e2k support
  libswscale/yuv2rgb.c                 |    2 +
  tests/checkasm/checkasm.c            |    2 +
  tests/checkasm/huffyuvdsp.c          |    8 +-
- 122 files changed, 14854 insertions(+), 6 deletions(-)
+ 123 files changed, 14866 insertions(+), 6 deletions(-)
  create mode 100644 libavcodec/e2k/Makefile
  create mode 100644 libavcodec/e2k/audiodsp.c
  create mode 100644 libavcodec/e2k/blockdsp.c
@@ -12726,6 +12727,36 @@ index e0bc1a2..6e5ff91 100644
  void ff_xvid_idct_init_mips(IDCTDSPContext *c, AVCodecContext *avctx,
                              unsigned high_bit_depth);
  
+diff --git a/libavfilter/vf_drawtext.c b/libavfilter/vf_drawtext.c
+index 50012bb..c02629f 100644
+--- a/libavfilter/vf_drawtext.c
++++ b/libavfilter/vf_drawtext.c
+@@ -1188,6 +1188,17 @@ static int func_eval_expr_int_format(AVFilterContext *ctx, AVBPrint *bp,
+         }
+     }
+ 
++#ifdef __e2k__
++    {
++        union { double d; long long i; unsigned long long u; } d2i = { res };
++        ret = d2i.i >= 0x41eLL << 52 || d2i.u >= (0xc1eULL << 52 | 1 << 21);
++    }
++    intval = res;
++    if (ret) {
++        av_log(ctx, AV_LOG_ERROR, "Conversion of floating-point result to int failed. Result: %g. Conversion result: %d\n", res, intval);
++        return AVERROR(EINVAL);
++    }
++#else
+     feclearexcept(FE_ALL_EXCEPT);
+     intval = res;
+ #if defined(FE_INVALID) && defined(FE_OVERFLOW) && defined(FE_UNDERFLOW)
+@@ -1195,6 +1206,7 @@ static int func_eval_expr_int_format(AVFilterContext *ctx, AVBPrint *bp,
+         av_log(ctx, AV_LOG_ERROR, "Conversion of floating-point result to int failed. Control register: 0x%08x. Conversion result: %d\n", ret, intval);
+         return AVERROR(EINVAL);
+     }
++#endif
+ #endif
+ 
+     if (argc == 3)
 diff --git a/libavutil/cpu.c b/libavutil/cpu.c
 index 2c5f7f4..a889afb 100644
 --- a/libavutil/cpu.c
