@@ -1,7 +1,7 @@
-From 9032eb6ebe3efa50d4c431f4547cbc863c29da5c Mon Sep 17 00:00:00 2001
+From 46cab529d9b854214c058561bc58d62a698ca72a Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Thu, 24 Jun 2021 10:11:22 +0700
-Subject: [PATCH] embree-3.13.0 e2k support
+Date: Fri, 27 Oct 2023 10:53:19 +0700
+Subject: [PATCH] embree-4.3.0 e2k support
 
 Use cmake option -DEMBREE_MAX_ISA=DEFAULT
 ---
@@ -15,11 +15,11 @@ Use cmake option -DEMBREE_MAX_ISA=DEFAULT
  7 files changed, 23 insertions(+), 4 deletions(-)
 
 diff --git a/common/math/vec2fa.h b/common/math/vec2fa.h
-index a51fb68fd..ce3668a6d 100644
+index d57e549..922b252 100644
 --- a/common/math/vec2fa.h
 +++ b/common/math/vec2fa.h
-@@ -230,7 +230,7 @@ namespace embree
-   /// Euclidian Space Operators
+@@ -252,7 +252,7 @@ namespace embree
+   /// Euclidean Space Operators
    ////////////////////////////////////////////////////////////////////////////////
  
 -#if defined(__SSE4_1__)
@@ -28,11 +28,11 @@ index a51fb68fd..ce3668a6d 100644
      return _mm_cvtss_f32(_mm_dp_ps(a,b,0x3F));
    }
 diff --git a/common/math/vec3fa.h b/common/math/vec3fa.h
-index 586039741..8e9d920db 100644
+index 967e75d..fbb0432 100644
 --- a/common/math/vec3fa.h
 +++ b/common/math/vec3fa.h
-@@ -264,7 +264,7 @@ namespace embree
-   /// Euclidian Space Operators
+@@ -321,7 +321,7 @@ namespace embree
+   /// Euclidean Space Operators
    ////////////////////////////////////////////////////////////////////////////////
  
 -#if defined(__SSE4_1__)
@@ -40,8 +40,8 @@ index 586039741..8e9d920db 100644
    __forceinline float dot ( const Vec3fa& a, const Vec3fa& b ) {
      return _mm_cvtss_f32(_mm_dp_ps(a.m128,b.m128,0x7F));
    }
-@@ -629,7 +629,7 @@ namespace embree
-   /// Euclidian Space Operators
+@@ -691,7 +691,7 @@ namespace embree
+   /// Euclidean Space Operators
    ////////////////////////////////////////////////////////////////////////////////
  
 -#if defined(__SSE4_1__)
@@ -50,11 +50,11 @@ index 586039741..8e9d920db 100644
      return _mm_cvtss_f32(_mm_dp_ps(a.m128,b.m128,0x7F));
    }
 diff --git a/common/sys/intrinsics.h b/common/sys/intrinsics.h
-index 79729c87a..c6a3ab0e3 100644
+index f5074bb..69b67f3 100644
 --- a/common/sys/intrinsics.h
 +++ b/common/sys/intrinsics.h
-@@ -15,6 +15,10 @@
- #include <immintrin.h>
+@@ -18,6 +18,10 @@
+ #endif
  #endif
  
 +#ifdef __e2k__
@@ -64,7 +64,7 @@ index 79729c87a..c6a3ab0e3 100644
  #if defined(__BMI__) && defined(__GNUC__) && !defined(__INTEL_COMPILER)
    #if !defined(_tzcnt_u32)
      #define _tzcnt_u32 __tzcnt_u32
-@@ -222,6 +226,8 @@ namespace embree
+@@ -201,6 +205,8 @@ namespace embree
      uint32_t high,low;
      asm volatile ("rdtsc" : "=d"(high), "=a"(low));
      return (((uint64_t)high) << 32) + (uint64_t)low;
@@ -74,10 +74,10 @@ index 79729c87a..c6a3ab0e3 100644
      /* Not supported yet, meaning measuring traversal cost per pixel does not work. */
      return 0;
 diff --git a/common/sys/platform.h b/common/sys/platform.h
-index 3fc5e99b8..c5511509f 100644
+index 6dc0cf3..002e5a2 100644
 --- a/common/sys/platform.h
 +++ b/common/sys/platform.h
-@@ -32,7 +32,7 @@
+@@ -58,7 +58,7 @@
  #endif
  
  /* detect 64 bit platform */
@@ -87,10 +87,10 @@ index 3fc5e99b8..c5511509f 100644
  #endif
  
 diff --git a/common/sys/sysinfo.cpp b/common/sys/sysinfo.cpp
-index ba97dc227..f1646547b 100644
+index 1e45061..d6bc3dc 100644
 --- a/common/sys/sysinfo.cpp
 +++ b/common/sys/sysinfo.cpp
-@@ -90,6 +90,8 @@ namespace embree
+@@ -100,6 +100,8 @@ namespace embree
      return (char*)name;
  #elif defined(__ARM_NEON)
      return "ARM";
@@ -99,7 +99,7 @@ index ba97dc227..f1646547b 100644
  #else
      return "Unknown";
  #endif
-@@ -166,6 +168,8 @@ namespace embree
+@@ -176,6 +178,8 @@ namespace embree
      
  #elif defined(__ARM_NEON)
      return CPU::ARM;
@@ -108,7 +108,7 @@ index ba97dc227..f1646547b 100644
  #endif
      
      return CPU::UNKNOWN;
-@@ -195,6 +199,7 @@ namespace embree
+@@ -205,6 +209,7 @@ namespace embree
      case CPU::CORE2                   : return "Core2";
      case CPU::CORE1                   : return "Core";
      case CPU::ARM                     : return "ARM";
@@ -116,20 +116,20 @@ index ba97dc227..f1646547b 100644
      case CPU::UNKNOWN                 : return "Unknown CPU";
      }
      return "Unknown CPU (error)";
-@@ -338,6 +343,8 @@ namespace embree
- #elif defined(__ARM_NEON)
-     /* emulated features with sse2neon */
-     return CPU_FEATURE_SSE|CPU_FEATURE_SSE2|CPU_FEATURE_XMM_ENABLED;
+@@ -363,6 +368,8 @@ namespace embree
+     cpu_features |= CPU_FEATURE_NEON_2X;
+     return cpu_features;
+ 
 +#elif defined(__e2k__)
 +    return ISA;
  #else
      /* Unknown CPU. */
      return 0;
 diff --git a/common/sys/sysinfo.h b/common/sys/sysinfo.h
-index 72351d12e..37ef8ce2d 100644
+index cefd39a..ffe82ca 100644
 --- a/common/sys/sysinfo.h
 +++ b/common/sys/sysinfo.h
-@@ -84,6 +84,7 @@ namespace embree
+@@ -89,6 +89,7 @@ namespace embree
      CORE2,
      CORE1,
      ARM,
@@ -138,13 +138,13 @@ index 72351d12e..37ef8ce2d 100644
    };
    
 diff --git a/kernels/common/device.cpp b/kernels/common/device.cpp
-index 068e0c298..2537e22b7 100644
+index c2e7c7c..c27a2dd 100644
 --- a/kernels/common/device.cpp
 +++ b/kernels/common/device.cpp
-@@ -67,6 +67,11 @@ namespace embree
+@@ -78,6 +78,11 @@ namespace embree
      case CPU::XEON_PHI_KNIGHTS_MILL   : frequency_level = FREQUENCY_SIMD512; break;
      case CPU::XEON_PHI_KNIGHTS_LANDING: frequency_level = FREQUENCY_SIMD512; break;
-     case CPU::ARM:             frequency_level = FREQUENCY_SIMD128; break;
+     case CPU::ARM:             frequency_level = FREQUENCY_SIMD256; break;
 +#ifdef __AVX__
 +    case CPU::E2K:             frequency_level = FREQUENCY_SIMD256; break;
 +#else
@@ -154,4 +154,5 @@ index 068e0c298..2537e22b7 100644
  
      /* initialize global state */
 -- 
-2.17.1
+2.34.1
+
