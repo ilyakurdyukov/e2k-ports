@@ -1,7 +1,7 @@
-From 61006804e35d65eac1efe532eccaae01ff76741f Mon Sep 17 00:00:00 2001
+From 8393996110f559c79b9ee9e9587eb46ed7f43950 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Thu, 26 May 2022 13:55:01 +0700
-Subject: [PATCH] libjpeg-turbo-2.1.2 e2k support
+Date: Mon, 13 Nov 2023 10:50:53 +0700
+Subject: [PATCH] libjpeg-turbo-2.1.5.1 e2k support
 
 ---
  CMakeLists.txt           |   5 +
@@ -51,10 +51,10 @@ Subject: [PATCH] libjpeg-turbo-2.1.2 e2k support
  create mode 100644 simd/e2k/jsimd_e2k.h
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 6dd83d3..b5f684f 100644
+index eefba16..8bd8ba5 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -85,6 +85,9 @@ elseif(CMAKE_SYSTEM_PROCESSOR_LC STREQUAL "aarch64" OR
+@@ -97,6 +97,9 @@ elseif(CMAKE_SYSTEM_PROCESSOR_LC STREQUAL "aarch64" OR
  elseif(CMAKE_SYSTEM_PROCESSOR_LC MATCHES "^ppc" OR
    CMAKE_SYSTEM_PROCESSOR_LC MATCHES "^powerpc")
    set(CPU_TYPE powerpc)
@@ -64,7 +64,7 @@ index 6dd83d3..b5f684f 100644
  else()
    set(CPU_TYPE ${CMAKE_SYSTEM_PROCESSOR_LC})
  endif()
-@@ -935,6 +938,8 @@ else()
+@@ -946,6 +949,8 @@ else()
    if((CPU_TYPE STREQUAL "powerpc" OR CPU_TYPE STREQUAL "arm64") AND
      NOT CMAKE_C_COMPILER_ID STREQUAL "Clang" AND NOT MSVC)
      set(DEFAULT_FLOATTEST fp-contract)
@@ -74,10 +74,10 @@ index 6dd83d3..b5f684f 100644
      set(DEFAULT_FLOATTEST no-fp-contract)
    endif()
 diff --git a/simd/CMakeLists.txt b/simd/CMakeLists.txt
-index c0e80f3..9550d15 100644
+index 6024900..789fa3f 100644
 --- a/simd/CMakeLists.txt
 +++ b/simd/CMakeLists.txt
-@@ -452,6 +452,29 @@ if(CMAKE_POSITION_INDEPENDENT_CODE OR ENABLE_SHARED)
+@@ -531,6 +531,29 @@ if(CMAKE_POSITION_INDEPENDENT_CODE OR ENABLE_SHARED)
    set_target_properties(simd PROPERTIES POSITION_INDEPENDENT_CODE 1)
  endif()
  
@@ -3814,7 +3814,7 @@ index 0000000..a3e1ff1
 +}
 diff --git a/simd/e2k/jsimd.c b/simd/e2k/jsimd.c
 new file mode 100644
-index 0000000..20e39c6
+index 0000000..f8c0465
 --- /dev/null
 +++ b/simd/e2k/jsimd.c
 @@ -0,0 +1,761 @@
@@ -4549,10 +4549,10 @@ index 0000000..20e39c6
 +GLOBAL(void)
 +jsimd_encode_mcu_AC_first_prepare(const JCOEF *block,
 +                                  const int *jpeg_natural_order_start, int Sl,
-+                                  int Al, JCOEF *values, size_t *zerobits)
++                                  int Al, UJCOEF *values, size_t *zerobits)
 +{
 +  jsimd_encode_mcu_AC_first_prepare_e2k(block, jpeg_natural_order_start,
-+                                        Sl, Al, values, zerobits);
++                                        Sl, Al, (JCOEF*)values, zerobits);
 +}
 +
 +GLOBAL(int)
@@ -4573,11 +4573,11 @@ index 0000000..20e39c6
 +GLOBAL(int)
 +jsimd_encode_mcu_AC_refine_prepare(const JCOEF *block,
 +                                   const int *jpeg_natural_order_start, int Sl,
-+                                   int Al, JCOEF *absvalues, size_t *bits)
++                                   int Al, UJCOEF *absvalues, size_t *bits)
 +{
 +  return jsimd_encode_mcu_AC_refine_prepare_e2k(block,
 +                                                jpeg_natural_order_start,
-+                                                Sl, Al, absvalues, bits);
++                                                Sl, Al, (JCOEF*)absvalues, bits);
 +}
 diff --git a/simd/e2k/jsimd_api_e2k.h b/simd/e2k/jsimd_api_e2k.h
 new file mode 100644
