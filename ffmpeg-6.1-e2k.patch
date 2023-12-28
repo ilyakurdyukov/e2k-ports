@@ -1,7 +1,7 @@
-From 61748b309bc432b4e1f74bd374e7b788a63e5980 Mon Sep 17 00:00:00 2001
+From a931b09738e265fd3568152cefa85bbb0186d663 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Wed, 20 Sep 2023 17:30:19 +0700
-Subject: [PATCH] ffmpeg-6.0 e2k support
+Date: Thu, 28 Dec 2023 16:41:30 +0700
+Subject: [PATCH] ffmpeg-6.1 e2k support
 
 ---
  configure                            |   27 +-
@@ -13,7 +13,7 @@ Subject: [PATCH] ffmpeg-6.0 e2k support
  libavcodec/e2k/audiodsp.c            |   61 +
  libavcodec/e2k/blockdsp.c            |   71 +
  libavcodec/e2k/dctdsp.h              |   29 +
- libavcodec/e2k/fdctdsp.c             |  388 ++++
+ libavcodec/e2k/fdctdsp.c             |  389 ++++
  libavcodec/e2k/fft.c                 | 1043 ++++++++++
  libavcodec/e2k/fft.h                 |   29 +
  libavcodec/e2k/fft_init.c            |  151 ++
@@ -26,12 +26,12 @@ Subject: [PATCH] ffmpeg-6.0 e2k support
  libavcodec/e2k/hevcdsp.c             | 2893 ++++++++++++++++++++++++++
  libavcodec/e2k/hpeldsp.c             |  489 +++++
  libavcodec/e2k/hpeldsp.h             |   30 +
- libavcodec/e2k/idctdsp.c             |  323 +++
+ libavcodec/e2k/idctdsp.c             |  324 +++
  libavcodec/e2k/lossless_audiodsp.c   |   74 +
  libavcodec/e2k/lossless_videodsp.c   |   58 +
  libavcodec/e2k/me_cmp.c              |  465 +++++
  libavcodec/e2k/mpeg4videodsp.c       |   85 +
- libavcodec/e2k/mpegaudiodsp.c        |  141 ++
+ libavcodec/e2k/mpegaudiodsp.c        |  143 ++
  libavcodec/e2k/mpegvideo.c           |   99 +
  libavcodec/e2k/mpegvideoencdsp.c     |   74 +
  libavcodec/e2k/pixblockdsp.c         |   82 +
@@ -45,8 +45,6 @@ Subject: [PATCH] ffmpeg-6.0 e2k support
  libavcodec/e2k/xvididct.c            |  198 ++
  libavcodec/fdctdsp.c                 |    2 +
  libavcodec/fdctdsp.h                 |    2 +
- libavcodec/fft.h                     |    1 +
- libavcodec/fft_template.c            |    2 +
  libavcodec/fmtconvert.c              |    2 +
  libavcodec/fmtconvert.h              |    1 +
  libavcodec/h264chroma.c              |    2 +
@@ -61,6 +59,7 @@ Subject: [PATCH] ffmpeg-6.0 e2k support
  libavcodec/hpeldsp.h                 |    1 +
  libavcodec/idctdsp.c                 |    2 +
  libavcodec/idctdsp.h                 |    2 +
+ libavcodec/librsvgdec.c              |    2 +
  libavcodec/lossless_audiodsp.c       |    2 +
  libavcodec/lossless_audiodsp.h       |    1 +
  libavcodec/lossless_videodsp.c       |    2 +
@@ -127,7 +126,7 @@ Subject: [PATCH] ffmpeg-6.0 e2k support
  libswscale/yuv2rgb.c                 |    2 +
  tests/checkasm/checkasm.c            |    2 +
  tests/checkasm/huffyuvdsp.c          |    8 +-
- 123 files changed, 14866 insertions(+), 6 deletions(-)
+ 122 files changed, 14869 insertions(+), 6 deletions(-)
  create mode 100644 libavcodec/e2k/Makefile
  create mode 100644 libavcodec/e2k/audiodsp.c
  create mode 100644 libavcodec/e2k/blockdsp.c
@@ -179,10 +178,10 @@ Subject: [PATCH] ffmpeg-6.0 e2k support
  create mode 100644 libswscale/e2k/yuv2yuv.c
 
 diff --git a/configure b/configure
-index 081174b..19b9560 100755
+index 0407af2..f94404d 100755
 --- a/configure
 +++ b/configure
-@@ -2043,6 +2043,7 @@ ARCH_LIST="
+@@ -2078,6 +2078,7 @@ ARCH_LIST="
      parisc
      ppc
      ppc64
@@ -190,7 +189,7 @@ index 081174b..19b9560 100755
      riscv
      s390
      sh4
-@@ -2117,6 +2118,10 @@ ARCH_EXT_LIST_PPC="
+@@ -2153,6 +2154,10 @@ ARCH_EXT_LIST_PPC="
      vsx
  "
  
@@ -201,7 +200,7 @@ index 081174b..19b9560 100755
  ARCH_EXT_LIST_RISCV="
      rvv
  "
-@@ -2130,6 +2135,7 @@ ARCH_EXT_LIST_X86="
+@@ -2166,6 +2171,7 @@ ARCH_EXT_LIST_X86="
  ARCH_EXT_LIST="
      $ARCH_EXT_LIST_ARM
      $ARCH_EXT_LIST_PPC
@@ -209,7 +208,7 @@ index 081174b..19b9560 100755
      $ARCH_EXT_LIST_RISCV
      $ARCH_EXT_LIST_X86
      $ARCH_EXT_LIST_MIPS
-@@ -2634,6 +2640,8 @@ ppc4xx_deps="ppc"
+@@ -2678,6 +2684,8 @@ ppc4xx_deps="ppc"
  vsx_deps="altivec"
  power8_deps="vsx"
  
@@ -218,7 +217,7 @@ index 081174b..19b9560 100755
  rvv_deps="riscv"
  
  loongson2_deps="mips"
-@@ -2688,10 +2696,10 @@ for ext in $(filter_out mmx $ARCH_EXT_LIST_X86_SIMD); do
+@@ -2732,10 +2740,10 @@ for ext in $(filter_out mmx $ARCH_EXT_LIST_X86_SIMD); do
  done
  
  aligned_stack_if_any="aarch64 ppc x86"
@@ -233,7 +232,7 @@ index 081174b..19b9560 100755
  simd_align_32_if_any="avx"
  simd_align_64_if_any="avx512"
  
-@@ -5049,6 +5057,9 @@ case "$arch" in
+@@ -5117,6 +5125,9 @@ case "$arch" in
      riscv*)
          arch="riscv"
      ;;
@@ -243,7 +242,7 @@ index 081174b..19b9560 100755
      s390|s390x)
          arch="s390"
      ;;
-@@ -5358,6 +5369,11 @@ elif enabled riscv; then
+@@ -5426,6 +5437,11 @@ elif enabled riscv; then
          enable fast_clz
      fi
  
@@ -255,7 +254,7 @@ index 081174b..19b9560 100755
  elif enabled sparc; then
  
      case $cpu in
-@@ -5467,6 +5483,9 @@ case "$arch" in
+@@ -5533,6 +5549,9 @@ case "$arch" in
          check_64bit ppc ppc64
          enabled shared && enable_weak pic
      ;;
@@ -266,7 +265,7 @@ index 081174b..19b9560 100755
          check_64bit riscv32 riscv64
          enabled shared && enable_weak pic
 diff --git a/libavcodec/audiodsp.c b/libavcodec/audiodsp.c
-index eba6e80..6ee9f65 100644
+index c5427d3..74bbf40 100644
 --- a/libavcodec/audiodsp.c
 +++ b/libavcodec/audiodsp.c
 @@ -113,6 +113,8 @@ av_cold void ff_audiodsp_init(AudioDSPContext *c)
@@ -533,10 +532,10 @@ index 0000000..d1ba599
 +#endif /* AVCODEC_E2K_DCTDSP_H */
 diff --git a/libavcodec/e2k/fdctdsp.c b/libavcodec/e2k/fdctdsp.c
 new file mode 100644
-index 0000000..35726a1
+index 0000000..e5b568e
 --- /dev/null
 +++ b/libavcodec/e2k/fdctdsp.c
-@@ -0,0 +1,388 @@
+@@ -0,0 +1,389 @@
 +/*
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
 + * Copyright (C) 2003  James Klicman <james@klicman.org>
@@ -564,6 +563,7 @@ index 0000000..35726a1
 +#include "libavutil/e2k/cpu.h"
 +#include "libavutil/e2k/util_e2k.h"
 +
++#include "libavcodec/avcodec.h"
 +#include "libavcodec/fdctdsp.h"
 +
 +#include "dctdsp.h"
@@ -7549,10 +7549,10 @@ index 0000000..0ade264
 +#endif /* AVCODEC_E2K_HPELDSP_H */
 diff --git a/libavcodec/e2k/idctdsp.c b/libavcodec/e2k/idctdsp.c
 new file mode 100644
-index 0000000..93523bb
+index 0000000..82a13c8
 --- /dev/null
 +++ b/libavcodec/e2k/idctdsp.c
-@@ -0,0 +1,323 @@
+@@ -0,0 +1,324 @@
 +/*
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
 + * Copyright (c) 2001 Michel Lespinasse
@@ -7583,6 +7583,7 @@ index 0000000..93523bb
 +#include "libavutil/e2k/cpu.h"
 +#include "libavutil/e2k/util_e2k.h"
 +
++#include "libavcodec/avcodec.h"
 +#include "libavcodec/idctdsp.h"
 +#include "dctdsp.h"
 +
@@ -8584,10 +8585,10 @@ index 0000000..3c233b2
 +}
 diff --git a/libavcodec/e2k/mpegaudiodsp.c b/libavcodec/e2k/mpegaudiodsp.c
 new file mode 100644
-index 0000000..4827afc
+index 0000000..d171bd2
 --- /dev/null
 +++ b/libavcodec/e2k/mpegaudiodsp.c
-@@ -0,0 +1,141 @@
+@@ -0,0 +1,143 @@
 +/*
 + * Elbrus optimized MP3 decoding functions
 + * Copyright (C) 2021 Ilya Kurdyukov <jpegqs@gmail.com> for BaseALT, Ltd
@@ -8609,6 +8610,8 @@ index 0000000..4827afc
 + * License along with FFmpeg; if not, write to the Free Software
 + * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 + */
++
++#include <string.h> // memcpy
 +
 +#include "config.h"
 +#include "libavutil/attributes.h"
@@ -12046,10 +12049,10 @@ index 0000000..efd6b5f
 +    }
 +}
 diff --git a/libavcodec/fdctdsp.c b/libavcodec/fdctdsp.c
-index 5306c9d..9888aea 100644
+index f8ba174..b399ded 100644
 --- a/libavcodec/fdctdsp.c
 +++ b/libavcodec/fdctdsp.c
-@@ -45,6 +45,8 @@ av_cold void ff_fdctdsp_init(FDCTDSPContext *c, AVCodecContext *avctx)
+@@ -44,6 +44,8 @@ av_cold void ff_fdctdsp_init(FDCTDSPContext *c, AVCodecContext *avctx)
  
  #if ARCH_PPC
      ff_fdctdsp_init_ppc(c, avctx, high_bit_depth);
@@ -12059,43 +12062,18 @@ index 5306c9d..9888aea 100644
      ff_fdctdsp_init_x86(c, avctx, high_bit_depth);
  #endif
 diff --git a/libavcodec/fdctdsp.h b/libavcodec/fdctdsp.h
-index 3e1f683..75407d4 100644
+index 7378eab..296562f 100644
 --- a/libavcodec/fdctdsp.h
 +++ b/libavcodec/fdctdsp.h
-@@ -31,6 +31,8 @@ typedef struct FDCTDSPContext {
- void ff_fdctdsp_init(FDCTDSPContext *c, AVCodecContext *avctx);
- void ff_fdctdsp_init_ppc(FDCTDSPContext *c, AVCodecContext *avctx,
+@@ -34,6 +34,8 @@ FF_VISIBILITY_PUSH_HIDDEN
+ void ff_fdctdsp_init(FDCTDSPContext *c, struct AVCodecContext *avctx);
+ void ff_fdctdsp_init_ppc(FDCTDSPContext *c, struct AVCodecContext *avctx,
                           unsigned high_bit_depth);
-+void ff_fdctdsp_init_e2k(FDCTDSPContext *c, AVCodecContext *avctx,
++void ff_fdctdsp_init_e2k(FDCTDSPContext *c, struct AVCodecContext *avctx,
 +                         unsigned high_bit_depth);
- void ff_fdctdsp_init_x86(FDCTDSPContext *c, AVCodecContext *avctx,
+ void ff_fdctdsp_init_x86(FDCTDSPContext *c, struct AVCodecContext *avctx,
                           unsigned high_bit_depth);
  
-diff --git a/libavcodec/fft.h b/libavcodec/fft.h
-index d46e5a3..86c7051 100644
---- a/libavcodec/fft.h
-+++ b/libavcodec/fft.h
-@@ -148,6 +148,7 @@ void ff_fft_init_x86(FFTContext *s);
- void ff_fft_init_arm(FFTContext *s);
- void ff_fft_init_mips(FFTContext *s);
- void ff_fft_init_ppc(FFTContext *s);
-+void ff_fft_init_e2k(FFTContext *s);
- 
- void ff_fft_end(FFTContext *s);
- 
-diff --git a/libavcodec/fft_template.c b/libavcodec/fft_template.c
-index f2742a3..31c1ee6 100644
---- a/libavcodec/fft_template.c
-+++ b/libavcodec/fft_template.c
-@@ -233,6 +233,8 @@ av_cold int ff_fft_init(FFTContext *s, int nbits, int inverse)
-     ff_fft_init_arm(s);
- #elif ARCH_PPC
-     ff_fft_init_ppc(s);
-+#elif ARCH_E2K
-+    ff_fft_init_e2k(s);
- #elif ARCH_X86
-     ff_fft_init_x86(s);
- #endif
 diff --git a/libavcodec/fmtconvert.c b/libavcodec/fmtconvert.c
 index d889e61..09190f8 100644
 --- a/libavcodec/fmtconvert.c
@@ -12122,7 +12100,7 @@ index 1cb4628..8d89d2c 100644
  void ff_fmt_convert_init_x86(FmtConvertContext *c);
  void ff_fmt_convert_init_mips(FmtConvertContext *c);
 diff --git a/libavcodec/h264chroma.c b/libavcodec/h264chroma.c
-index 60b86b6..15f94ff 100644
+index 1eeab7b..d67d3b6 100644
 --- a/libavcodec/h264chroma.c
 +++ b/libavcodec/h264chroma.c
 @@ -52,6 +52,8 @@ av_cold void ff_h264chroma_init(H264ChromaContext *c, int bit_depth)
@@ -12135,7 +12113,7 @@ index 60b86b6..15f94ff 100644
      ff_h264chroma_init_x86(c, bit_depth);
  #elif ARCH_MIPS
 diff --git a/libavcodec/h264chroma.h b/libavcodec/h264chroma.h
-index b8f9c8f..6a0cb01 100644
+index 9c81c18..ff6589b 100644
 --- a/libavcodec/h264chroma.h
 +++ b/libavcodec/h264chroma.h
 @@ -34,6 +34,7 @@ void ff_h264chroma_init(H264ChromaContext *c, int bit_depth);
@@ -12261,18 +12239,33 @@ index 7216afb..6f53d90 100644
      ff_idctdsp_init_riscv(c, avctx, high_bit_depth);
  #elif ARCH_X86
 diff --git a/libavcodec/idctdsp.h b/libavcodec/idctdsp.h
-index 7224463..d93a9af 100644
+index c840a51..d6bcf4b 100644
 --- a/libavcodec/idctdsp.h
 +++ b/libavcodec/idctdsp.h
-@@ -105,6 +105,8 @@ void ff_idctdsp_init_arm(IDCTDSPContext *c, AVCodecContext *avctx,
+@@ -106,6 +106,8 @@ void ff_idctdsp_init_arm(IDCTDSPContext *c, struct AVCodecContext *avctx,
                           unsigned high_bit_depth);
- void ff_idctdsp_init_ppc(IDCTDSPContext *c, AVCodecContext *avctx,
+ void ff_idctdsp_init_ppc(IDCTDSPContext *c, struct AVCodecContext *avctx,
                           unsigned high_bit_depth);
-+void ff_idctdsp_init_e2k(IDCTDSPContext *c, AVCodecContext *avctx,
++void ff_idctdsp_init_e2k(IDCTDSPContext *c, struct AVCodecContext *avctx,
 +                         unsigned high_bit_depth);
- void ff_idctdsp_init_riscv(IDCTDSPContext *c, AVCodecContext *avctx,
+ void ff_idctdsp_init_riscv(IDCTDSPContext *c, struct AVCodecContext *avctx,
                             unsigned high_bit_depth);
- void ff_idctdsp_init_x86(IDCTDSPContext *c, AVCodecContext *avctx,
+ void ff_idctdsp_init_x86(IDCTDSPContext *c, struct AVCodecContext *avctx,
+diff --git a/libavcodec/librsvgdec.c b/libavcodec/librsvgdec.c
+index c328fbc..756c26d 100644
+--- a/libavcodec/librsvgdec.c
++++ b/libavcodec/librsvgdec.c
+@@ -90,8 +90,10 @@ static int librsvg_decode_frame(AVCodecContext *avctx, AVFrame *frame,
+         goto end;
+ 
+     avctx->pix_fmt = AV_PIX_FMT_RGB32;
++#if LIBRSVG_MAJOR_VERSION > 2 || LIBRSVG_MAJOR_VERSION == 2 && LIBRSVG_MINOR_VERSION >= 52
+     viewport.width = dimensions.width;
+     viewport.height = dimensions.height;
++#endif
+ 
+     ret = ff_get_buffer(avctx, frame, 0);
+     if (ret < 0)
 diff --git a/libavcodec/lossless_audiodsp.c b/libavcodec/lossless_audiodsp.c
 index 1daf2e4..6eb5c64 100644
 --- a/libavcodec/lossless_audiodsp.c
@@ -12323,10 +12316,10 @@ index da4baa1..c0960fe 100644
  
  #endif //AVCODEC_LOSSLESS_VIDEODSP_H
 diff --git a/libavcodec/me_cmp.c b/libavcodec/me_cmp.c
-index e2f9f84..b28620d 100644
+index cd05e63..c734108 100644
 --- a/libavcodec/me_cmp.c
 +++ b/libavcodec/me_cmp.c
-@@ -1059,6 +1059,8 @@ av_cold void ff_me_cmp_init(MECmpContext *c, AVCodecContext *avctx)
+@@ -1064,6 +1064,8 @@ av_cold void ff_me_cmp_init(MECmpContext *c, AVCodecContext *avctx)
      ff_me_cmp_init_arm(c, avctx);
  #elif ARCH_PPC
      ff_me_cmp_init_ppc(c, avctx);
@@ -12336,7 +12329,7 @@ index e2f9f84..b28620d 100644
      ff_me_cmp_init_x86(c, avctx);
  #elif ARCH_MIPS
 diff --git a/libavcodec/me_cmp.h b/libavcodec/me_cmp.h
-index 90ea76c..3d7c1a3 100644
+index aefd32a..f2cf80d 100644
 --- a/libavcodec/me_cmp.h
 +++ b/libavcodec/me_cmp.h
 @@ -86,6 +86,7 @@ void ff_me_cmp_init_aarch64(MECmpContext *c, AVCodecContext *avctx);
@@ -12373,10 +12366,10 @@ index e1ccb71..d27f4fd 100644
  
  #endif /* AVCODEC_MPEG4VIDEODSP_H */
 diff --git a/libavcodec/mpegaudiodsp.c b/libavcodec/mpegaudiodsp.c
-index 5a5a679..90236ba 100644
+index 0971c28..0cf198c 100644
 --- a/libavcodec/mpegaudiodsp.c
 +++ b/libavcodec/mpegaudiodsp.c
-@@ -101,6 +101,8 @@ av_cold void ff_mpadsp_init(MPADSPContext *s)
+@@ -97,6 +97,8 @@ av_cold void ff_mpadsp_init(MPADSPContext *s)
      ff_mpadsp_init_arm(s);
  #elif ARCH_PPC
      ff_mpadsp_init_ppc(s);
@@ -12398,7 +12391,7 @@ index 7bc6351..55a00a9 100644
  void ff_mpadsp_init_x86_tabs(void);
  void ff_mpadsp_init_mipsfpu(MPADSPContext *s);
 diff --git a/libavcodec/mpegvideo.c b/libavcodec/mpegvideo.c
-index fc73aba..97a7751 100644
+index 81796e4..3390813 100644
 --- a/libavcodec/mpegvideo.c
 +++ b/libavcodec/mpegvideo.c
 @@ -309,6 +309,8 @@ static av_cold int dct_init(MpegEncContext *s)
@@ -12411,10 +12404,10 @@ index fc73aba..97a7751 100644
      ff_mpv_common_init_x86(s);
  #elif ARCH_MIPS
 diff --git a/libavcodec/mpegvideo.h b/libavcodec/mpegvideo.h
-index 55828e6..28cc00d 100644
+index d7c2f57..62bbf76 100644
 --- a/libavcodec/mpegvideo.h
 +++ b/libavcodec/mpegvideo.h
-@@ -553,6 +553,7 @@ void ff_mpv_common_init_arm(MpegEncContext *s);
+@@ -552,6 +552,7 @@ void ff_mpv_common_init_arm(MpegEncContext *s);
  void ff_mpv_common_init_axp(MpegEncContext *s);
  void ff_mpv_common_init_neon(MpegEncContext *s);
  void ff_mpv_common_init_ppc(MpegEncContext *s);
@@ -12475,10 +12468,10 @@ index 9b002aa..518b4a5 100644
                                 unsigned high_bit_depth);
  void ff_pixblockdsp_init_x86(PixblockDSPContext *c, AVCodecContext *avctx,
 diff --git a/libavcodec/svq1enc.c b/libavcodec/svq1enc.c
-index 4651e01..698ff1e 100644
+index 894ae55..1067373 100644
 --- a/libavcodec/svq1enc.c
 +++ b/libavcodec/svq1enc.c
-@@ -640,6 +640,8 @@ static av_cold int svq1_encode_init(AVCodecContext *avctx)
+@@ -643,6 +643,8 @@ static av_cold int svq1_encode_init(AVCodecContext *avctx)
  
  #if ARCH_PPC
      ff_svq1enc_init_ppc(&s->svq1encdsp);
@@ -12500,10 +12493,10 @@ index 91b3673..a8c9ca2 100644
  
  #endif /* AVCODEC_SVQ1ENCDSP_H */
 diff --git a/libavcodec/tests/dct.c b/libavcodec/tests/dct.c
-index c847af2..bf4d713 100644
+index 010d0c1..20f8273 100644
 --- a/libavcodec/tests/dct.c
 +++ b/libavcodec/tests/dct.c
-@@ -102,6 +102,8 @@ static const struct algo idct_tab[] = {
+@@ -104,6 +104,8 @@ static const struct algo idct_tab[] = {
  #include "arm/dct.c"
  #elif ARCH_PPC
  #include "ppc/dct.c"
@@ -12702,7 +12695,7 @@ index be0ac0b..281dabe 100644
  void ff_vp9dsp_init_loongarch(VP9DSPContext *dsp, int bpp);
  
 diff --git a/libavcodec/xvididct.c b/libavcodec/xvididct.c
-index f338901..b80b811 100644
+index 01072d8..a60b44f 100644
 --- a/libavcodec/xvididct.c
 +++ b/libavcodec/xvididct.c
 @@ -348,6 +348,8 @@ av_cold void ff_xvid_idct_init(IDCTDSPContext *c, AVCodecContext *avctx)
@@ -12728,10 +12721,10 @@ index e0bc1a2..6e5ff91 100644
                              unsigned high_bit_depth);
  
 diff --git a/libavfilter/vf_drawtext.c b/libavfilter/vf_drawtext.c
-index 50012bb..c02629f 100644
+index c5477cb..848de38 100644
 --- a/libavfilter/vf_drawtext.c
 +++ b/libavfilter/vf_drawtext.c
-@@ -1188,6 +1188,17 @@ static int func_eval_expr_int_format(AVFilterContext *ctx, AVBPrint *bp,
+@@ -1391,6 +1391,17 @@ static int func_eval_expr_int_format(AVFilterContext *ctx, AVBPrint *bp,
          }
      }
  
@@ -12749,7 +12742,7 @@ index 50012bb..c02629f 100644
      feclearexcept(FE_ALL_EXCEPT);
      intval = res;
  #if defined(FE_INVALID) && defined(FE_OVERFLOW) && defined(FE_UNDERFLOW)
-@@ -1195,6 +1206,7 @@ static int func_eval_expr_int_format(AVFilterContext *ctx, AVBPrint *bp,
+@@ -1398,6 +1409,7 @@ static int func_eval_expr_int_format(AVFilterContext *ctx, AVBPrint *bp,
          av_log(ctx, AV_LOG_ERROR, "Conversion of floating-point result to int failed. Control register: 0x%08x. Conversion result: %d\n", ret, intval);
          return AVERROR(EINVAL);
      }
@@ -12758,7 +12751,7 @@ index 50012bb..c02629f 100644
  
      if (argc == 3)
 diff --git a/libavutil/cpu.c b/libavutil/cpu.c
-index 2c5f7f4..a889afb 100644
+index 1e0607d..fa400c1 100644
 --- a/libavutil/cpu.c
 +++ b/libavutil/cpu.c
 @@ -62,6 +62,8 @@ static int get_cpu_flags(void)
@@ -12779,7 +12772,7 @@ index 2c5f7f4..a889afb 100644
  #elif ARCH_X86
          { "mmx"     , NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_MMX      },    .unit = "flags" },
          { "mmx2"    , NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_MMX2     },    .unit = "flags" },
-@@ -272,6 +276,8 @@ size_t av_cpu_max_align(void)
+@@ -275,6 +279,8 @@ size_t av_cpu_max_align(void)
      return ff_get_cpu_max_align_arm();
  #elif ARCH_PPC
      return ff_get_cpu_max_align_ppc();
@@ -12789,7 +12782,7 @@ index 2c5f7f4..a889afb 100644
      return ff_get_cpu_max_align_x86();
  #elif ARCH_LOONGARCH
 diff --git a/libavutil/cpu.h b/libavutil/cpu.h
-index 8fa5ea9..7ad40ad 100644
+index 8dff341..8577a68 100644
 --- a/libavutil/cpu.h
 +++ b/libavutil/cpu.h
 @@ -61,6 +61,8 @@
@@ -13381,7 +13374,7 @@ index 7cad9fc..b3ccde0 100644
  void ff_float_dsp_init_x86(AVFloatDSPContext *fdsp);
  void ff_float_dsp_init_mips(AVFloatDSPContext *fdsp);
 diff --git a/libavutil/intreadwrite.h b/libavutil/intreadwrite.h
-index 4c8413a..b8a698e 100644
+index 21df788..81c95a1 100644
 --- a/libavutil/intreadwrite.h
 +++ b/libavutil/intreadwrite.h
 @@ -72,6 +72,8 @@ typedef union {
@@ -13390,14 +13383,14 @@ index 4c8413a..b8a698e 100644
  #   include "ppc/intreadwrite.h"
 +#elif ARCH_E2K
 +#   include "e2k/intreadwrite.h"
- #elif ARCH_TOMI
- #   include "tomi/intreadwrite.h"
  #elif ARCH_X86
+ #   include "x86/intreadwrite.h"
+ #endif
 diff --git a/libavutil/tests/cpu.c b/libavutil/tests/cpu.c
-index dadadb3..33623b5 100644
+index 200f203..a2bf8c1 100644
 --- a/libavutil/tests/cpu.c
 +++ b/libavutil/tests/cpu.c
-@@ -49,6 +49,8 @@ static const struct {
+@@ -51,6 +51,8 @@ static const struct {
      { AV_CPU_FLAG_SETEND,    "setend"     },
  #elif ARCH_PPC
      { AV_CPU_FLAG_ALTIVEC,   "altivec"    },
@@ -13407,7 +13400,7 @@ index dadadb3..33623b5 100644
      { AV_CPU_FLAG_MMI,       "mmi"        },
      { AV_CPU_FLAG_MSA,       "msa"        },
 diff --git a/libavutil/timer.h b/libavutil/timer.h
-index d3db5a2..10a4af3 100644
+index 2cd299e..463f272 100644
 --- a/libavutil/timer.h
 +++ b/libavutil/timer.h
 @@ -57,6 +57,8 @@
@@ -16123,10 +16116,10 @@ index 0000000..c31cfd8
 +    }
 +}
 diff --git a/libswscale/swscale.c b/libswscale/swscale.c
-index 367d045..55cd05c 100644
+index 90e5b29..c2fc8e4 100644
 --- a/libswscale/swscale.c
 +++ b/libswscale/swscale.c
-@@ -592,6 +592,8 @@ void ff_sws_init_scale(SwsContext *c)
+@@ -593,6 +593,8 @@ void ff_sws_init_scale(SwsContext *c)
  
  #if ARCH_PPC
      ff_sws_init_swscale_ppc(c);
@@ -16174,10 +16167,10 @@ index abeebbb..d1263a4 100644
  void ff_sws_init_swscale_aarch64(SwsContext *c);
  void ff_sws_init_swscale_arm(SwsContext *c);
 diff --git a/libswscale/swscale_unscaled.c b/libswscale/swscale_unscaled.c
-index 9af2e7e..4ed4b78 100644
+index 5d054c0..20f99dc 100644
 --- a/libswscale/swscale_unscaled.c
 +++ b/libswscale/swscale_unscaled.c
-@@ -2225,6 +2225,8 @@ void ff_get_unscaled_swscale(SwsContext *c)
+@@ -2283,6 +2283,8 @@ void ff_get_unscaled_swscale(SwsContext *c)
  
  #if ARCH_PPC
      ff_get_unscaled_swscale_ppc(c);
@@ -16187,7 +16180,7 @@ index 9af2e7e..4ed4b78 100644
      ff_get_unscaled_swscale_arm(c);
  #elif ARCH_AARCH64
 diff --git a/libswscale/utils.c b/libswscale/utils.c
-index 925c536..ce74b47 100644
+index a878456..fa9055e 100644
 --- a/libswscale/utils.c
 +++ b/libswscale/utils.c
 @@ -51,6 +51,7 @@
@@ -16198,7 +16191,7 @@ index 925c536..ce74b47 100644
  #include "libavutil/x86/asm.h"
  #include "libavutil/x86/cpu.h"
  #include "libavutil/loongarch/cpu.h"
-@@ -647,6 +648,14 @@ static av_cold int initFilter(int16_t **outFilter, int32_t **filterPos,
+@@ -655,6 +656,14 @@ static av_cold int initFilter(int16_t **outFilter, int32_t **filterPos,
              filterAlign = 1;
      }
  
@@ -16213,15 +16206,15 @@ index 925c536..ce74b47 100644
      if (HAVE_MMX && cpu_flags & AV_CPU_FLAG_MMX) {
          // special case for unscaled vertical filtering
          if (minFilterSize == 1 && filterAlign == 2)
-@@ -1805,6 +1814,7 @@ static av_cold int sws_init_single_context(SwsContext *c, SwsFilter *srcFilter,
+@@ -1817,6 +1826,7 @@ static av_cold int sws_init_single_context(SwsContext *c, SwsFilter *srcFilter,
          {
              const int filterAlign = X86_MMX(cpu_flags)     ? 4 :
                                      PPC_ALTIVEC(cpu_flags) ? 8 :
 +                                    E2K_SIMD(cpu_flags)    ? 8 :
                                      have_neon(cpu_flags)   ? 4 :
+                                     have_lsx(cpu_flags)    ? 8 :
                                      have_lasx(cpu_flags)   ? 8 : 1;
- 
-@@ -1837,6 +1847,7 @@ static av_cold int sws_init_single_context(SwsContext *c, SwsFilter *srcFilter,
+@@ -1850,6 +1860,7 @@ static av_cold int sws_init_single_context(SwsContext *c, SwsFilter *srcFilter,
      {
          const int filterAlign = X86_MMX(cpu_flags)     ? 2 :
                                  PPC_ALTIVEC(cpu_flags) ? 8 :
@@ -16229,7 +16222,7 @@ index 925c536..ce74b47 100644
                                  have_neon(cpu_flags)   ? 2 : 1;
  
          if ((ret = initFilter(&c->vLumFilter, &c->vLumFilterPos, &c->vLumFilterSize,
-@@ -1921,6 +1932,8 @@ static av_cold int sws_init_single_context(SwsContext *c, SwsFilter *srcFilter,
+@@ -1934,6 +1945,8 @@ static av_cold int sws_init_single_context(SwsContext *c, SwsFilter *srcFilter,
              cpucaps = "MMX";
          else if (PPC_ALTIVEC(cpu_flags))
              cpucaps = "AltiVec";
@@ -16252,10 +16245,10 @@ index 9c3f5e2..3ea8b23 100644
      t = ff_yuv2rgb_init_x86(c);
  #elif ARCH_LOONGARCH64
 diff --git a/tests/checkasm/checkasm.c b/tests/checkasm/checkasm.c
-index e96d84a..8d2a548 100644
+index f521d30..bdfb980 100644
 --- a/tests/checkasm/checkasm.c
 +++ b/tests/checkasm/checkasm.c
-@@ -235,6 +235,8 @@ static const struct {
+@@ -244,6 +244,8 @@ static const struct {
      { "ALTIVEC",  "altivec",  AV_CPU_FLAG_ALTIVEC },
      { "VSX",      "vsx",      AV_CPU_FLAG_VSX },
      { "POWER8",   "power8",   AV_CPU_FLAG_POWER8 },
@@ -16265,7 +16258,7 @@ index e96d84a..8d2a548 100644
      { "RVI",      "rvi",      AV_CPU_FLAG_RVI },
      { "RVF",      "rvf",      AV_CPU_FLAG_RVF },
 diff --git a/tests/checkasm/huffyuvdsp.c b/tests/checkasm/huffyuvdsp.c
-index 16e6bfb..87ff7a9 100644
+index 6ba27e2..4fbf9fb 100644
 --- a/tests/checkasm/huffyuvdsp.c
 +++ b/tests/checkasm/huffyuvdsp.c
 @@ -24,10 +24,14 @@
