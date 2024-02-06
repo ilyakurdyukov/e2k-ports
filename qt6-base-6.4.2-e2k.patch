@@ -1,41 +1,39 @@
-From cd53177335b6c7ce4c8b680ebc3ccf2934538599 Mon Sep 17 00:00:00 2001
+From 912ced0d349ab6df271e9a077134b9445064b9bf Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Tue, 31 Oct 2023 19:43:55 +0700
+Date: Mon, 5 Feb 2024 00:44:09 +0700
 Subject: [PATCH] qt6-base-6.4.2 e2k support
 
-using LCC 1.26.20 and -mno-sse4.2
+using LCC 1.27.12 and -mno-sse4.2
 ---
- cmake/QtCompilerFlags.cmake                   |  2 +
- config.tests/x86_simd/main.cpp                |  6 +++
- configure.cmake                               |  1 +
- .../double-conversion/utils.h                 |  1 +
- .../qtconcurrentstoredfunctioncall.h          | 39 +++++++++++++++++++
- src/corelib/global/archdetect.cpp             |  2 +
- src/corelib/global/qcompilerdetection.h       | 12 +++++-
- src/corelib/global/qlogging.cpp               |  2 +-
- src/corelib/global/qprocessordetection.h      |  9 +++++
- src/corelib/global/qsimd.cpp                  |  6 ++-
- src/corelib/global/qsimd.h                    | 11 ++++++
- src/corelib/global/qsimd_p.h                  | 12 +++---
- src/corelib/global/qversiontagging.h          |  3 ++
- src/corelib/kernel/qmetatype.h                | 19 +++++++++
- src/corelib/kernel/qproperty.h                |  2 +-
- src/corelib/plugin/qelfparser_p.cpp           |  2 +
- src/corelib/text/qanystringview.h             |  2 +-
- src/corelib/text/qstringview.h                |  2 +-
- src/corelib/thread/qfuture_impl.h             |  4 ++
- src/corelib/tools/qhash.h                     |  5 +++
- src/corelib/tools/qhashfunctions.h            |  4 ++
- src/corelib/tools/qlist.h                     |  7 ++++
- src/gui/kernel/qplatformintegration.h         |  9 +++++
- src/gui/painting/qcolortrclut_p.h             |  6 +++
- src/gui/painting/qdrawhelper.cpp              |  2 +-
- .../platform/unix/qunixnativeinterface.cpp    | 15 +++++++
- src/gui/platform/unix/qxkbcommon.cpp          |  7 ++++
- .../gl_integrations/xcb_egl/qxcbeglcontext.h  |  3 ++
- .../auto/corelib/text/qlocale/tst_qlocale.cpp |  2 +-
- .../gui/painting/qpainter/tst_qpainter.cpp    |  2 +-
- 30 files changed, 184 insertions(+), 15 deletions(-)
+ cmake/QtCompilerFlags.cmake                       |  2 ++
+ config.tests/x86_simd/main.cpp                    |  6 ++++++
+ configure.cmake                                   |  1 +
+ .../double-conversion/double-conversion/utils.h   |  1 +
+ src/corelib/global/archdetect.cpp                 |  2 ++
+ src/corelib/global/qcompilerdetection.h           | 12 +++++++++++-
+ src/corelib/global/qlogging.cpp                   |  2 +-
+ src/corelib/global/qnativeinterface.h             |  7 +++++++
+ src/corelib/global/qprocessordetection.h          |  9 +++++++++
+ src/corelib/global/qsimd.cpp                      |  6 +++++-
+ src/corelib/global/qsimd.h                        | 11 +++++++++++
+ src/corelib/global/qsimd_p.h                      | 12 ++++++------
+ src/corelib/global/qversiontagging.h              |  3 +++
+ src/corelib/kernel/qmetatype.h                    |  3 +++
+ src/corelib/plugin/qelfparser_p.cpp               |  2 ++
+ src/corelib/text/qanystringview.h                 |  2 +-
+ src/corelib/text/qstringview.h                    |  2 +-
+ src/corelib/thread/qfuture_impl.h                 |  4 ++++
+ src/corelib/tools/qhash.h                         |  9 +++++++++
+ src/corelib/tools/qlist.h                         |  4 ++++
+ src/gui/kernel/qplatformintegration.h             |  9 +++++++++
+ src/gui/painting/qcolortrclut_p.h                 |  6 ++++++
+ src/gui/painting/qdrawhelper.cpp                  |  2 +-
+ src/gui/platform/unix/qunixnativeinterface.cpp    | 15 +++++++++++++++
+ src/gui/platform/unix/qxkbcommon.cpp              |  7 +++++++
+ .../xcb/gl_integrations/xcb_egl/qxcbeglcontext.h  |  3 +++
+ tests/auto/corelib/text/qlocale/tst_qlocale.cpp   |  2 +-
+ tests/auto/gui/painting/qpainter/tst_qpainter.cpp |  2 +-
+ 28 files changed, 132 insertions(+), 14 deletions(-)
 
 diff --git a/cmake/QtCompilerFlags.cmake b/cmake/QtCompilerFlags.cmake
 index a34aaca2..1c9abd91 100644
@@ -91,58 +89,6 @@ index 41078b6c..805ab4ef 100644
      defined(__loongarch__) || \
      defined(__nios2__) || defined(__ghs) || \
      defined(__powerpc__) || defined(__ppc__) || defined(__ppc64__) || \
-diff --git a/src/concurrent/qtconcurrentstoredfunctioncall.h b/src/concurrent/qtconcurrentstoredfunctioncall.h
-index e9c66a63..b2efbdda 100644
---- a/src/concurrent/qtconcurrentstoredfunctioncall.h
-+++ b/src/concurrent/qtconcurrentstoredfunctioncall.h
-@@ -101,8 +101,47 @@ using InvokeResultType = typename InvokeResult<Function, Args...>::Type;
- template <class ...Types>
- using DecayedTuple = std::tuple<std::decay_t<Types>...>;
- 
-+#ifdef __EDG__
-+template <typename... T>
-+struct StoredFunctionCall;
-+
-+template <class Function>
-+struct StoredFunctionCall<Function> : public RunFunctionTaskBase<InvokeResultType<Function>>
-+{
-+    StoredFunctionCall(DecayedTuple<Function> &&_data)
-+        : data(std::move(_data))
-+    {}
-+
-+protected:
-+    void runFunctor() override
-+    {
-+        constexpr auto invoke = [] (std::decay_t<Function> function) -> auto {
-+            return std::invoke(function);
-+        };
-+
-+        if constexpr (std::is_void_v<InvokeResultType<Function>>) {
-+            std::apply(invoke, std::move(data));
-+        } else {
-+            auto result = std::apply(invoke, std::move(data));
-+
-+            using T = InvokeResultType<Function>;
-+            if constexpr (std::is_move_constructible_v<T>)
-+                this->promise.reportAndMoveResult(std::move(result));
-+            else if constexpr (std::is_copy_constructible_v<T>)
-+                this->promise.reportResult(result);
-+        }
-+    }
-+
-+private:
-+    DecayedTuple<Function> data;
-+};
-+
-+template <class Function, class ...Args>
-+struct StoredFunctionCall<Function, Args...> : public RunFunctionTaskBase<InvokeResultType<Function, Args...>>
-+#else
- template <class Function, class ...Args>
- struct StoredFunctionCall : public RunFunctionTaskBase<InvokeResultType<Function, Args...>>
-+#endif
- {
-     StoredFunctionCall(DecayedTuple<Function, Args...> &&_data)
-         : data(std::move(_data))
 diff --git a/src/corelib/global/archdetect.cpp b/src/corelib/global/archdetect.cpp
 index a0ce5baa..81c0a4dd 100644
 --- a/src/corelib/global/archdetect.cpp
@@ -199,6 +145,25 @@ index 875067fc..f3708ba1 100644
  // force skipping the frame pointer, to save the backtrace() function some work
  #    pragma GCC push_options
  #    pragma GCC optimize ("omit-frame-pointer")
+diff --git a/src/corelib/global/qnativeinterface.h b/src/corelib/global/qnativeinterface.h
+index 89f33651..374c64cc 100644
+--- a/src/corelib/global/qnativeinterface.h
++++ b/src/corelib/global/qnativeinterface.h
+@@ -121,7 +121,14 @@ namespace QNativeInterface::Private {
+     // Wrapper type to make the error message in case
+     // of incompatible interface types read better.
+     template <typename I>
++#ifdef __EDG__
++    struct NativeInterface : TypeInfo<I> {
++        template <typename BaseType>
++        static constexpr bool isCompatibleWith = TypeInfo<I>::template isCompatibleWith<BaseType>;
++    };
++#else
+     struct NativeInterface : TypeInfo<I> {};
++#endif
+ } // QNativeInterface::Private
+ 
+ // Declares an accessor for the native interface
 diff --git a/src/corelib/global/qprocessordetection.h b/src/corelib/global/qprocessordetection.h
 index f18cbf32..9df85b61 100644
 --- a/src/corelib/global/qprocessordetection.h
@@ -346,7 +311,7 @@ index e64cae1d..30aaaa66 100644
  #  define QT_VERSION_TAG2(sym, imp)     \
      extern "C" Q_DECL_IMPORT const char sym; \
 diff --git a/src/corelib/kernel/qmetatype.h b/src/corelib/kernel/qmetatype.h
-index f015daeb..d6123d6a 100644
+index f015daeb..fc064384 100644
 --- a/src/corelib/kernel/qmetatype.h
 +++ b/src/corelib/kernel/qmetatype.h
 @@ -793,6 +793,9 @@ namespace QtPrivate
@@ -359,61 +324,6 @@ index f015daeb..d6123d6a 100644
          static auto check(...) -> std::false_type;
          using type = decltype(check(static_cast<T *>(nullptr)));
      };
-@@ -1220,6 +1223,7 @@ int qRegisterNormalizedMetaTypeImplementation(const QT_PREPEND_NAMESPACE(QByteAr
-     const QMetaType metaType = QMetaType::fromType<T>();
-     const int id = metaType.id();
- 
-+    /* The EDG frontend has problems with the next two lines. */
-     QtPrivate::SequentialContainerTransformationHelper<T>::registerConverter();
-     QtPrivate::SequentialContainerTransformationHelper<T>::registerMutableView();
-     QtPrivate::AssociativeContainerTransformationHelper<T>::registerConverter();
-@@ -1639,10 +1643,21 @@ namespace QtPrivate {
- template<typename From>
- struct QSequentialIterableConvertFunctor
- {
-+#ifdef __EDG__
-+    /* Somehow this fixes an internal compiler error
-+       with SequentialContainerTransformationHelper
-+       from the Q_DECLARE_METATYPE macro. */
-+    static auto get() {
-+        return [](const From &f) {
-+            return QIterable<QMetaSequence>(QMetaSequence::fromContainer<From>(), &f);
-+        };
-+    }
-+#else
-     QIterable<QMetaSequence> operator()(const From &f) const
-     {
-         return QIterable<QMetaSequence>(QMetaSequence::fromContainer<From>(), &f);
-     }
-+#endif
- };
- 
- template<typename From>
-@@ -1661,7 +1676,11 @@ struct SequentialValueTypeIsMetaType<T, true>
-     {
-         const QMetaType to = QMetaType::fromType<QIterable<QMetaSequence>>();
-         if (!QMetaType::hasRegisteredConverterFunction(QMetaType::fromType<T>(), to)) {
-+#ifdef __EDG__
-+            auto o = QSequentialIterableConvertFunctor<T>::get();
-+#else
-             QSequentialIterableConvertFunctor<T> o;
-+#endif
-             return QMetaType::registerConverter<T, QIterable<QMetaSequence>>(o);
-         }
-         return true;
-diff --git a/src/corelib/kernel/qproperty.h b/src/corelib/kernel/qproperty.h
-index 4968b29c..976506db 100644
---- a/src/corelib/kernel/qproperty.h
-+++ b/src/corelib/kernel/qproperty.h
-@@ -31,7 +31,7 @@
- #endif
- #endif
- 
--#if __has_include(<experimental/source_location>) && !defined(Q_CLANG_QDOC)
-+#if __has_include(<experimental/source_location>) && !defined(Q_CLANG_QDOC) && !defined(__EDG__)
- #include <experimental/source_location>
- #if !defined(QT_PROPERTY_COLLECT_BINDING_LOCATION)
- #if defined(__cpp_lib_experimental_source_location)
 diff --git a/src/corelib/plugin/qelfparser_p.cpp b/src/corelib/plugin/qelfparser_p.cpp
 index 6ebfaff2..f388cf2b 100644
 --- a/src/corelib/plugin/qelfparser_p.cpp
@@ -470,7 +380,7 @@ index 8e96b943..6c7c5ed3 100644
  {
      using ArgsType = ArgsType<Signal>;
 diff --git a/src/corelib/tools/qhash.h b/src/corelib/tools/qhash.h
-index 952911f9..a7d0d092 100644
+index 952911f9..92563104 100644
 --- a/src/corelib/tools/qhash.h
 +++ b/src/corelib/tools/qhash.h
 @@ -29,6 +29,11 @@ namespace QHashPrivate {
@@ -485,45 +395,34 @@ index 952911f9..a7d0d092 100644
  template <typename T>
  constexpr inline bool HasQHashOverload<T, std::enable_if_t<
      std::is_convertible_v<decltype(qHash(std::declval<const T &>(), std::declval<size_t>())), size_t>
-diff --git a/src/corelib/tools/qhashfunctions.h b/src/corelib/tools/qhashfunctions.h
-index c946cc61..7fe092a4 100644
---- a/src/corelib/tools/qhashfunctions.h
-+++ b/src/corelib/tools/qhashfunctions.h
-@@ -203,11 +203,15 @@ struct QHashCombineCommutative
- };
+@@ -827,7 +832,11 @@ public:
+     using reference = T &;
+     using const_reference = const T &;
  
- template <typename... T>
 +#ifdef __EDG__
-+using QHashMultiReturnType = size_t;
++    inline QHash() noexcept {}
 +#else
- using QHashMultiReturnType = decltype(
-     std::declval< std::enable_if_t<(sizeof...(T) > 0)> >(),
-     (qHash(std::declval<const T &>()), ...),
-     size_t{}
- );
+     inline QHash() noexcept = default;
 +#endif
- 
- // workaround for a MSVC ICE,
- // https://developercommunity.visualstudio.com/content/problem/996540/internal-compiler-error-on-msvc-1924-when-doing-sf.html
+     inline QHash(std::initializer_list<std::pair<Key,T> > list)
+         : d(new Data(list.size()))
+     {
 diff --git a/src/corelib/tools/qlist.h b/src/corelib/tools/qlist.h
-index 0cc62e5f..0a6bd028 100644
+index 0cc62e5f..c9e176e0 100644
 --- a/src/corelib/tools/qlist.h
 +++ b/src/corelib/tools/qlist.h
-@@ -309,7 +309,14 @@ public:
+@@ -259,7 +259,11 @@ public:
      }
  
-     // This constructor is here for compatibility with QStringList in Qt 5, that has a QStringList(const QString &) constructor
+ public:
 +#ifdef __EDG__
-+    template<typename X, typename Y>
-+    struct edg_fix : std::integral_constant<bool,
-+         std::is_same_v<X, QString> && std::is_convertible_v<Y, QString>> {};
-+    template<typename String, std::enable_if_t<edg_fix<T, String>::value, bool> = true>
++    QList() {}
 +#else
-     template<typename String, typename = std::enable_if_t<std::is_same_v<T, QString> && std::is_convertible_v<String, QString>>>
+     QList() = default;
 +#endif
-     inline explicit QList(const String &str)
-     { append(str); }
- 
+     explicit QList(qsizetype size)
+         : d(Data::allocate(size))
+     {
 diff --git a/src/gui/kernel/qplatformintegration.h b/src/gui/kernel/qplatformintegration.h
 index 46f1d743..eee1a5c0 100644
 --- a/src/gui/kernel/qplatformintegration.h
