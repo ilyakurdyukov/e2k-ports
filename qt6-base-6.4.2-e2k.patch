@@ -1,6 +1,6 @@
-From 912ced0d349ab6df271e9a077134b9445064b9bf Mon Sep 17 00:00:00 2001
+From 050ce8b7f0cd7215aac6a42a919f0c7a8df11118 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Mon, 5 Feb 2024 00:44:09 +0700
+Date: Wed, 21 Feb 2024 09:36:01 +0700
 Subject: [PATCH] qt6-base-6.4.2 e2k support
 
 using LCC 1.27.12 and -mno-sse4.2
@@ -8,6 +8,7 @@ using LCC 1.27.12 and -mno-sse4.2
  cmake/QtCompilerFlags.cmake                       |  2 ++
  config.tests/x86_simd/main.cpp                    |  6 ++++++
  configure.cmake                                   |  1 +
+ mkspecs/features/toolchain.prf                    |  3 ++-
  .../double-conversion/double-conversion/utils.h   |  1 +
  src/corelib/global/archdetect.cpp                 |  2 ++
  src/corelib/global/qcompilerdetection.h           | 12 +++++++++++-
@@ -33,7 +34,7 @@ using LCC 1.27.12 and -mno-sse4.2
  .../xcb/gl_integrations/xcb_egl/qxcbeglcontext.h  |  3 +++
  tests/auto/corelib/text/qlocale/tst_qlocale.cpp   |  2 +-
  tests/auto/gui/painting/qpainter/tst_qpainter.cpp |  2 +-
- 28 files changed, 132 insertions(+), 14 deletions(-)
+ 29 files changed, 134 insertions(+), 15 deletions(-)
 
 diff --git a/cmake/QtCompilerFlags.cmake b/cmake/QtCompilerFlags.cmake
 index a34aaca2..1c9abd91 100644
@@ -77,6 +78,20 @@ index 999c9133..67a441a3 100644
      AUTODETECT NOT WASM
  )
  qt_feature_definition("sse2" "QT_COMPILER_SUPPORTS_SSE2" VALUE "1")
+diff --git a/mkspecs/features/toolchain.prf b/mkspecs/features/toolchain.prf
+index 0040b6c4..7ce56869 100644
+--- a/mkspecs/features/toolchain.prf
++++ b/mkspecs/features/toolchain.prf
+@@ -263,7 +263,8 @@ isEmpty($${target_prefix}.INCDIRS) {
+                 }
+             }
+         }
+-        if(!darwin:clang)|intel_icc {
++        arch = $$system("uname -m")
++        if(!darwin:clang)|intel_icc|equals(arch, e2k) {
+             # Clang on a non-Apple system (that is, a system without ld64 -- say, with GNU ld
+             # or gold under Linux) will not print any library search path. Need to use another
+             # invocation with different options (which in turn doesn't print include search
 diff --git a/src/3rdparty/double-conversion/double-conversion/utils.h b/src/3rdparty/double-conversion/double-conversion/utils.h
 index 41078b6c..805ab4ef 100644
 --- a/src/3rdparty/double-conversion/double-conversion/utils.h
