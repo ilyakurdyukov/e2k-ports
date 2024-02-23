@@ -1,14 +1,15 @@
-From a7ad2cc27d6105b4e089411e4a582915f85d0aad Mon Sep 17 00:00:00 2001
+From eca78a48be42bfaa20f07f0d2c74a8ad54301eb4 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Thu, 21 Sep 2023 17:13:27 +0700
-Subject: [PATCH] blender-3.6.2 e2k support
+Date: Thu, 22 Feb 2024 12:39:56 +0700
+Subject: [PATCH] blender-4.0.2 e2k support
 
-Using LCC 1.26.20
+Using LCC 1.27.14
 ---
  .../btSequentialImpulseConstraintSolver.cpp      |  4 ++++
  extern/cuew/include/cuew.h                       |  2 +-
  extern/fast_float/fast_float.h                   |  2 +-
  extern/hipew/include/hipew.h                     |  2 +-
+ intern/cycles/kernel/osl/osl.h                   |  4 ++++
  intern/cycles/util/defines.h                     |  2 +-
  intern/cycles/util/math_float3.h                 |  6 +++---
  intern/cycles/util/math_float4.h                 |  2 +-
@@ -30,7 +31,7 @@ Using LCC 1.26.20
  source/blender/blenlib/BLI_utildefines.h         |  2 +-
  source/blender/blenlib/BLI_virtual_array.hh      |  3 +++
  .../interface_template_attribute_search.cc       |  4 ++++
- 25 files changed, 84 insertions(+), 19 deletions(-)
+ 26 files changed, 88 insertions(+), 19 deletions(-)
 
 diff --git a/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp b/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
 index d2641c5..a0af3a4 100644
@@ -62,10 +63,10 @@ index 278fb11..ab32d0c 100644
  #else
  typedef unsigned int CUdeviceptr;
 diff --git a/extern/fast_float/fast_float.h b/extern/fast_float/fast_float.h
-index 479aecc..32337f9 100644
+index 155363a..b3918fa 100644
 --- a/extern/fast_float/fast_float.h
 +++ b/extern/fast_float/fast_float.h
-@@ -2200,7 +2200,7 @@ struct pow5_tables {
+@@ -2352,7 +2352,7 @@ struct pow5_tables {
      298023223876953125UL, 1490116119384765625UL, 7450580596923828125UL,
    };
  #ifdef FASTFLOAT_64BIT_LIMB
@@ -87,11 +88,27 @@ index f82654f..b9c3b7e 100644
  typedef unsigned long long hipDeviceptr_t;
  #else
  typedef unsigned int hipDeviceptr_t;
+diff --git a/intern/cycles/kernel/osl/osl.h b/intern/cycles/kernel/osl/osl.h
+index 347b635..8797182 100644
+--- a/intern/cycles/kernel/osl/osl.h
++++ b/intern/cycles/kernel/osl/osl.h
+@@ -78,7 +78,11 @@ ccl_device void flatten_closure_tree(KernelGlobals kg,
+       case OSL_CLOSURE_MUL_ID: {
+         ccl_private const OSLClosureMul *mul = static_cast<ccl_private const OSLClosureMul *>(
+             closure);
++#ifdef __EDG__
++        weight = weight * mul->weight;
++#else
+         weight *= mul->weight;
++#endif
+         closure = mul->closure;
+         continue;
+       }
 diff --git a/intern/cycles/util/defines.h b/intern/cycles/util/defines.h
-index d5be14c..a217455 100644
+index dd0299a..e6b9686 100644
 --- a/intern/cycles/util/defines.h
 +++ b/intern/cycles/util/defines.h
-@@ -12,7 +12,7 @@
+@@ -13,7 +13,7 @@
  /* Bitness */
  
  #if defined(__ppc64__) || defined(__PPC64__) || defined(__x86_64__) || defined(__ia64__) || \
@@ -101,10 +118,10 @@ index d5be14c..a217455 100644
  #endif
  
 diff --git a/intern/cycles/util/math_float3.h b/intern/cycles/util/math_float3.h
-index 7376240..629cc57 100644
+index a123197..00eabcc 100644
 --- a/intern/cycles/util/math_float3.h
 +++ b/intern/cycles/util/math_float3.h
-@@ -199,7 +199,7 @@ ccl_device_inline bool operator!=(const float3 a, const float3 b)
+@@ -200,7 +200,7 @@ ccl_device_inline bool operator!=(const float3 a, const float3 b)
  
  ccl_device_inline float dot(const float3 a, const float3 b)
  {
@@ -113,7 +130,7 @@ index 7376240..629cc57 100644
    return _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7F));
  #  else
    return a.x * b.x + a.y * b.y + a.z * b.z;
-@@ -219,7 +219,7 @@ ccl_device_inline float dot_xy(const float3 a, const float3 b)
+@@ -220,7 +220,7 @@ ccl_device_inline float dot_xy(const float3 a, const float3 b)
  
  ccl_device_inline float len(const float3 a)
  {
@@ -122,7 +139,7 @@ index 7376240..629cc57 100644
    return _mm_cvtss_f32(_mm_sqrt_ss(_mm_dp_ps(a.m128, a.m128, 0x7F)));
  #else
    return sqrtf(dot(a, a));
-@@ -263,7 +263,7 @@ ccl_device_inline float3 cross(const float3 a, const float3 b)
+@@ -264,7 +264,7 @@ ccl_device_inline float3 cross(const float3 a, const float3 b)
  
  ccl_device_inline float3 normalize(const float3 a)
  {
@@ -132,10 +149,10 @@ index 7376240..629cc57 100644
    return float3(_mm_div_ps(a.m128, norm));
  #  else
 diff --git a/intern/cycles/util/math_float4.h b/intern/cycles/util/math_float4.h
-index 1f5f391..11a5ef6 100644
+index 235bf3f..3dda638 100644
 --- a/intern/cycles/util/math_float4.h
 +++ b/intern/cycles/util/math_float4.h
-@@ -363,7 +363,7 @@ ccl_device_inline float reduce_max(const float4 a)
+@@ -364,7 +364,7 @@ ccl_device_inline float reduce_max(const float4 a)
  #if !defined(__KERNEL_METAL__)
  ccl_device_inline float dot(const float4 a, const float4 b)
  {
@@ -145,10 +162,10 @@ index 1f5f391..11a5ef6 100644
    __m128 t = vmulq_f32(a, b);
    return vaddvq_f32(t);
 diff --git a/intern/cycles/util/optimization.h b/intern/cycles/util/optimization.h
-index b6194dc..6be3940 100644
+index d4cdc4c..98456d2 100644
 --- a/intern/cycles/util/optimization.h
 +++ b/intern/cycles/util/optimization.h
-@@ -48,6 +48,14 @@
+@@ -49,6 +49,14 @@
  #    define __KERNEL_SSE3__
  #    define __KERNEL_SSE41__
  
@@ -164,10 +181,10 @@ index b6194dc..6be3940 100644
  
  #endif
 diff --git a/intern/cycles/util/simd.h b/intern/cycles/util/simd.h
-index 7da0a0f..5f9e6f2 100644
+index e612475..9e15e95 100644
 --- a/intern/cycles/util/simd.h
 +++ b/intern/cycles/util/simd.h
-@@ -20,7 +20,7 @@
+@@ -21,7 +21,7 @@
  #  include "util/windows.h"
  #elif defined(_MSC_VER)
  #  include <intrin.h>
@@ -176,7 +193,7 @@ index 7da0a0f..5f9e6f2 100644
  #  include <x86intrin.h>
  #elif defined(__KERNEL_NEON__)
  #  define SSE2NEON_PRECISE_MINMAX 1
-@@ -224,7 +224,7 @@ type shuffle_neon(const type &a, const type &b)
+@@ -225,7 +225,7 @@ type shuffle_neon(const type &a, const type &b)
  #  endif
  #endif
  
@@ -186,10 +203,10 @@ index 7da0a0f..5f9e6f2 100644
  #  define _lzcnt_u64 __lzcnt64
  #endif
 diff --git a/intern/cycles/util/system.cpp b/intern/cycles/util/system.cpp
-index c1c4963..d40e29a 100644
+index 0af0d1f..e5256a0 100644
 --- a/intern/cycles/util/system.cpp
 +++ b/intern/cycles/util/system.cpp
-@@ -215,6 +215,12 @@ bool system_cpu_support_avx2()
+@@ -216,6 +216,12 @@ bool system_cpu_support_avx2()
    CPUCapabilities &caps = system_cpu_capabilities();
    return caps.avx2;
  }
@@ -203,10 +220,10 @@ index c1c4963..d40e29a 100644
  
  bool system_cpu_support_sse2()
 diff --git a/intern/cycles/util/transform_inverse.h b/intern/cycles/util/transform_inverse.h
-index 2faac57..69b359f 100644
+index 32a62a2..0d60c64 100644
 --- a/intern/cycles/util/transform_inverse.h
 +++ b/intern/cycles/util/transform_inverse.h
-@@ -29,7 +29,7 @@ ccl_device_forceinline float3 transform_inverse_cross(const float3 a_, const flo
+@@ -30,7 +30,7 @@ ccl_device_forceinline float3 transform_inverse_cross(const float3 a_, const flo
  
  ccl_device_forceinline float transform_inverse_dot(const float3 a_, const float3 b_)
  {
@@ -268,10 +285,10 @@ index c8c4700..633ee11 100644
    for (int y = 0; y < height; y++) {
      for (int x = 0; x < width; x++) {
 diff --git a/source/blender/blenkernel/intern/geometry_component_curves.cc b/source/blender/blenkernel/intern/geometry_component_curves.cc
-index e20c130..954e4b7 100644
+index dfc5c0c..e1628f9 100644
 --- a/source/blender/blenkernel/intern/geometry_component_curves.cc
 +++ b/source/blender/blenkernel/intern/geometry_component_curves.cc
-@@ -565,9 +565,9 @@ static ComponentAttributeProviders create_attribute_providers_for_curve()
+@@ -659,9 +659,9 @@ static ComponentAttributeProviders create_attribute_providers_for_curve()
  
  /** \} */
  
@@ -283,10 +300,10 @@ index e20c130..954e4b7 100644
        attribute_accessor_functions::accessor_functions_for_providers<providers>();
    fn.domain_size = [](const void *owner, const eAttrDomain domain) {
 diff --git a/source/blender/blenkernel/intern/geometry_component_instances.cc b/source/blender/blenkernel/intern/geometry_component_instances.cc
-index 3af5d46..59044ef 100644
+index 81fe794..936b780 100644
 --- a/source/blender/blenkernel/intern/geometry_component_instances.cc
 +++ b/source/blender/blenkernel/intern/geometry_component_instances.cc
-@@ -210,9 +210,9 @@ static ComponentAttributeProviders create_attribute_providers_for_instances()
+@@ -201,9 +201,9 @@ static ComponentAttributeProviders create_attribute_providers_for_instances()
    return ComponentAttributeProviders({&position, &id}, {&instance_custom_data});
  }
  
@@ -298,10 +315,10 @@ index 3af5d46..59044ef 100644
        attribute_accessor_functions::accessor_functions_for_providers<providers>();
    fn.domain_size = [](const void *owner, const eAttrDomain domain) {
 diff --git a/source/blender/blenkernel/intern/geometry_component_mesh.cc b/source/blender/blenkernel/intern/geometry_component_mesh.cc
-index 3a2cbe7..08f3903 100644
+index ace3d1c..bb66533 100644
 --- a/source/blender/blenkernel/intern/geometry_component_mesh.cc
 +++ b/source/blender/blenkernel/intern/geometry_component_mesh.cc
-@@ -1242,9 +1242,9 @@ static ComponentAttributeProviders create_attribute_providers_for_mesh()
+@@ -1107,9 +1107,9 @@ static ComponentAttributeProviders create_attribute_providers_for_mesh()
                                        &face_custom_data});
  }
  
@@ -313,10 +330,10 @@ index 3a2cbe7..08f3903 100644
        attribute_accessor_functions::accessor_functions_for_providers<providers>();
    fn.domain_size = [](const void *owner, const eAttrDomain domain) {
 diff --git a/source/blender/blenkernel/intern/geometry_component_pointcloud.cc b/source/blender/blenkernel/intern/geometry_component_pointcloud.cc
-index f9261fd..859feef 100644
+index 8f3b801..f863cfb 100644
 --- a/source/blender/blenkernel/intern/geometry_component_pointcloud.cc
 +++ b/source/blender/blenkernel/intern/geometry_component_pointcloud.cc
-@@ -163,10 +163,10 @@ static ComponentAttributeProviders create_attribute_providers_for_point_cloud()
+@@ -165,10 +165,10 @@ static ComponentAttributeProviders create_attribute_providers_for_point_cloud()
    return ComponentAttributeProviders({&position, &radius, &id}, {&point_custom_data});
  }
  
@@ -330,10 +347,10 @@ index f9261fd..859feef 100644
        attribute_accessor_functions::accessor_functions_for_providers<providers>();
    fn.domain_size = [](const void *owner, const eAttrDomain domain) {
 diff --git a/source/blender/blenkernel/intern/volume.cc b/source/blender/blenkernel/intern/volume.cc
-index 1102102..98f7043 100644
+index a03b476..8fb2a4d 100644
 --- a/source/blender/blenkernel/intern/volume.cc
 +++ b/source/blender/blenkernel/intern/volume.cc
-@@ -1544,6 +1544,9 @@ struct CreateGridOp {
+@@ -1530,6 +1530,9 @@ struct CreateGridOp {
      else {
        return GridType::create();
      }
@@ -344,10 +361,10 @@ index 1102102..98f7043 100644
  };
  #endif
 diff --git a/source/blender/blenlib/BLI_enumerable_thread_specific.hh b/source/blender/blenlib/BLI_enumerable_thread_specific.hh
-index 1774230..f8ec93a 100644
+index 32886f1..83b9da8 100644
 --- a/source/blender/blenlib/BLI_enumerable_thread_specific.hh
 +++ b/source/blender/blenlib/BLI_enumerable_thread_specific.hh
-@@ -33,7 +33,14 @@ namespace blender::threading {
+@@ -35,7 +35,14 @@ namespace blender::threading {
  #ifndef WITH_TBB
  namespace enumerable_thread_specific_utils {
  inline std::atomic<int> next_id = 0;
@@ -363,10 +380,10 @@ index 1774230..f8ec93a 100644
  #endif
  
 diff --git a/source/blender/blenlib/BLI_hash.hh b/source/blender/blenlib/BLI_hash.hh
-index 7be25b6..dcf9053 100644
+index f5ba712..0356a2b 100644
 --- a/source/blender/blenlib/BLI_hash.hh
 +++ b/source/blender/blenlib/BLI_hash.hh
-@@ -92,6 +92,9 @@ template<typename T> struct DefaultHash {
+@@ -93,6 +93,9 @@ template<typename T> struct DefaultHash {
        /* If this results in a compiler error, no hash function for the type has been found. */
        return value.hash();
      }
@@ -377,10 +394,10 @@ index 7be25b6..dcf9053 100644
  
    template<typename U> uint64_t operator()(const U &value) const
 diff --git a/source/blender/blenlib/BLI_math_matrix_types.hh b/source/blender/blenlib/BLI_math_matrix_types.hh
-index 46e098a..cfd75d8 100644
+index 978d304..f000778 100644
 --- a/source/blender/blenlib/BLI_math_matrix_types.hh
 +++ b/source/blender/blenlib/BLI_math_matrix_types.hh
-@@ -427,7 +427,12 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
+@@ -428,7 +428,12 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
      /* This is the reference implementation.
       * Might be overloaded with vectorized / optimized code. */
      row_type result(0);
@@ -393,7 +410,7 @@ index 46e098a..cfd75d8 100644
      return result;
    }
  
-@@ -487,7 +492,14 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
+@@ -488,7 +493,14 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
    friend std::ostream &operator<<(std::ostream &stream, const MatBase &mat)
    {
      stream << "(\n";
@@ -408,7 +425,7 @@ index 46e098a..cfd75d8 100644
        stream << "(";
        unroll<NumRow>([&](auto j) {
          /** NOTE: j and i are swapped to follow mathematical convention. */
-@@ -500,6 +512,10 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
+@@ -501,6 +513,10 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
        if (i < NumCol - 1) {
          stream << ",";
        }
@@ -420,10 +437,10 @@ index 46e098a..cfd75d8 100644
      });
      stream << ")\n";
 diff --git a/source/blender/blenlib/BLI_memory_utils.hh b/source/blender/blenlib/BLI_memory_utils.hh
-index 1eedd89..85cc6ac 100644
+index bec0281..5f177e7 100644
 --- a/source/blender/blenlib/BLI_memory_utils.hh
 +++ b/source/blender/blenlib/BLI_memory_utils.hh
-@@ -10,6 +10,7 @@
+@@ -12,6 +12,7 @@
  #include <memory>
  #include <new>
  #include <type_traits>
@@ -432,23 +449,23 @@ index 1eedd89..85cc6ac 100644
  #include "BLI_utildefines.h"
  #include "MEM_guardedalloc.h"
 diff --git a/source/blender/blenlib/BLI_utildefines.h b/source/blender/blenlib/BLI_utildefines.h
-index bfa5102..04e3ef9 100644
+index 509ac86..19b5029 100644
 --- a/source/blender/blenlib/BLI_utildefines.h
 +++ b/source/blender/blenlib/BLI_utildefines.h
-@@ -493,7 +493,7 @@ extern "C" {
-   ((void)0)
- 
+@@ -499,7 +499,7 @@ extern "C" {
  /* assuming a static array */
--#if defined(__GNUC__) && !defined(__cplusplus) && !defined(__clang__) && !defined(__INTEL_COMPILER)
-+#if defined(__GNUC__) && !defined(__cplusplus) && !defined(__clang__) && !defined(__INTEL_COMPILER) && !defined(__EDG__)
- #  define ARRAY_SIZE(arr) \
-     ((sizeof(struct { int isnt_array : ((const void *)&(arr) == &(arr)[0]); }) * 0) + \
-      (sizeof(arr) / sizeof(*(arr))))
+ #ifndef __cplusplus
+ #  if defined(__GNUC__) && !defined(__cplusplus) && !defined(__clang__) && \
+-      !defined(__INTEL_COMPILER)
++      !defined(__INTEL_COMPILER) && !defined(__EDG__)
+ #    define ARRAY_SIZE(arr) \
+       ((sizeof(struct { int isnt_array : ((const void *)&(arr) == &(arr)[0]); }) * 0) + \
+        (sizeof(arr) / sizeof(*(arr))))
 diff --git a/source/blender/blenlib/BLI_virtual_array.hh b/source/blender/blenlib/BLI_virtual_array.hh
-index 54a5ece..2529534 100644
+index 59ca7cd..2dec813 100644
 --- a/source/blender/blenlib/BLI_virtual_array.hh
 +++ b/source/blender/blenlib/BLI_virtual_array.hh
-@@ -504,6 +504,9 @@ template<typename T> struct VArrayAnyExtraInfo {
+@@ -481,6 +481,9 @@ template<typename T> struct VArrayAnyExtraInfo {
        BLI_assert_unreachable();
        return {};
      }
@@ -459,11 +476,12 @@ index 54a5ece..2529534 100644
  };
  
 diff --git a/source/blender/editors/interface/interface_template_attribute_search.cc b/source/blender/editors/interface/interface_template_attribute_search.cc
-index 2ac8e96..a0437d4 100644
+index d91cee8..c43275d 100644
 --- a/source/blender/editors/interface/interface_template_attribute_search.cc
 +++ b/source/blender/editors/interface/interface_template_attribute_search.cc
-@@ -1,5 +1,9 @@
- /* SPDX-License-Identifier: GPL-2.0-or-later */
+@@ -2,6 +2,10 @@
+  *
+  * SPDX-License-Identifier: GPL-2.0-or-later */
  
 +#ifdef __EDG__
 +#define EDG_THREAD_FIX
