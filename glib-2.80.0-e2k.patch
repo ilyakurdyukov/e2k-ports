@@ -1,20 +1,23 @@
-From b682f42f13b0e7e8ac37c889da91909ca234d1fa Mon Sep 17 00:00:00 2001
+From 7a900f0b87f3960c67b50b9ca87cd4143c1b7879 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Thu, 3 Feb 2022 15:49:56 +0700
-Subject: [PATCH] glib-2.70.3 e2k support
+Date: Thu, 28 Mar 2024 21:54:11 +0700
+Subject: [PATCH] glib-2.80.0 e2k support
 
 ---
- glib/gmacros.h | 77 ++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 77 insertions(+)
+ glib/gmacros.h | 82 +++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 81 insertions(+), 1 deletion(-)
 
 diff --git a/glib/gmacros.h b/glib/gmacros.h
-index 7fc34d5..2d98200 100644
+index 2d66c2f..d346efe 100644
 --- a/glib/gmacros.h
 +++ b/glib/gmacros.h
-@@ -699,6 +699,11 @@
+@@ -749,6 +749,14 @@
    _Pragma ("warning (disable:1478)")
  #define G_GNUC_END_IGNORE_DEPRECATIONS			\
    _Pragma ("warning (pop)")
++#elif defined(__GI_SCANNER__)
++#define G_GNUC_BEGIN_IGNORE_DEPRECATIONS
++#define G_GNUC_END_IGNORE_DEPRECATIONS
 +#elif defined(__EDG__)
 +#define G_GNUC_BEGIN_IGNORE_DEPRECATIONS		\
 +  _Pragma ("diag_suppress 1215,1444")
@@ -23,12 +26,21 @@ index 7fc34d5..2d98200 100644
  #elif G_GNUC_CHECK_VERSION(4, 6)
  #define G_GNUC_BEGIN_IGNORE_DEPRECATIONS		\
    _Pragma ("GCC diagnostic push")			\
-@@ -1200,7 +1205,16 @@
+@@ -1332,7 +1340,7 @@
+ 
+ #ifndef __GI_SCANNER__
+ 
+-#if g_macro__has_attribute(cleanup)
++#if g_macro__has_attribute(cleanup) || defined(__EDG__)
+ 
+ /* these macros are private; note that gstdio.h also uses _GLIB_CLEANUP */
+ #define _GLIB_AUTOPTR_FUNC_NAME(TypeName) glib_autoptr_cleanup_##TypeName
+@@ -1345,7 +1353,16 @@
  #define _GLIB_AUTOPTR_QUEUE_FUNC_NAME(TypeName) glib_queueautoptr_cleanup_##TypeName
  #define _GLIB_AUTOPTR_QUEUE_TYPENAME(TypeName)  TypeName##_queueautoptr
  #define _GLIB_AUTO_FUNC_NAME(TypeName)    glib_auto_cleanup_##TypeName
 +
-+#if defined(__cplusplus) && defined(__EDG__)
++#if defined(__cplusplus) && defined(__EDG__) && !defined(__GI_SCANNER__)
 +#define _GLIB_CLEANUP(func) \
 +  _Pragma("diag_error 1097") \
 +  __attribute__((cleanup(func))) \
@@ -40,7 +52,7 @@ index 7fc34d5..2d98200 100644
  #define _GLIB_DEFINE_AUTOPTR_CLEANUP_FUNCS(TypeName, ParentName, cleanup) \
    typedef TypeName *_GLIB_AUTOPTR_TYPENAME(TypeName);                                                           \
    typedef GList *_GLIB_AUTOPTR_LIST_TYPENAME(TypeName);                                                         \
-@@ -1233,11 +1247,74 @@
+@@ -1378,11 +1395,74 @@
    G_GNUC_BEGIN_IGNORE_DEPRECATIONS                                                                              \
    static G_GNUC_UNUSED inline void _GLIB_AUTO_FUNC_NAME(TypeName) (TypeName *_ptr) { if (*_ptr != none) (func) (*_ptr); }     \
    G_GNUC_END_IGNORE_DEPRECATIONS
@@ -116,5 +128,5 @@ index 7fc34d5..2d98200 100644
  
  #else /* not GNU C */
 -- 
-2.17.1
+2.34.1
 
