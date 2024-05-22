@@ -1,16 +1,14 @@
-From 958914e9463b34f0fb9857286517134138b2d89f Mon Sep 17 00:00:00 2001
+From 9663a967bf17e04aba2bb07c3810a435cb4dc235 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Mon, 20 Nov 2023 16:35:01 +0700
-Subject: [PATCH] mysql-8.0.35 e2k support
+Date: Wed, 22 May 2024 11:17:56 +0700
+Subject: [PATCH] mysql-8.0.37 e2k support
 
 These sed patches are also needed to workaround bugs in the EDG frontend: 
 sed -i "/using __base/{N;N;s/^.*using __base.*EncodeBase.*friend __base.*$/EncodeBase_EDG/}" router/src/mysql_protocol/include/mysqlrouter/classic_protocol_codec_*.h
-sed -i "/#include <filesystem>/c #define preferred_separator preferred_separator_1\n#include <experimental/filesystem>\nnamespace std { namespace filesystem = experimental::filesystem; }" mysql-shell/{configure.cmake,mysqlshdk/libs/storage/backend/directory.cc}
 sed -i "s/-Werror/-Wno-error/" mysql-shell/cmake/compiler.cmake
 ---
  CMakeLists.txt                                  |  1 +
  cmake/abi_check.cmake                           |  2 +-
- extra/robin-hood-hashing/robin_hood.h           |  2 +-
  .../devapi/mod_mysqlx_collection_find.cc        |  6 ++++++
  .../devapi/mod_mysqlx_collection_modify.cc      |  4 ++++
  .../modules/devapi/mod_mysqlx_table_insert.cc   |  6 ++++++
@@ -30,13 +28,13 @@ sed -i "s/-Werror/-Wno-error/" mysql-shell/cmake/compiler.cmake
  unittest/gunit/fake_table.cc                    |  7 +++++++
  unittest/gunit/gunit_test_main.cc               |  2 +-
  unittest/gunit/gunit_test_main.h                |  2 +-
- 22 files changed, 96 insertions(+), 13 deletions(-)
+ 21 files changed, 95 insertions(+), 12 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 2f26c3b3..e33ea357 100644
+index 401d0e74..1a832692 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -688,6 +688,7 @@ SET(MYSQL_MACHINE_TYPE ${CMAKE_SYSTEM_PROCESSOR})
+@@ -701,6 +701,7 @@ SET(MYSQL_MACHINE_TYPE ${CMAKE_SYSTEM_PROCESSOR})
  SET(KNOWN_64BIT_ARCHITECTURES
    arm64
    aarch64
@@ -45,10 +43,10 @@ index 2f26c3b3..e33ea357 100644
    ppc64le
    s390x
 diff --git a/cmake/abi_check.cmake b/cmake/abi_check.cmake
-index 59e49db8..c6373e37 100644
+index bfca594f..5ca14971 100644
 --- a/cmake/abi_check.cmake
 +++ b/cmake/abi_check.cmake
-@@ -32,7 +32,7 @@
+@@ -33,7 +33,7 @@
  # On Windows we use the Windows subsystem for Linux and gcc and sed
  # installed in it, if available.
  SET(RUN_ABI_CHECK 0)
@@ -57,24 +55,11 @@ index 59e49db8..c6373e37 100644
    SET(RUN_ABI_CHECK 1)
  ELSEIF(WIN32)
    FIND_PROGRAM(WSL_EXECUTABLE wsl HINTS C:/Windows/Sysnative)
-diff --git a/extra/robin-hood-hashing/robin_hood.h b/extra/robin-hood-hashing/robin_hood.h
-index b4e0fbc5..aff28ad9 100644
---- a/extra/robin-hood-hashing/robin_hood.h
-+++ b/extra/robin-hood-hashing/robin_hood.h
-@@ -165,7 +165,7 @@ static Counts& counts() {
- #ifndef __has_cpp_attribute // For backwards compatibility
- #    define __has_cpp_attribute(x) 0
- #endif
--#if __has_cpp_attribute(clang::fallthrough)
-+#if __has_cpp_attribute(clang::fallthrough) && !defined(__e2k__)
- #    define ROBIN_HOOD_PRIVATE_DEFINITION_FALLTHROUGH() [[clang::fallthrough]]
- #elif __has_cpp_attribute(gnu::fallthrough)
- #    define ROBIN_HOOD_PRIVATE_DEFINITION_FALLTHROUGH() [[gnu::fallthrough]]
 diff --git a/mysql-shell/modules/devapi/mod_mysqlx_collection_find.cc b/mysql-shell/modules/devapi/mod_mysqlx_collection_find.cc
-index 8518e6f4..27a8769e 100644
+index 2cb6dc36..4df895bd 100644
 --- a/mysql-shell/modules/devapi/mod_mysqlx_collection_find.cc
 +++ b/mysql-shell/modules/devapi/mod_mysqlx_collection_find.cc
-@@ -36,9 +36,15 @@ namespace mysqlsh {
+@@ -38,9 +38,15 @@ namespace mysqlsh {
  namespace mysqlx {
  
  using shcore::Value;
@@ -91,10 +76,10 @@ index 8518e6f4..27a8769e 100644
  
  REGISTER_HELP_CLASS(CollectionFind, mysqlx);
 diff --git a/mysql-shell/modules/devapi/mod_mysqlx_collection_modify.cc b/mysql-shell/modules/devapi/mod_mysqlx_collection_modify.cc
-index 9fb9875a..144a09d4 100644
+index 8030204e..b67f2961 100644
 --- a/mysql-shell/modules/devapi/mod_mysqlx_collection_modify.cc
 +++ b/mysql-shell/modules/devapi/mod_mysqlx_collection_modify.cc
-@@ -42,7 +42,11 @@ namespace mysqlsh {
+@@ -44,7 +44,11 @@ namespace mysqlsh {
  namespace mysqlx {
  
  using shcore::Value;
@@ -107,10 +92,10 @@ index 9fb9875a..144a09d4 100644
  
  // Documentation of CollectionModify class
 diff --git a/mysql-shell/modules/devapi/mod_mysqlx_table_insert.cc b/mysql-shell/modules/devapi/mod_mysqlx_table_insert.cc
-index 01f621c4..9a39f97e 100644
+index 0bcb2a51..a068464c 100644
 --- a/mysql-shell/modules/devapi/mod_mysqlx_table_insert.cc
 +++ b/mysql-shell/modules/devapi/mod_mysqlx_table_insert.cc
-@@ -33,9 +33,15 @@ namespace mysqlsh {
+@@ -35,9 +35,15 @@ namespace mysqlsh {
  namespace mysqlx {
  
  using shcore::Value;
@@ -127,10 +112,10 @@ index 01f621c4..9a39f97e 100644
  
  REGISTER_HELP_CLASS(TableInsert, mysqlx);
 diff --git a/mysql-shell/mysqlshdk/include/scripting/types_cpp.h b/mysql-shell/mysqlshdk/include/scripting/types_cpp.h
-index 03f343ee..6a982be5 100644
+index 046d7439..d11e92c2 100644
 --- a/mysql-shell/mysqlshdk/include/scripting/types_cpp.h
 +++ b/mysql-shell/mysqlshdk/include/scripting/types_cpp.h
-@@ -1650,7 +1650,7 @@ class SHCORE_PUBLIC Cpp_object_bridge : public Object_bridge {
+@@ -1652,7 +1652,7 @@ class SHCORE_PUBLIC Cpp_object_bridge : public Object_bridge {
      _funcs.emplace(
          registered_name,
          std::shared_ptr<Cpp_function>(
@@ -139,7 +124,7 @@ index 03f343ee..6a982be5 100644
                                     defs = std::make_tuple(std::move(defs)...)](
                                        const shcore::Argument_list &args) {
                // Executes parameter validators
-@@ -1661,7 +1661,7 @@ class SHCORE_PUBLIC Cpp_object_bridge : public Object_bridge {
+@@ -1663,7 +1663,7 @@ class SHCORE_PUBLIC Cpp_object_bridge : public Object_bridge {
                  md.signature[index]->validate(args[index], &context);
                }
  
@@ -149,10 +134,10 @@ index 03f343ee..6a982be5 100644
                                          std::index_sequence_for<A...>{});
                });
 diff --git a/mysql-shell/mysqlshdk/libs/storage/backend/directory.cc b/mysql-shell/mysqlshdk/libs/storage/backend/directory.cc
-index ac06d7f1..ab4e4cd0 100644
+index 7e246035..952131e0 100644
 --- a/mysql-shell/mysqlshdk/libs/storage/backend/directory.cc
 +++ b/mysql-shell/mysqlshdk/libs/storage/backend/directory.cc
-@@ -66,7 +66,7 @@ std::unordered_set<IDirectory::File_info> Directory::filter_files(
+@@ -68,7 +68,7 @@ std::unordered_set<IDirectory::File_info> Directory::filter_files(
    std::error_code ec;
  
    for (auto &entry : std::filesystem::directory_iterator(path, ec)) {
@@ -161,7 +146,7 @@ index ac06d7f1..ab4e4cd0 100644
  #if (__GNUC__ < 8 || (__GNUC__ == 8 && __GNUC_MINOR__ < 4)) && \
      !defined(__clang__)
          // older versions of GCC do not handle filesystems which do not support
-@@ -84,7 +84,7 @@ std::unordered_set<IDirectory::File_info> Directory::filter_files(
+@@ -86,7 +86,7 @@ std::unordered_set<IDirectory::File_info> Directory::filter_files(
  
        if (pattern.empty() || shcore::match_glob(pattern, name)) {
          files.emplace(std::move(name), [entry = std::move(entry)]() {
@@ -171,10 +156,10 @@ index ac06d7f1..ab4e4cd0 100644
        }
      }
 diff --git a/router/src/mysql_protocol/include/mysqlrouter/classic_protocol_codec_base.h b/router/src/mysql_protocol/include/mysqlrouter/classic_protocol_codec_base.h
-index 1065e599..bcea86b4 100644
+index ecc4a69b..893c7610 100644
 --- a/router/src/mysql_protocol/include/mysqlrouter/classic_protocol_codec_base.h
 +++ b/router/src/mysql_protocol/include/mysqlrouter/classic_protocol_codec_base.h
-@@ -370,6 +370,22 @@ class EncodeSizeAccumulator {
+@@ -371,6 +371,22 @@ class EncodeSizeAccumulator {
   * used by .size() and .encode() as both have to process the same
   * fields in the same order, just with different mappers
   */
@@ -197,7 +182,7 @@ index 1065e599..bcea86b4 100644
  template <class T>
  class EncodeBase {
   public:
-@@ -391,6 +407,7 @@ class EncodeBase {
+@@ -392,6 +408,7 @@ class EncodeBase {
   private:
    const capabilities::value_type caps_;
  };
@@ -206,10 +191,10 @@ index 1065e599..bcea86b4 100644
  }  // namespace impl
  }  // namespace classic_protocol
 diff --git a/sql/containers/atomics_array.h b/sql/containers/atomics_array.h
-index 1b10097d..6cc4fb43 100644
+index 0ebbc346..ca15aa5e 100644
 --- a/sql/containers/atomics_array.h
 +++ b/sql/containers/atomics_array.h
-@@ -256,7 +256,7 @@ class Atomics_array {
+@@ -257,7 +257,7 @@ class Atomics_array {
  
    friend std::ostream &operator<<(std::ostream &out,
                                    Atomics_array<T, I, A> &in) {
@@ -219,10 +204,10 @@ index 1b10097d..6cc4fb43 100644
    }
  
 diff --git a/sql/mem_root_array.h b/sql/mem_root_array.h
-index 0ecbe513..03962dec 100644
+index 58c9fbef..fc9e875f 100644
 --- a/sql/mem_root_array.h
 +++ b/sql/mem_root_array.h
-@@ -484,7 +484,7 @@ class Mem_root_array : public Mem_root_array_YY<Element_type> {
+@@ -485,7 +485,7 @@ class Mem_root_array : public Mem_root_array_YY<Element_type> {
        : Mem_root_array(root, x.cbegin(), x.cend()) {}
  
    Mem_root_array(std::initializer_list<Element_type> elements)
@@ -232,10 +217,10 @@ index 0ecbe513..03962dec 100644
    ~Mem_root_array() { super::clear(); }
  
 diff --git a/sql/mysqld.cc b/sql/mysqld.cc
-index 3f94e768..1107d9b1 100644
+index e176b83b..7922fb7e 100644
 --- a/sql/mysqld.cc
 +++ b/sql/mysqld.cc
-@@ -1554,7 +1554,7 @@ SHOW_COMP_OPTION have_statement_timeout = SHOW_OPTION_DISABLED;
+@@ -1557,7 +1557,7 @@ SHOW_COMP_OPTION have_statement_timeout = SHOW_OPTION_DISABLED;
  
  /* Thread specific variables */
  
@@ -245,10 +230,10 @@ index 3f94e768..1107d9b1 100644
  mysql_mutex_t LOCK_status, LOCK_uuid_generator, LOCK_crypt,
      LOCK_global_system_variables, LOCK_user_conn, LOCK_error_messages;
 diff --git a/sql/mysqld.h b/sql/mysqld.h
-index 8b5a842b..5f79d6a5 100644
+index 42e22df7..af539642 100644
 --- a/sql/mysqld.h
 +++ b/sql/mysqld.h
-@@ -420,7 +420,7 @@ extern bool migrate_connect_options;
+@@ -422,7 +422,7 @@ extern bool migrate_connect_options;
  
  extern LEX_CSTRING sql_statement_names[(uint)SQLCOM_END + 1];
  
@@ -258,10 +243,10 @@ index 8b5a842b..5f79d6a5 100644
  extern PSI_file_key key_file_binlog_cache;
  extern PSI_file_key key_file_binlog_index_cache;
 diff --git a/sql/thr_malloc.h b/sql/thr_malloc.h
-index 92ec34cb..18c22030 100644
+index c5e3ae7b..a0416d47 100644
 --- a/sql/thr_malloc.h
 +++ b/sql/thr_malloc.h
-@@ -28,7 +28,7 @@
+@@ -29,7 +29,7 @@
  struct CHARSET_INFO;
  struct MEM_ROOT;
  typedef unsigned int PSI_memory_key;
@@ -271,10 +256,10 @@ index 92ec34cb..18c22030 100644
  void init_sql_alloc(PSI_memory_key key, MEM_ROOT *root, size_t block_size);
  
 diff --git a/storage/innobase/buf/checksum.cc b/storage/innobase/buf/checksum.cc
-index 75dbfba4..418357aa 100644
+index 1385f236..5d88de50 100644
 --- a/storage/innobase/buf/checksum.cc
 +++ b/storage/innobase/buf/checksum.cc
-@@ -30,6 +30,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
+@@ -31,6 +31,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
   Created Aug 11, 2011 Vasil Dimov
   *******************************************************/
  
@@ -284,10 +269,10 @@ index 75dbfba4..418357aa 100644
  #include <zlib.h>
  
 diff --git a/storage/innobase/include/os0thread.h b/storage/innobase/include/os0thread.h
-index d0f2e3dd..9964782d 100644
+index 1fe5aa9e..38b274d3 100644
 --- a/storage/innobase/include/os0thread.h
 +++ b/storage/innobase/include/os0thread.h
-@@ -69,8 +69,15 @@ using os_thread_id_t = std::thread::native_handle_type;
+@@ -70,8 +70,15 @@ using os_thread_id_t = std::thread::native_handle_type;
  
  namespace ut {
  /** The hash value of the current thread's id */
@@ -304,10 +289,10 @@ index d0f2e3dd..9964782d 100644
  
  /** Returns the string representation of the thread ID supplied. It uses the
 diff --git a/storage/innobase/include/ut0rnd.h b/storage/innobase/include/ut0rnd.h
-index 2cfb701b..2dbecd40 100644
+index c5a6c742..66d8bcd0 100644
 --- a/storage/innobase/include/ut0rnd.h
 +++ b/storage/innobase/include/ut0rnd.h
-@@ -123,7 +123,16 @@ on data written to disk.
+@@ -112,7 +112,16 @@ on data written to disk.
  
  namespace detail {
  /** Seed value of ut::random_64() */
@@ -325,10 +310,10 @@ index 2cfb701b..2dbecd40 100644
  /** A helper method, it is used by hash_binary_ib for backward compatibility.
  NOTE: Do not use this method, it produces results that are not hashed well.
 diff --git a/storage/innobase/ut/ut0rnd.cc b/storage/innobase/ut/ut0rnd.cc
-index ad081ebb..c4c9a0c5 100644
+index 19b1ad71..d8dbfc49 100644
 --- a/storage/innobase/ut/ut0rnd.cc
 +++ b/storage/innobase/ut/ut0rnd.cc
-@@ -36,7 +36,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
+@@ -37,7 +37,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
  namespace ut::detail {
  
  /* Changes for each threads for more different sequences. */
@@ -344,10 +329,10 @@ index ad081ebb..c4c9a0c5 100644
  /* This is a "precomputed" table of random hash values. */
  alignas(ut::INNODB_CACHE_LINE_SIZE)
 diff --git a/storage/ndb/include/portlib/mt-asm.h b/storage/ndb/include/portlib/mt-asm.h
-index 4759c6f9..8dff847c 100644
+index 379d48f8..26b4cdea 100644
 --- a/storage/ndb/include/portlib/mt-asm.h
 +++ b/storage/ndb/include/portlib/mt-asm.h
-@@ -143,6 +143,23 @@ xcng(volatile unsigned * addr, int val)
+@@ -123,6 +123,23 @@ static inline int xcng(volatile unsigned *addr, int val) {
    return prev;
  }
  
@@ -369,13 +354,13 @@ index 4759c6f9..8dff847c 100644
 +}
 +
  #elif defined(__aarch64__)
- #include <atomic>
- #define NDB_HAVE_MB
+ /**
+  * Use generic defaults for mb(), rmb(), wmb() see further down.
 diff --git a/unittest/gunit/fake_table.cc b/unittest/gunit/fake_table.cc
-index 6c8b15cb..9b6b9acb 100644
+index ece6f632..51ff29d2 100644
 --- a/unittest/gunit/fake_table.cc
 +++ b/unittest/gunit/fake_table.cc
-@@ -19,7 +19,14 @@
+@@ -20,7 +20,14 @@
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
@@ -391,10 +376,10 @@ index 6c8b15cb..9b6b9acb 100644
  // We choose non-zero to avoid it working by coincidence.
  int Fake_TABLE::highest_table_id = 5;
 diff --git a/unittest/gunit/gunit_test_main.cc b/unittest/gunit/gunit_test_main.cc
-index c737bdca..20c316b4 100644
+index 0dfb099d..31dd95cf 100644
 --- a/unittest/gunit/gunit_test_main.cc
 +++ b/unittest/gunit/gunit_test_main.cc
-@@ -121,7 +121,7 @@ static void init_signal_handling() {
+@@ -122,7 +122,7 @@ static void init_signal_handling() {
  // Some globals needed for "small" tests.
  mysql_mutex_t LOCK_open;
  uint opt_debug_sync_timeout = 0;
@@ -404,10 +389,10 @@ index c737bdca..20c316b4 100644
  size_t malloc_chunk_size = 1024;
  
 diff --git a/unittest/gunit/gunit_test_main.h b/unittest/gunit/gunit_test_main.h
-index 23979fdb..482bf915 100644
+index 43f2f0bf..54ab62e9 100644
 --- a/unittest/gunit/gunit_test_main.h
 +++ b/unittest/gunit/gunit_test_main.h
-@@ -30,7 +30,7 @@ struct MEM_ROOT;
+@@ -31,7 +31,7 @@ struct MEM_ROOT;
  
  extern mysql_mutex_t LOCK_open;
  extern uint opt_debug_sync_timeout;
