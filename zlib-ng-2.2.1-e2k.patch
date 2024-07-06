@@ -1,7 +1,7 @@
-From c134cd6275ab3c2813e5b1e3730600108166f809 Mon Sep 17 00:00:00 2001
+From 02db39f2b1ea78859118c177078cee20552ec388 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Sun, 22 Oct 2023 09:29:44 +0700
-Subject: [PATCH] zlib-ng-2.1.4 e2k support
+Date: Sat, 6 Jul 2024 20:54:48 +0700
+Subject: [PATCH] zlib-ng-2.2.1 e2k support
 
 ---
  CMakeLists.txt                | 14 +++++++++++++-
@@ -12,10 +12,10 @@ Subject: [PATCH] zlib-ng-2.1.4 e2k support
  5 files changed, 38 insertions(+), 2 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 974af49..15ab3f7 100644
+index 719673f..03c33da 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -113,6 +113,18 @@ elseif(BASEARCH_S360_FOUND)
+@@ -115,6 +115,18 @@ elseif(BASEARCH_S360_FOUND)
      option(WITH_DFLTCC_DEFLATE "Build with DFLTCC intrinsics for compression on IBM Z" OFF)
      option(WITH_DFLTCC_INFLATE "Build with DFLTCC intrinsics for decompression on IBM Z" OFF)
      option(WITH_CRC32_VX "Build with vectorized CRC32 on IBM Z" ON)
@@ -32,23 +32,23 @@ index 974af49..15ab3f7 100644
 +        add_compile_options(-mno-avx)
 +    endif()
  elseif(BASEARCH_X86_FOUND)
-     option(WITH_AVX2 "Build with AVX2" ON)
-     option(WITH_AVX512 "Build with AVX512" ON)
-@@ -873,7 +885,7 @@ if(WITH_OPTIM)
-                 set(WITH_SSSE3 OFF)
-             endif()
+     option(WITH_SSE2 "Build with SSE2" ON)
+     cmake_dependent_option(WITH_SSSE3 "Build with SSSE3" ON "WITH_SSE2" OFF)
+@@ -933,7 +945,7 @@ if(WITH_OPTIM)
          endif()
--        if(WITH_PCLMULQDQ AND WITH_SSSE3 AND WITH_SSE42)
-+        if(WITH_PCLMULQDQ AND WITH_SSSE3 AND (WITH_SSE42 OR ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "e2k"))
+         if(WITH_PCLMULQDQ)
              check_pclmulqdq_intrinsics()
-             if(HAVE_PCLMULQDQ_INTRIN AND HAVE_SSSE3_INTRIN)
+-            if(HAVE_PCLMULQDQ_INTRIN AND WITH_SSE42)
++            if(HAVE_PCLMULQDQ_INTRIN AND (WITH_SSE42 OR ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "e2k"))
                  add_definitions(-DX86_PCLMULQDQ_CRC)
+                 set(PCLMULQDQ_SRCS ${ARCHDIR}/crc32_pclmulqdq.c)
+                 add_feature_info(PCLMUL_CRC 1 "Support CRC hash generation using PCLMULQDQ, using \"${SSE42FLAG} ${PCLMULFLAG}\"")
 diff --git a/arch/x86/x86_features.c b/arch/x86/x86_features.c
-index 8d11564..12ded76 100644
+index 58cb4df..2e605cd 100644
 --- a/arch/x86/x86_features.c
 +++ b/arch/x86/x86_features.c
 @@ -10,6 +10,19 @@
- #include "../../zbuild.h"
+ #include "zbuild.h"
  #include "x86_features.h"
  
 +#ifdef __e2k__
@@ -67,26 +67,26 @@ index 8d11564..12ded76 100644
  #ifdef _MSC_VER
  #  include <intrin.h>
  #else
-@@ -95,3 +108,4 @@ void Z_INTERNAL x86_check_features(struct x86_cpu_features *features) {
+@@ -113,3 +126,4 @@ void Z_INTERNAL x86_check_features(struct x86_cpu_features *features) {
          }
      }
  }
 +#endif
 diff --git a/arch/x86/x86_intrins.h b/arch/x86/x86_intrins.h
-index 52e1085..126ab68 100644
+index 0e596d1..a84783f 100644
 --- a/arch/x86/x86_intrins.h
 +++ b/arch/x86/x86_intrins.h
 @@ -7,7 +7,12 @@
  #ifdef __AVX2__
  #include <immintrin.h>
  
--#if (!defined(__clang__) && defined(__GNUC__) && __GNUC__ < 10) \
+-#if (!defined(__clang__) && !defined(__NVCOMPILER) && defined(__GNUC__) && __GNUC__ < 10) \
 +#ifdef __e2k__
 +#define _mm256_zextsi128_si256 _mm256_zextsi128_si256_redef
 +static inline __m256i _mm256_zextsi128_si256(__m128i a) {
 +    return _mm256_set_m128i(_mm_setzero_si128(), a);
 +}
-+#elif (!defined(__clang__) && defined(__GNUC__) && __GNUC__ < 10) \
++#elif (!defined(__clang__) && !defined(__NVCOMPILER) && defined(__GNUC__) && __GNUC__ < 10) \
      || (defined(__apple_build_version__) && __apple_build_version__ < 9020039)
  static inline __m256i _mm256_zextsi128_si256(__m128i a) {
      __m128i r;
@@ -104,11 +104,11 @@ index dfdc601..41a78cb 100644
      set(ARCH "wasm32")
  elseif(CMAKE_CROSSCOMPILING)
 diff --git a/cmake/detect-intrinsics.cmake b/cmake/detect-intrinsics.cmake
-index 250ee44..f4a6ad9 100644
+index 14f82fc..02e1bb7 100644
 --- a/cmake/detect-intrinsics.cmake
 +++ b/cmake/detect-intrinsics.cmake
-@@ -245,6 +245,9 @@ macro(check_pclmulqdq_intrinsics)
-         set(CMAKE_REQUIRED_FLAGS "${PCLMULFLAG} ${NATIVEFLAG}")
+@@ -274,6 +274,9 @@ macro(check_pclmulqdq_intrinsics)
+         set(CMAKE_REQUIRED_FLAGS "${PCLMULFLAG} ${NATIVEFLAG} ${ZNOLTOFLAG}")
          check_c_source_compiles(
              "#include <immintrin.h>
 +            #if defined(__e2k__) && __iset__ < 6
