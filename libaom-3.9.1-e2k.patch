@@ -1,7 +1,7 @@
-From f6683d5cbaa6b7941e6463b146515d3ad60d51eb Mon Sep 17 00:00:00 2001
+From 14465a195e91149e12becbc56f63ce3f3e0f4c39 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Mon, 31 May 2021 23:39:40 +0700
-Subject: [PATCH] libaom-3.0.0 e2k support
+Date: Mon, 5 Aug 2024 15:25:26 +0700
+Subject: [PATCH] libaom-3.9.1 e2k support
 
 ---
  aom_dsp/aom_dsp.cmake                    |   18 +
@@ -20,8 +20,6 @@ Subject: [PATCH] libaom-3.0.0 e2k support
  aom_dsp/e2k/subtract_e2k.c               |  111 ++
  aom_dsp/simd/v256_intrinsics_c.h         |    8 +
  aom_dsp/simd/v256_intrinsics_x86.h       |    2 +-
- aom_dsp/x86/aom_asm_stubs.c              |    2 +
- aom_dsp/x86/variance_sse2.c              |    4 +
  aom_ports/e2k.h                          |   98 ++
  av1/av1.cmake                            |    5 +
  av1/encoder/e2k/error_e2k.c              |   68 +
@@ -30,8 +28,7 @@ Subject: [PATCH] libaom-3.0.0 e2k support
  build/cmake/aom_optimization.cmake       |    3 +
  build/cmake/cpu.cmake                    |   16 +
  build/cmake/rtcd.pl                      |   33 +
- test/variance_test.cc                    |    2 +
- 27 files changed, 4900 insertions(+), 2 deletions(-)
+ 24 files changed, 4892 insertions(+), 2 deletions(-)
  create mode 100644 aom_dsp/e2k/aom_high_subpixel_8t_e2k.c
  create mode 100644 aom_dsp/e2k/aom_subpixel_8t_e2k.c
  create mode 100644 aom_dsp/e2k/highbd_intrapred_e2k.c
@@ -48,12 +45,12 @@ Subject: [PATCH] libaom-3.0.0 e2k support
  create mode 100644 av1/encoder/e2k/error_e2k.c
 
 diff --git a/aom_dsp/aom_dsp.cmake b/aom_dsp/aom_dsp.cmake
-index fa58f85..68bc126 100644
+index de987cb..40f8363 100644
 --- a/aom_dsp/aom_dsp.cmake
 +++ b/aom_dsp/aom_dsp.cmake
-@@ -295,6 +295,24 @@ if(CONFIG_AV1_ENCODER)
-                      "${AOM_ROOT}/aom_dsp/x86/obmc_variance_sse4.c")
-   endif()
+@@ -273,6 +273,24 @@ if(CONFIG_AV1_ENCODER)
+               "${AOM_ROOT}/aom_dsp/x86/obmc_sad_sse4.c"
+               "${AOM_ROOT}/aom_dsp/x86/obmc_variance_sse4.c")
  
 +  if("${AOM_TARGET_CPU}" STREQUAL "e2k")
 +    list(APPEND AOM_DSP_COMMON_INTRIN_SSE4_1
@@ -73,19 +70,19 @@ index fa58f85..68bc126 100644
 +                "${AOM_ROOT}/aom_dsp/e2k/subtract_e2k.c")
 +  endif()
 +
-   list(APPEND AOM_DSP_ENCODER_INTRIN_NEON "${AOM_ROOT}/aom_dsp/arm/sad4d_neon.c"
+   list(APPEND AOM_DSP_ENCODER_INTRIN_NEON
+               "${AOM_ROOT}/aom_dsp/arm/sadxd_neon.c"
                "${AOM_ROOT}/aom_dsp/arm/sad_neon.c"
-               "${AOM_ROOT}/aom_dsp/arm/subpel_variance_neon.c"
 diff --git a/aom_dsp/aom_simd.h b/aom_dsp/aom_simd.h
-index ab950ca..a2e8516 100644
+index 69da8f2..a378083 100644
 --- a/aom_dsp/aom_simd.h
 +++ b/aom_dsp/aom_simd.h
-@@ -29,7 +29,7 @@
+@@ -27,7 +27,7 @@
  // VS compiling for 32 bit targets does not support vector types in
  // structs as arguments, which makes the v256 type of the intrinsics
  // hard to support, so optimizations for this target are disabled.
--#elif HAVE_SSE2 && (defined(_WIN64) || !defined(_MSC_VER) || defined(__clang__))
-+#elif HAVE_SSE2 && (defined(_WIN64) || !defined(_MSC_VER) || defined(__clang__) || ARCH_E2K)
+-#if HAVE_SSE2 && (defined(_WIN64) || !defined(_MSC_VER) || defined(__clang__))
++#if HAVE_SSE2 && (defined(_WIN64) || !defined(_MSC_VER) || defined(__clang__) || AOM_ARCH_E2K)
  #include "simd/v256_intrinsics_x86.h"
  #else
  #include "simd/v256_intrinsics.h"
@@ -1118,7 +1115,7 @@ index 0000000..5a266e6
 +
 diff --git a/aom_dsp/e2k/highbd_sad4d_e2k.c b/aom_dsp/e2k/highbd_sad4d_e2k.c
 new file mode 100644
-index 0000000..9996081
+index 0000000..224144b
 --- /dev/null
 +++ b/aom_dsp/e2k/highbd_sad4d_e2k.c
 @@ -0,0 +1,326 @@
@@ -1152,8 +1149,8 @@ index 0000000..9996081
 +#define RESULT_SHL(x, pi) x
 +
 +#define SAD_START(IS_AVG, vec, si) (const uint8_t *_src, int src_stride, \
-+                                    const uint8_t * const ref_ptr[], int ref_stride \
-+                                    IS_AVG(, const uint8_t *_second_pred), uint32_t *sad_array) { \
++                                    const uint8_t * const ref_ptr[4], int ref_stride \
++                                    IS_AVG(, const uint8_t *_second_pred), uint32_t sad_array[4]) { \
 +  vec v0, v1, v2, v3, v4, t0, t1, t2, t3, vzero = _mm_setzero_##si(); \
 +  vec vsum0 = vzero, vsum1 = vzero, vsum2 = vzero, vsum3 = vzero; \
 +  const uint16_t *src = CONVERT_TO_SHORTPTR(_src); \
@@ -2370,7 +2367,7 @@ index 0000000..edda753
 +
 diff --git a/aom_dsp/e2k/sad4d_e2k.c b/aom_dsp/e2k/sad4d_e2k.c
 new file mode 100644
-index 0000000..c50a2db
+index 0000000..5a4dda6
 --- /dev/null
 +++ b/aom_dsp/e2k/sad4d_e2k.c
 @@ -0,0 +1,270 @@
@@ -2423,8 +2420,8 @@ index 0000000..c50a2db
 +
 +#define SAD128XN(h, IS_AVG, name, end) \
 +void name##128x##h##end(const uint8_t *src, int src_stride, \
-+                        const uint8_t * const ref_ptr[], int ref_stride \
-+                        IS_AVG(, const uint8_t *second_pred), uint32_t *sad_array) { \
++                        const uint8_t * const ref_ptr[4], int ref_stride \
++                        IS_AVG(, const uint8_t *second_pred), uint32_t sad_array[4]) { \
 +  __m128i v0, v1, v2, v3, v4, vsum0 = _mm_setzero_si128(); \
 +  __m128i vsum1 = vsum0, vsum2 = vsum0, vsum3 = vsum0; \
 +  const uint8_t *ref0 = ref_ptr[0], *ref1 = ref_ptr[1], *ref2 = ref_ptr[2], *ref3 = ref_ptr[3]; \
@@ -2453,8 +2450,8 @@ index 0000000..c50a2db
 +
 +#define SAD64XN(h, IS_AVG, name, end) \
 +void name##64x##h##end(const uint8_t *src, int src_stride, \
-+                       const uint8_t * const ref_ptr[], int ref_stride \
-+                       IS_AVG(, const uint8_t *second_pred), uint32_t *sad_array) { \
++                       const uint8_t * const ref_ptr[4], int ref_stride \
++                       IS_AVG(, const uint8_t *second_pred), uint32_t sad_array[4]) { \
 +  __m128i v0, v1, v2, v3, v4, vsum0 = _mm_setzero_si128(); \
 +  __m128i vsum1 = vsum0, vsum2 = vsum0, vsum3 = vsum0; \
 +  const uint8_t *ref0 = ref_ptr[0], *ref1 = ref_ptr[1], *ref2 = ref_ptr[2], *ref3 = ref_ptr[3]; \
@@ -2479,8 +2476,8 @@ index 0000000..c50a2db
 +
 +#define SAD32XN(h, IS_AVG, name, end) \
 +void name##32x##h##end(const uint8_t *src, int src_stride, \
-+                       const uint8_t * const ref_ptr[], int ref_stride \
-+                       IS_AVG(, const uint8_t *second_pred), uint32_t *sad_array) { \
++                       const uint8_t * const ref_ptr[4], int ref_stride \
++                       IS_AVG(, const uint8_t *second_pred), uint32_t sad_array[4]) { \
 +  __m128i v0, v1, v2, v3, v4, vsum0 = _mm_setzero_si128(); \
 +  __m128i vsum1 = vsum0, vsum2 = vsum0, vsum3 = vsum0; \
 +  const uint8_t *ref0 = ref_ptr[0], *ref1 = ref_ptr[1], *ref2 = ref_ptr[2], *ref3 = ref_ptr[3]; \
@@ -2503,8 +2500,8 @@ index 0000000..c50a2db
 +
 +#define SAD16XN(h, IS_AVG, name, end) \
 +void name##16x##h##end(const uint8_t *src, int src_stride, \
-+                       const uint8_t * const ref_ptr[], int ref_stride \
-+                       IS_AVG(, const uint8_t *second_pred), uint32_t *sad_array) { \
++                       const uint8_t * const ref_ptr[4], int ref_stride \
++                       IS_AVG(, const uint8_t *second_pred), uint32_t sad_array[4]) { \
 +  __m128i v0, v1, v2, v3, v4, vsum0 = _mm_setzero_si128(); \
 +  __m128i vsum1 = vsum0, vsum2 = vsum0, vsum3 = vsum0; \
 +  const uint8_t *ref0 = ref_ptr[0], *ref1 = ref_ptr[1], *ref2 = ref_ptr[2], *ref3 = ref_ptr[3]; \
@@ -2526,8 +2523,8 @@ index 0000000..c50a2db
 +
 +#define SAD8XN(h, IS_AVG, name, end) \
 +void name##8x##h##end(const uint8_t *src, int src_stride, \
-+                      const uint8_t * const ref_ptr[], int ref_stride \
-+                      IS_AVG(, const uint8_t *second_pred), uint32_t *sad_array) { \
++                      const uint8_t * const ref_ptr[4], int ref_stride \
++                      IS_AVG(, const uint8_t *second_pred), uint32_t sad_array[4]) { \
 +  __m64 v0, v1, v2, v3, v4, vsum0 = _mm_setzero_si64(); \
 +  __m64 vsum1 = vsum0, vsum2 = vsum0, vsum3 = vsum0; \
 +  const uint8_t *ref0 = ref_ptr[0], *ref1 = ref_ptr[1], *ref2 = ref_ptr[2], *ref3 = ref_ptr[3]; \
@@ -2562,8 +2559,8 @@ index 0000000..c50a2db
 +
 +#define SAD4XN(h, IS_AVG, name, end) \
 +void name##4x##h##end(const uint8_t *src, int src_stride, \
-+                      const uint8_t * const ref_ptr[], int ref_stride \
-+                      IS_AVG(, const uint8_t *second_pred), uint32_t *sad_array) { \
++                      const uint8_t * const ref_ptr[4], int ref_stride \
++                      IS_AVG(, const uint8_t *second_pred), uint32_t sad_array[4]) { \
 +  __m64 v0, v1, v2, v3, v4, v5, vsum0 = _mm_setzero_si64(); \
 +  __m64 vsum1 = vsum0, vsum2 = vsum0, vsum3 = vsum0; \
 +  const uint8_t *ref0 = ref_ptr[0], *ref1 = ref_ptr[1], *ref2 = ref_ptr[2], *ref3 = ref_ptr[3]; \
@@ -4684,7 +4681,7 @@ index 0000000..785c2c6
 +
 diff --git a/aom_dsp/e2k/subtract_e2k.c b/aom_dsp/e2k/subtract_e2k.c
 new file mode 100644
-index 0000000..53449fb
+index 0000000..54669ae
 --- /dev/null
 +++ b/aom_dsp/e2k/subtract_e2k.c
 @@ -0,0 +1,111 @@
@@ -4706,7 +4703,7 @@ index 0000000..53449fb
 +
 +#define PROCESS16(i) \
 +  v2 = _mm_load_si128((const __m128i *)(src + i)); \
-+  v3 = _mm_load_si128((const __m128i *)(pred + i)); \
++  v3 = _mm_loadu_si128((const __m128i *)(pred + i)); \
 +  v0 = _mm_unpacklo_epi8(v2, vzero); \
 +  v1 = _mm_unpackhi_epi8(v2, vzero); \
 +  v0 = _mm_sub_epi16(v0, _mm_unpacklo_epi8(v3, vzero)); \
@@ -4800,10 +4797,10 @@ index 0000000..53449fb
 +}
 +
 diff --git a/aom_dsp/simd/v256_intrinsics_c.h b/aom_dsp/simd/v256_intrinsics_c.h
-index 8127ee3..6fcb55c 100644
+index 60d0d53..5cea5e6 100644
 --- a/aom_dsp/simd/v256_intrinsics_c.h
 +++ b/aom_dsp/simd/v256_intrinsics_c.h
-@@ -78,7 +78,11 @@ SIMD_INLINE c_v256 c_v256_load_unaligned(const void *p) {
+@@ -76,7 +76,11 @@ SIMD_INLINE c_v256 c_v256_load_unaligned(const void *p) {
  }
  
  SIMD_INLINE c_v256 c_v256_load_aligned(const void *p) {
@@ -4815,7 +4812,7 @@ index 8127ee3..6fcb55c 100644
      fprintf(stderr, "Error: unaligned v256 load at %p\n", p);
      abort();
    }
-@@ -93,7 +97,11 @@ SIMD_INLINE void c_v256_store_unaligned(void *p, c_v256 a) {
+@@ -88,7 +92,11 @@ SIMD_INLINE void c_v256_store_unaligned(void *p, c_v256 a) {
  }
  
  SIMD_INLINE void c_v256_store_aligned(void *p, c_v256 a) {
@@ -4828,7 +4825,7 @@ index 8127ee3..6fcb55c 100644
      abort();
    }
 diff --git a/aom_dsp/simd/v256_intrinsics_x86.h b/aom_dsp/simd/v256_intrinsics_x86.h
-index 5983cb8..3262695 100644
+index 894ddee..d3c1f37 100644
 --- a/aom_dsp/simd/v256_intrinsics_x86.h
 +++ b/aom_dsp/simd/v256_intrinsics_x86.h
 @@ -12,7 +12,7 @@
@@ -4840,45 +4837,6 @@ index 5983cb8..3262695 100644
  
  #include "aom_dsp/simd/v256_intrinsics_v128.h"
  
-diff --git a/aom_dsp/x86/aom_asm_stubs.c b/aom_dsp/x86/aom_asm_stubs.c
-index ce8285e..17aa7b1 100644
---- a/aom_dsp/x86/aom_asm_stubs.c
-+++ b/aom_dsp/x86/aom_asm_stubs.c
-@@ -46,8 +46,10 @@ filter8_1dfunction aom_filter_block1d4_h2_sse2;
- //                              const int16_t *filter_x, int x_step_q4,
- //                              const int16_t *filter_y, int y_step_q4,
- //                              int w, int h);
-+#if !ARCH_E2K
- FUN_CONV_1D(horiz, x_step_q4, filter_x, h, src, , sse2);
- FUN_CONV_1D(vert, y_step_q4, filter_y, v, src - src_stride * 3, , sse2);
-+#endif
- 
- #if CONFIG_AV1_HIGHBITDEPTH
- highbd_filter8_1dfunction aom_highbd_filter_block1d16_v8_sse2;
-diff --git a/aom_dsp/x86/variance_sse2.c b/aom_dsp/x86/variance_sse2.c
-index e372a4b..4ebfd46 100644
---- a/aom_dsp/x86/variance_sse2.c
-+++ b/aom_dsp/x86/variance_sse2.c
-@@ -434,7 +434,9 @@ DECLS(ssse3);
-   FN(4, 4, 4, 2, 2, opt, (int32_t), (int32_t));
- #endif
- 
-+#if !ARCH_E2K
- FNS(sse2);
-+#endif
- FNS(ssse3);
- 
- #undef FNS
-@@ -533,7 +535,9 @@ DECLS(ssse3);
-   FN(4, 4, 4, 2, 2, opt, (uint32_t), (int32_t));
- #endif
- 
-+#if !ARCH_E2K
- FNS(sse2);
-+#endif
- FNS(ssse3);
- 
- #undef FNS
 diff --git a/aom_ports/e2k.h b/aom_ports/e2k.h
 new file mode 100644
 index 0000000..e3d6107
@@ -4984,12 +4942,12 @@ index 0000000..e3d6107
 +
 +#endif  // AOM_AOM_PORTS_E2K_H_
 diff --git a/av1/av1.cmake b/av1/av1.cmake
-index b48c614..a4cf999 100644
+index 32645f6..81d1d34 100644
 --- a/av1/av1.cmake
 +++ b/av1/av1.cmake
-@@ -422,6 +422,11 @@ if(CONFIG_REALTIME_ONLY)
-                    "${AOM_ROOT}/av1/encoder/x86/pickrst_sse4.c")
- endif()
+@@ -337,6 +337,11 @@ list(APPEND AOM_AV1_ENCODER_INTRIN_SSE4_1
+             "${AOM_ROOT}/av1/encoder/x86/rdopt_sse4.c"
+             "${AOM_ROOT}/av1/encoder/x86/pickrst_sse4.c")
  
 +if("${AOM_TARGET_CPU}" STREQUAL "e2k")
 +  list(APPEND AOM_AV1_ENCODER_INTRIN_SSE4_1
@@ -4998,7 +4956,7 @@ index b48c614..a4cf999 100644
 +
  list(APPEND AOM_AV1_ENCODER_INTRIN_AVX2
              "${AOM_ROOT}/av1/encoder/x86/av1_quantize_avx2.c"
-             "${AOM_ROOT}/av1/encoder/x86/av1_highbd_quantize_avx2.c"
+             "${AOM_ROOT}/av1/encoder/x86/error_intrin_avx2.c"
 diff --git a/av1/encoder/e2k/error_e2k.c b/av1/encoder/e2k/error_e2k.c
 new file mode 100644
 index 0000000..09b4961
@@ -5074,22 +5032,22 @@ index 0000000..09b4961
 +  return _mm_cvtsi128_si64(sse_reg);
 +}
 diff --git a/build/cmake/aom_config_defaults.cmake b/build/cmake/aom_config_defaults.cmake
-index f1b1e57..faf2acc 100644
+index 980dfb9..7f140d9 100644
 --- a/build/cmake/aom_config_defaults.cmake
 +++ b/build/cmake/aom_config_defaults.cmake
-@@ -28,6 +28,7 @@ set_aom_detect_var(ARCH_MIPS 0 "Enables MIPS architecture.")
- set_aom_detect_var(ARCH_PPC 0 "Enables PPC architecture.")
- set_aom_detect_var(ARCH_X86 0 "Enables X86 architecture.")
- set_aom_detect_var(ARCH_X86_64 0 "Enables X86_64 architecture.")
-+set_aom_detect_var(ARCH_E2K 0 "Enables E2K architecture.")
+@@ -28,6 +28,7 @@ set_aom_detect_var(AOM_ARCH_ARM 0 "Enables ARM architecture.")
+ set_aom_detect_var(AOM_ARCH_PPC 0 "Enables PPC architecture.")
+ set_aom_detect_var(AOM_ARCH_X86 0 "Enables X86 architecture.")
+ set_aom_detect_var(AOM_ARCH_X86_64 0 "Enables X86_64 architecture.")
++set_aom_detect_var(AOM_ARCH_E2K 0 "Enables E2K architecture.")
  
- # ARM feature flags.
- set_aom_detect_var(HAVE_NEON 0 "Enables NEON intrinsics optimizations.")
+ # Arm/AArch64 feature flags.
+ set_aom_detect_var(HAVE_NEON 0 "Enables Neon intrinsics optimizations.")
 diff --git a/build/cmake/aom_configure.cmake b/build/cmake/aom_configure.cmake
-index 43d60ae..d83b277 100644
+index 304d90d..eaebcfe 100644
 --- a/build/cmake/aom_configure.cmake
 +++ b/build/cmake/aom_configure.cmake
-@@ -73,6 +73,8 @@ if(NOT AOM_TARGET_CPU)
+@@ -75,6 +75,8 @@ if(NOT AOM_TARGET_CPU)
      set(AOM_TARGET_CPU "arm64")
    elseif(cpu_lowercase MATCHES "^ppc")
      set(AOM_TARGET_CPU "ppc")
@@ -5099,12 +5057,12 @@ index 43d60ae..d83b277 100644
      message(WARNING "The architecture ${CMAKE_SYSTEM_PROCESSOR} is not "
                      "supported, falling back to the generic target")
 diff --git a/build/cmake/aom_optimization.cmake b/build/cmake/aom_optimization.cmake
-index e4b29de..b0bef50 100644
+index 0f93228..61f6a15 100644
 --- a/build/cmake/aom_optimization.cmake
 +++ b/build/cmake/aom_optimization.cmake
-@@ -130,6 +130,9 @@ endfunction()
- # to ensure that all cmake generators can determine the linker language, and
- # that build tools don't complain that an object exposes no symbols.
+@@ -140,6 +140,9 @@ endfunction()
+ # directory/target/object names are updated to include _shared and _static
+ # suffixes.
  function(add_asm_library lib_name asm_sources)
 +  if("${AOM_TARGET_CPU}" STREQUAL "e2k")
 +    return()
@@ -5113,10 +5071,10 @@ index e4b29de..b0bef50 100644
      return()
    endif()
 diff --git a/build/cmake/cpu.cmake b/build/cmake/cpu.cmake
-index ef2d755..5e19edf 100644
+index 8d0acf3..e534d66 100644
 --- a/build/cmake/cpu.cmake
 +++ b/build/cmake/cpu.cmake
-@@ -79,4 +79,20 @@ elseif("${AOM_TARGET_CPU}" MATCHES "^x86")
+@@ -131,4 +131,20 @@ elseif("${AOM_TARGET_CPU}" MATCHES "^x86")
        set(AOM_RTCD_FLAGS ${AOM_RTCD_FLAGS} --disable-${flavor})
      endif()
    endforeach()
@@ -5138,7 +5096,7 @@ index ef2d755..5e19edf 100644
 +  endforeach()
  endif()
 diff --git a/build/cmake/rtcd.pl b/build/cmake/rtcd.pl
-index e9f75dd..0357a14 100755
+index f4a7084..a8a270c 100755
 --- a/build/cmake/rtcd.pl
 +++ b/build/cmake/rtcd.pl
 @@ -289,6 +289,36 @@ EOF
@@ -5178,36 +5136,16 @@ index e9f75dd..0357a14 100755
  sub arm() {
    determine_indirection("c", @ALL_ARCHS);
  
-@@ -420,6 +450,9 @@ if ($opts{arch} eq 'x86') {
+@@ -388,6 +418,9 @@ if ($opts{arch} eq 'x86') {
    @REQUIRES = filter(qw/mmx sse sse2/);
    &require(@REQUIRES);
    x86;
 +} elsif ($opts{arch} eq 'e2k') {
 +  @ALL_ARCHS = filter(qw/mmx sse sse2 sse3 ssse3 sse4_1/);
 +  e2k;
- } elsif ($opts{arch} eq 'mips32' || $opts{arch} eq 'mips64') {
-   @ALL_ARCHS = filter("$opts{arch}");
-   if (aom_config("HAVE_DSPR2") eq "yes") {
-diff --git a/test/variance_test.cc b/test/variance_test.cc
-index fa90305..9c67417 100644
---- a/test/variance_test.cc
-+++ b/test/variance_test.cc
-@@ -1996,6 +1996,7 @@ const VarianceParams kArrayVariance_sse2[] = {
- INSTANTIATE_TEST_SUITE_P(SSE2, AvxVarianceTest,
-                          ::testing::ValuesIn(kArrayVariance_sse2));
- 
-+#if !ARCH_E2K
- const SubpelVarianceParams kArraySubpelVariance_sse2[] = {
-   SubpelVarianceParams(7, 7, &aom_sub_pixel_variance128x128_sse2, 0),
-   SubpelVarianceParams(7, 6, &aom_sub_pixel_variance128x64_sse2, 0),
-@@ -2053,6 +2054,7 @@ const SubpelAvgVarianceParams kArraySubpelAvgVariance_sse2[] = {
- };
- INSTANTIATE_TEST_SUITE_P(SSE2, AvxSubpelAvgVarianceTest,
-                          ::testing::ValuesIn(kArraySubpelAvgVariance_sse2));
-+#endif
- 
- #if CONFIG_AV1_HIGHBITDEPTH
- #if HAVE_SSE2
+ } elsif ($opts{arch} =~ /armv[78]\w?/) {
+   @ALL_ARCHS = filter(qw/neon/);
+   arm;
 -- 
-2.17.1
+2.34.1
 
