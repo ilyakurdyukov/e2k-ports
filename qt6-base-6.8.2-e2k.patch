@@ -1,85 +1,71 @@
-From 050ce8b7f0cd7215aac6a42a919f0c7a8df11118 Mon Sep 17 00:00:00 2001
+From a80cb4721964807deff08410ef46661ce8f04a78 Mon Sep 17 00:00:00 2001
 From: Ilya Kurdyukov <jpegqs@gmail.com>
-Date: Wed, 21 Feb 2024 09:36:01 +0700
-Subject: [PATCH] qt6-base-6.4.2 e2k support
+Date: Tue, 18 Mar 2025 15:14:03 +0700
+Subject: [PATCH] qt6-base-6.8.2 e2k support
 
-using LCC 1.27.12 and -mno-sse4.2
+using LCC 1.29.06 and -mno-sse4.2
 ---
- cmake/QtCompilerFlags.cmake                       |  2 ++
- config.tests/x86_simd/main.cpp                    |  6 ++++++
- configure.cmake                                   |  1 +
- mkspecs/features/toolchain.prf                    |  3 ++-
- .../double-conversion/double-conversion/utils.h   |  1 +
- src/corelib/global/archdetect.cpp                 |  2 ++
- src/corelib/global/qcompilerdetection.h           | 12 +++++++++++-
- src/corelib/global/qlogging.cpp                   |  2 +-
- src/corelib/global/qnativeinterface.h             |  7 +++++++
- src/corelib/global/qprocessordetection.h          |  9 +++++++++
- src/corelib/global/qsimd.cpp                      |  6 +++++-
- src/corelib/global/qsimd.h                        | 11 +++++++++++
- src/corelib/global/qsimd_p.h                      | 12 ++++++------
- src/corelib/global/qversiontagging.h              |  3 +++
- src/corelib/kernel/qmetatype.h                    |  3 +++
- src/corelib/plugin/qelfparser_p.cpp               |  2 ++
- src/corelib/text/qanystringview.h                 |  2 +-
- src/corelib/text/qstringview.h                    |  2 +-
- src/corelib/thread/qfuture_impl.h                 |  4 ++++
- src/corelib/tools/qhash.h                         |  9 +++++++++
- src/corelib/tools/qlist.h                         |  4 ++++
- src/gui/kernel/qplatformintegration.h             |  9 +++++++++
- src/gui/painting/qcolortrclut_p.h                 |  6 ++++++
- src/gui/painting/qdrawhelper.cpp                  |  2 +-
- src/gui/platform/unix/qunixnativeinterface.cpp    | 15 +++++++++++++++
- src/gui/platform/unix/qxkbcommon.cpp              |  7 +++++++
- .../xcb/gl_integrations/xcb_egl/qxcbeglcontext.h  |  3 +++
- tests/auto/corelib/text/qlocale/tst_qlocale.cpp   |  2 +-
- tests/auto/gui/painting/qpainter/tst_qpainter.cpp |  2 +-
- 29 files changed, 134 insertions(+), 15 deletions(-)
+ cmake/QtCompilerFlags.cmake                      |  2 ++
+ .../bindablesubscription/bindablesubscription.h  |  6 +++---
+ mkspecs/features/toolchain.prf                   |  3 ++-
+ .../double-conversion/double-conversion/utils.h  |  1 +
+ src/corelib/global/archdetect.cpp                |  2 ++
+ src/corelib/global/qcompilerdetection.h          | 16 +++++++++++++++-
+ src/corelib/global/qnativeinterface.h            |  7 +++++++
+ src/corelib/global/qnumeric_p.h                  |  2 +-
+ src/corelib/global/qprocessordetection.h         |  9 +++++++++
+ src/corelib/global/qsimd.cpp                     |  6 +++++-
+ src/corelib/global/qsimd.h                       | 11 +++++++++++
+ src/corelib/global/qsimd_p.h                     |  8 ++++----
+ src/corelib/global/qversiontagging.h             |  3 +++
+ src/corelib/kernel/qmetatype.h                   |  3 +++
+ src/corelib/plugin/qelfparser_p.cpp              |  2 ++
+ src/corelib/text/qbytearray.h                    |  3 +++
+ src/corelib/thread/qfuture_impl.h                |  4 ++++
+ src/corelib/thread/qyieldcpu.h                   |  5 +++++
+ src/corelib/tools/qhash.h                        |  5 +++++
+ src/gui/kernel/qplatformintegration.h            |  9 +++++++++
+ src/gui/painting/qcolortrclut_p.h                |  6 ++++++
+ src/gui/painting/qdrawhelper.cpp                 |  4 ++--
+ src/gui/painting/qdrawhelper_p.h                 |  2 +-
+ src/gui/platform/unix/qunixnativeinterface.cpp   | 15 +++++++++++++++
+ .../xcb/gl_integrations/xcb_egl/qxcbeglcontext.h |  3 +++
+ tests/auto/corelib/text/qlocale/tst_qlocale.cpp  |  2 ++
+ .../auto/gui/painting/qpainter/tst_qpainter.cpp  |  2 +-
+ 27 files changed, 126 insertions(+), 15 deletions(-)
 
 diff --git a/cmake/QtCompilerFlags.cmake b/cmake/QtCompilerFlags.cmake
-index a34aaca2..1c9abd91 100644
+index f58f36b7..eaa1150f 100644
 --- a/cmake/QtCompilerFlags.cmake
 +++ b/cmake/QtCompilerFlags.cmake
-@@ -16,6 +16,8 @@ else()
+@@ -18,6 +18,8 @@ else()
      else()
          list(APPEND _qt_compiler_warning_flags_on -Wall -Wextra)
      endif()
 +    # False warnings of this type from EDG frontend are very annoying. 
 +    list(APPEND _qt_compiler_warning_flags_on -Wno-return-type)
-     list(APPEND _qt_compiler_warning_flags_off -w)
  endif()
  
-diff --git a/config.tests/x86_simd/main.cpp b/config.tests/x86_simd/main.cpp
-index c7032317..5014a1a6 100644
---- a/config.tests/x86_simd/main.cpp
-+++ b/config.tests/x86_simd/main.cpp
-@@ -12,6 +12,12 @@
- #  define attribute_target(x)
- #endif
+ set(_qt_compiler_warning_flags_condition
+diff --git a/examples/corelib/bindableproperties/bindablesubscription/bindablesubscription.h b/examples/corelib/bindableproperties/bindablesubscription/bindablesubscription.h
+index 03870d06..210583ca 100644
+--- a/examples/corelib/bindableproperties/bindablesubscription/bindablesubscription.h
++++ b/examples/corelib/bindableproperties/bindablesubscription/bindablesubscription.h
+@@ -34,9 +34,9 @@ private:
+     int basePrice() const;
  
-+#if defined(__e2k__) && ( \
-+  T(SSE4_2) || T(AVX) || T(AVX2) || \
-+  T(F16C) || T(SHANI) || T(RDRND) || T(AESNI))
-+#error
-+#endif
-+
- #if T(SSE2)
- attribute_target("sse2") void test_sse2()
- {
-diff --git a/configure.cmake b/configure.cmake
-index 999c9133..67a441a3 100644
---- a/configure.cmake
-+++ b/configure.cmake
-@@ -722,6 +722,7 @@ qt_feature("sse2" PRIVATE
-     LABEL "SSE2"
-     CONDITION ( ( (  TEST_architecture_arch STREQUAL i386 )
-         OR ( TEST_architecture_arch STREQUAL x86_64 ) ) AND TEST_subarch_sse2 ) OR QT_FORCE_FEATURE_sse2 OR WASM
-+        OR ( TEST_architecture_arch STREQUAL e2k )
-     AUTODETECT NOT WASM
- )
- qt_feature_definition("sse2" "QT_COMPILER_SUPPORTS_SSE2" VALUE "1")
+     BindableUser *m_user;
+-    QProperty<Duration> m_duration { Monthly };
+-    QProperty<int> m_price { 0 };
+-    QProperty<bool> m_isValid { false };
++    QProperty<Duration> m_duration = QProperty<Duration>{ Monthly };
++    QProperty<int> m_price = QProperty<int>{ 0 };
++    QProperty<bool> m_isValid = QProperty<bool>{ false };
+ };
+ 
+ //! [bindable-subscription-class]
 diff --git a/mkspecs/features/toolchain.prf b/mkspecs/features/toolchain.prf
-index 0040b6c4..7ce56869 100644
+index 13bf7f12..f8cf39d1 100644
 --- a/mkspecs/features/toolchain.prf
 +++ b/mkspecs/features/toolchain.prf
 @@ -263,7 +263,8 @@ isEmpty($${target_prefix}.INCDIRS) {
@@ -93,10 +79,10 @@ index 0040b6c4..7ce56869 100644
              # or gold under Linux) will not print any library search path. Need to use another
              # invocation with different options (which in turn doesn't print include search
 diff --git a/src/3rdparty/double-conversion/double-conversion/utils.h b/src/3rdparty/double-conversion/double-conversion/utils.h
-index 41078b6c..805ab4ef 100644
+index 4f4dd71b..b2263a79 100644
 --- a/src/3rdparty/double-conversion/double-conversion/utils.h
 +++ b/src/3rdparty/double-conversion/double-conversion/utils.h
-@@ -132,6 +132,7 @@ int main(int argc, char** argv) {
+@@ -139,6 +139,7 @@ int main(int argc, char** argv) {
      defined(__ARMEL__) || defined(__avr32__) || defined(_M_ARM) || defined(_M_ARM64) || \
      defined(__hppa__) || defined(__ia64__) || \
      defined(__mips__) || \
@@ -105,10 +91,10 @@ index 41078b6c..805ab4ef 100644
      defined(__nios2__) || defined(__ghs) || \
      defined(__powerpc__) || defined(__ppc__) || defined(__ppc64__) || \
 diff --git a/src/corelib/global/archdetect.cpp b/src/corelib/global/archdetect.cpp
-index a0ce5baa..81c0a4dd 100644
+index 6a1e110a..e963fa58 100644
 --- a/src/corelib/global/archdetect.cpp
 +++ b/src/corelib/global/archdetect.cpp
-@@ -35,6 +35,8 @@
+@@ -45,6 +45,8 @@
  #  define ARCH_PROCESSOR "riscv32"
  #elif defined(Q_PROCESSOR_RISCV_64)
  #  define ARCH_PROCESSOR "riscv64"
@@ -118,10 +104,10 @@ index a0ce5baa..81c0a4dd 100644
  #  define ARCH_PROCESSOR "s390x"
  #elif defined(Q_PROCESSOR_S390)
 diff --git a/src/corelib/global/qcompilerdetection.h b/src/corelib/global/qcompilerdetection.h
-index f811f52c..312a19f0 100644
+index 6d8d4266..7d428d41 100644
 --- a/src/corelib/global/qcompilerdetection.h
 +++ b/src/corelib/global/qcompilerdetection.h
-@@ -1100,6 +1100,16 @@
+@@ -1147,6 +1147,16 @@
  #  define QT_WARNING_DISABLE_DEPRECATED         QT_WARNING_DISABLE_CLANG("-Wdeprecated-declarations")
  #  define QT_WARNING_DISABLE_FLOAT_COMPARE      QT_WARNING_DISABLE_CLANG("-Wfloat-equal")
  #  define QT_WARNING_DISABLE_INVALID_OFFSETOF   QT_WARNING_DISABLE_CLANG("-Winvalid-offsetof")
@@ -138,7 +124,7 @@ index f811f52c..312a19f0 100644
  #elif defined(Q_CC_GNU) && (__GNUC__ * 100 + __GNUC_MINOR__ >= 406)
  #  define QT_WARNING_PUSH                       QT_DO_PRAGMA(GCC diagnostic push)
  #  define QT_WARNING_POP                        QT_DO_PRAGMA(GCC diagnostic pop)
-@@ -1179,7 +1189,7 @@
+@@ -1234,7 +1244,7 @@
  /*
      Sanitize compiler feature availability
  */
@@ -147,19 +133,17 @@ index f811f52c..312a19f0 100644
  #  undef QT_COMPILER_SUPPORTS_SSE2
  #  undef QT_COMPILER_SUPPORTS_SSE3
  #  undef QT_COMPILER_SUPPORTS_SSSE3
-diff --git a/src/corelib/global/qlogging.cpp b/src/corelib/global/qlogging.cpp
-index 875067fc..f3708ba1 100644
---- a/src/corelib/global/qlogging.cpp
-+++ b/src/corelib/global/qlogging.cpp
-@@ -1243,7 +1243,7 @@ void QMessagePattern::setPattern(const QString &pattern)
- */
- static constexpr int TypicalBacktraceFrameCount = 8;
+@@ -1351,6 +1361,10 @@ static_assert(!std::is_convertible_v<std::nullptr_t, bool>,
+ #else
+ # define Q_CONSTINIT
+ #endif
++#ifdef __EDG__
++#undef Q_CONSTINIT
++#define Q_CONSTINIT
++#endif
  
--#  if defined(Q_CC_GNU) && !defined(Q_CC_CLANG)
-+#  if defined(Q_CC_GNU) && !defined(Q_CC_CLANG) && !defined(__EDG__)
- // force skipping the frame pointer, to save the backtrace() function some work
- #    pragma GCC push_options
- #    pragma GCC optimize ("omit-frame-pointer")
+ #ifndef Q_OUTOFLINE_TEMPLATE
+ #  define Q_OUTOFLINE_TEMPLATE
 diff --git a/src/corelib/global/qnativeinterface.h b/src/corelib/global/qnativeinterface.h
 index 89f33651..374c64cc 100644
 --- a/src/corelib/global/qnativeinterface.h
@@ -179,11 +163,24 @@ index 89f33651..374c64cc 100644
  } // QNativeInterface::Private
  
  // Declares an accessor for the native interface
+diff --git a/src/corelib/global/qnumeric_p.h b/src/corelib/global/qnumeric_p.h
+index 47edc957..32b7a062 100644
+--- a/src/corelib/global/qnumeric_p.h
++++ b/src/corelib/global/qnumeric_p.h
+@@ -301,7 +301,7 @@ convertDoubleTo(double v, T *value, bool allow_precision_upgrade = true)
+         return true;
+     }
+ 
+-#if defined(__SSE2__) && (defined(Q_CC_GNU) || __has_extension(gnu_asm))
++#if (defined(__SSE2__) && (defined(Q_CC_GNU) || __has_extension(gnu_asm))) && !defined(__e2k__)
+     // The x86 CVTSD2SH instruction from SSE2 does what we want:
+     // - converts out-of-range doubles to ±infinity and sets #O
+     // - converts underflows to zero and sets #U
 diff --git a/src/corelib/global/qprocessordetection.h b/src/corelib/global/qprocessordetection.h
-index f18cbf32..9df85b61 100644
+index f7298bbb..b5242281 100644
 --- a/src/corelib/global/qprocessordetection.h
 +++ b/src/corelib/global/qprocessordetection.h
-@@ -245,6 +245,15 @@
+@@ -280,6 +280,15 @@
  #  endif
  // Q_BYTE_ORDER not defined, use endianness auto-detection
  
@@ -200,10 +197,10 @@ index f18cbf32..9df85b61 100644
      RISC-V family, known variants: 32- and 64-bit
  
 diff --git a/src/corelib/global/qsimd.cpp b/src/corelib/global/qsimd.cpp
-index cc904335..6e6a2ea4 100644
+index 201afcc7..9d342f3b 100644
 --- a/src/corelib/global/qsimd.cpp
 +++ b/src/corelib/global/qsimd.cpp
-@@ -89,7 +89,7 @@ static const char features_string[] =
+@@ -95,7 +95,7 @@ static const char features_string[] =
  static const int features_indices[] = {
         0, 1, 6
  };
@@ -212,7 +209,7 @@ index cc904335..6e6a2ea4 100644
  #  include "qsimd_x86.cpp"                  // generated by util/x86simdgen
  #else
  static const char features_string[] = "";
-@@ -546,7 +546,11 @@ static inline quint64 detectProcessorFeatures()
+@@ -548,7 +548,11 @@ static inline quint64 detectProcessorFeatures()
  #else
  static inline uint detectProcessorFeatures()
  {
@@ -225,7 +222,7 @@ index cc904335..6e6a2ea4 100644
  #endif
  
 diff --git a/src/corelib/global/qsimd.h b/src/corelib/global/qsimd.h
-index 6ed7821e..86815dde 100644
+index 8ee3e9b1..88cb2b20 100644
 --- a/src/corelib/global/qsimd.h
 +++ b/src/corelib/global/qsimd.h
 @@ -87,6 +87,10 @@
@@ -254,28 +251,19 @@ index 6ed7821e..86815dde 100644
  #  define QT_COMPILER_USES_sse4_2 1
  #else
 diff --git a/src/corelib/global/qsimd_p.h b/src/corelib/global/qsimd_p.h
-index 37734198..06999955 100644
+index b613e049..003bc1b8 100644
 --- a/src/corelib/global/qsimd_p.h
 +++ b/src/corelib/global/qsimd_p.h
-@@ -160,7 +160,7 @@ QT_WARNING_DISABLE_INTEL(103)
- #  define QT_FUNCTION_TARGET(x)
+@@ -170,7 +170,7 @@ QT_WARNING_DISABLE_INTEL(103)
+ #  undef __VAES__
  #endif
  
 -#ifdef Q_PROCESSOR_X86
 +#if defined(Q_PROCESSOR_X86) || defined(__e2k__)
  /* -- x86 intrinsic support -- */
  
- #  if defined(Q_CC_MSVC) && (defined(_M_X64) || _M_IX86_FP >= 2)
-@@ -213,7 +213,7 @@ asm(
- // macOS's fat binaries support the "x86_64h" sub-architecture and the GNU libc
- // ELF loader also supports a "haswell/" subdir (e.g., /usr/lib/haswell).
- #  define ARCH_HASWELL_MACROS       (__AVX2__ + __BMI2__ + __FMA__ + __LZCNT__)
--#  if ARCH_HASWELL_MACROS != 0
-+#  if ARCH_HASWELL_MACROS != 0 && !defined(__e2k__)
- #    if ARCH_HASWELL_MACROS != 4
- #      error "Please enable all x86-64-v3 extensions; you probably want to use -march=haswell or -march=x86-64-v3 instead of -mavx2"
- #    endif
-@@ -291,7 +291,7 @@ inline uint8_t vaddv_u8(uint8x8_t v8)
+ #  if defined(QT_COMPILER_SUPPORTS_RDSEED) && defined(Q_OS_QNX)
+@@ -364,7 +364,7 @@ inline uint32x4_t qvsetq_n_u32(uint32_t a, uint32_t b, uint32_t c, uint32_t d)
  #endif
  #endif
  
@@ -284,7 +272,7 @@ index 37734198..06999955 100644
  enum CPUFeatures {
  #if defined(Q_PROCESSOR_ARM)
      CpuFeatureNEON          = 2,
-@@ -336,7 +336,7 @@ extern "C" {
+@@ -416,7 +416,7 @@ extern "C" {
  #  define Q_ATOMIC(T)   _Atomic(T)
  #endif
  
@@ -293,7 +281,7 @@ index 37734198..06999955 100644
  typedef uint64_t QCpuFeatureType;
  static const QCpuFeatureType qCompilerCpuFeatures = _compilerCpuFeatures;
  static const QCpuFeatureType CpuFeatureArchHaswell = cpu_haswell;
-@@ -349,7 +349,7 @@ Q_CORE_EXPORT uint64_t QT_MANGLE_NAMESPACE(qDetectCpuFeatures)();
+@@ -429,7 +429,7 @@ Q_CORE_EXPORT uint64_t QT_MANGLE_NAMESPACE(qDetectCpuFeatures)();
  
  static inline uint64_t qCpuFeatures()
  {
@@ -302,20 +290,11 @@ index 37734198..06999955 100644
      return qCompilerCpuFeatures;    // no detection
  #else
      quint64 features = atomic_load_explicit(QT_MANGLE_NAMESPACE(qt_cpu_features), memory_order_relaxed);
-@@ -388,7 +388,7 @@ static inline uint64_t qCpuFeatures()
- */
- static inline void qYieldCpu()
- {
--#if defined(Q_PROCESSOR_X86)
-+#if defined(Q_PROCESSOR_X86) || defined(__e2k__)
-     _mm_pause();
- #elif defined(Q_PROCESSOR_ARM) && Q_PROCESSOR_ARM >= 7 /* yield was added in ARMv7 */
- #  if __has_builtin(__builtin_arm_yield) /* e.g. Clang */
 diff --git a/src/corelib/global/qversiontagging.h b/src/corelib/global/qversiontagging.h
-index e64cae1d..30aaaa66 100644
+index fa2dd237..c1f886ef 100644
 --- a/src/corelib/global/qversiontagging.h
 +++ b/src/corelib/global/qversiontagging.h
-@@ -101,6 +101,9 @@ struct QVersionTag
+@@ -109,6 +109,9 @@ struct QVersionTag
  #  ifdef Q_OS_DARWIN
  #    define QT_VERSION_TAG_SECTION      __attribute__((section("__DATA,.qtversion")))
  #  endif
@@ -326,10 +305,10 @@ index e64cae1d..30aaaa66 100644
  #  define QT_VERSION_TAG2(sym, imp)     \
      extern "C" Q_DECL_IMPORT const char sym; \
 diff --git a/src/corelib/kernel/qmetatype.h b/src/corelib/kernel/qmetatype.h
-index f015daeb..fc064384 100644
+index 8c76d1de..06db4384 100644
 --- a/src/corelib/kernel/qmetatype.h
 +++ b/src/corelib/kernel/qmetatype.h
-@@ -793,6 +793,9 @@ namespace QtPrivate
+@@ -881,6 +881,9 @@ namespace QtPrivate
      {
          template<typename U>
          static auto check(U *) -> std::integral_constant<bool, sizeof(U) != 0>;
@@ -340,10 +319,10 @@ index f015daeb..fc064384 100644
          using type = decltype(check(static_cast<T *>(nullptr)));
      };
 diff --git a/src/corelib/plugin/qelfparser_p.cpp b/src/corelib/plugin/qelfparser_p.cpp
-index 6ebfaff2..f388cf2b 100644
+index 7f6271cd..cd3b994d 100644
 --- a/src/corelib/plugin/qelfparser_p.cpp
 +++ b/src/corelib/plugin/qelfparser_p.cpp
-@@ -138,6 +138,8 @@ struct ElfMachineCheck
+@@ -145,6 +145,8 @@ struct ElfMachineCheck
              EM_SPARCV9
  #elif defined(Q_PROCESSOR_SPARC)
              EM_SPARC
@@ -352,37 +331,25 @@ index 6ebfaff2..f388cf2b 100644
  #elif defined(Q_PROCESSOR_WASM)
  #elif defined(Q_PROCESSOR_X86_32)
              EM_386
-diff --git a/src/corelib/text/qanystringview.h b/src/corelib/text/qanystringview.h
-index 2601ce74..2697197a 100644
---- a/src/corelib/text/qanystringview.h
-+++ b/src/corelib/text/qanystringview.h
-@@ -59,7 +59,7 @@ private:
- #  if defined(__cpp_lib_is_constant_evaluated)
-         if (!std::is_constant_evaluated())
-             return false;
--#  elif defined(Q_CC_GNU) && !defined(Q_CC_CLANG)
-+#  elif defined(Q_CC_GNU) && !defined(Q_CC_CLANG) && !defined(__EDG__)
-         if (!str || !__builtin_constant_p(*str))
-             return false;
- #  endif
-diff --git a/src/corelib/text/qstringview.h b/src/corelib/text/qstringview.h
-index d820ec8a..eab029f4 100644
---- a/src/corelib/text/qstringview.h
-+++ b/src/corelib/text/qstringview.h
-@@ -104,7 +104,7 @@ private:
- #if defined(__cpp_lib_is_constant_evaluated)
-         if (std::is_constant_evaluated())
-             return std::char_traits<Char>::length(str);
--#elif defined(Q_CC_GNU) && !defined(Q_CC_CLANG)
-+#elif defined(Q_CC_GNU) && !defined(Q_CC_CLANG) && !defined(__EDG__)
-         if (__builtin_constant_p(*str))
-             return std::char_traits<Char>::length(str);
- #endif
+diff --git a/src/corelib/text/qbytearray.h b/src/corelib/text/qbytearray.h
+index 5c9855d3..32de3bbb 100644
+--- a/src/corelib/text/qbytearray.h
++++ b/src/corelib/text/qbytearray.h
+@@ -523,6 +523,9 @@ private:
+     Q_DECLARE_STRONGLY_ORDERED(QByteArray)
+     Q_DECLARE_STRONGLY_ORDERED(QByteArray, QByteArrayView)
+     Q_DECLARE_STRONGLY_ORDERED(QByteArray, const char *)
++#if defined(__EDG__) && __cplusplus >= 202002L
++    friend bool operator!=(QByteArray const &lhs, const char* const &rhs) noexcept(true) { return !(lhs == rhs); }
++#endif
+ #if defined(__GLIBCXX__) && defined(__cpp_lib_three_way_comparison)
+     // libstdc++ has a bug [0] when `operator const void *()` is preferred over
+     // `operator<=>()` when calling std::less<> and other similar methods.
 diff --git a/src/corelib/thread/qfuture_impl.h b/src/corelib/thread/qfuture_impl.h
-index 8e96b943..6c7c5ed3 100644
+index 22b1b784..4043d232 100644
 --- a/src/corelib/thread/qfuture_impl.h
 +++ b/src/corelib/thread/qfuture_impl.h
-@@ -891,7 +891,11 @@ namespace QtFuture {
+@@ -905,7 +905,11 @@ namespace QtFuture {
  template<class Signal>
  using ArgsType = typename QtPrivate::ArgResolver<Signal>::AllArgs;
  
@@ -394,11 +361,34 @@ index 8e96b943..6c7c5ed3 100644
  static QFuture<ArgsType<Signal>> connect(Sender *sender, Signal signal)
  {
      using ArgsType = ArgsType<Signal>;
+diff --git a/src/corelib/thread/qyieldcpu.h b/src/corelib/thread/qyieldcpu.h
+index c30374f0..0b0e2224 100644
+--- a/src/corelib/thread/qyieldcpu.h
++++ b/src/corelib/thread/qyieldcpu.h
+@@ -18,6 +18,9 @@ extern "C"
+ #  endif
+ void _mm_pause(void);       // the compiler recognizes as intrinsic
+ #endif
++#ifdef __e2k__
++#include <x86intrin.h>
++#endif
+ 
+ QT_BEGIN_NAMESPACE
+ 
+@@ -41,6 +44,8 @@ void qYieldCpu(void)
+ #elif defined(Q_PROCESSOR_X86) && defined(Q_CC_GNU)
+     // GCC < 10 didn't have __has_builtin()
+     __builtin_ia32_pause();
++#elif defined(__e2k__)
++    _mm_pause();
+ #elif defined(Q_PROCESSOR_X86) && defined(Q_CC_MSVC)
+     _mm_pause();
+ #elif defined(Q_PROCESSOR_X86)
 diff --git a/src/corelib/tools/qhash.h b/src/corelib/tools/qhash.h
-index 952911f9..92563104 100644
+index 3a3e1842..ade9ac9d 100644
 --- a/src/corelib/tools/qhash.h
 +++ b/src/corelib/tools/qhash.h
-@@ -29,6 +29,11 @@ namespace QHashPrivate {
+@@ -30,6 +30,11 @@ namespace QHashPrivate {
  template <typename T, typename = void>
  constexpr inline bool HasQHashOverload = false;
  
@@ -410,39 +400,11 @@ index 952911f9..92563104 100644
  template <typename T>
  constexpr inline bool HasQHashOverload<T, std::enable_if_t<
      std::is_convertible_v<decltype(qHash(std::declval<const T &>(), std::declval<size_t>())), size_t>
-@@ -827,7 +832,11 @@ public:
-     using reference = T &;
-     using const_reference = const T &;
- 
-+#ifdef __EDG__
-+    inline QHash() noexcept {}
-+#else
-     inline QHash() noexcept = default;
-+#endif
-     inline QHash(std::initializer_list<std::pair<Key,T> > list)
-         : d(new Data(list.size()))
-     {
-diff --git a/src/corelib/tools/qlist.h b/src/corelib/tools/qlist.h
-index 0cc62e5f..c9e176e0 100644
---- a/src/corelib/tools/qlist.h
-+++ b/src/corelib/tools/qlist.h
-@@ -259,7 +259,11 @@ public:
-     }
- 
- public:
-+#ifdef __EDG__
-+    QList() {}
-+#else
-     QList() = default;
-+#endif
-     explicit QList(qsizetype size)
-         : d(Data::allocate(size))
-     {
 diff --git a/src/gui/kernel/qplatformintegration.h b/src/gui/kernel/qplatformintegration.h
-index 46f1d743..eee1a5c0 100644
+index a18ae821..77fa8a70 100644
 --- a/src/gui/kernel/qplatformintegration.h
 +++ b/src/gui/kernel/qplatformintegration.h
-@@ -47,6 +47,13 @@ class QVulkanInstance;
+@@ -48,6 +48,13 @@ class QVulkanInstance;
  
  namespace QNativeInterface::Private {
  
@@ -456,7 +418,7 @@ index 46f1d743..eee1a5c0 100644
  template <typename R, typename I, auto func, typename... Args>
  struct QInterfaceProxyImp
  {
-@@ -64,8 +71,10 @@ template <auto func>
+@@ -65,8 +72,10 @@ template <auto func>
  struct QInterfaceProxy;
  template <typename R, typename I, typename... Args, R(I::*func)(Args...)>
  struct QInterfaceProxy<func> : public QInterfaceProxyImp<R, I, func, Args...> {};
@@ -468,17 +430,17 @@ index 46f1d743..eee1a5c0 100644
  } // QNativeInterface::Private
  
 diff --git a/src/gui/painting/qcolortrclut_p.h b/src/gui/painting/qcolortrclut_p.h
-index 1b312d4a..9b80c673 100644
+index da5e9e60..b54c289a 100644
 --- a/src/gui/painting/qcolortrclut_p.h
 +++ b/src/gui/painting/qcolortrclut_p.h
-@@ -191,7 +191,13 @@ public:
-     ushort m_fromLinear[(255 * 16) + 1]; // [0-4080] -> [0-65280]
+@@ -210,7 +210,13 @@ public:
+     ushort m_unclampedToLinear = Resolution;
  
  private:
 +#ifdef __EDG__
 +public:
 +#endif
-     QColorTrcLut() { } // force uninitialized members
+     QColorTrcLut() = default;
 +#ifdef __EDG__
 +private:
 +#endif
@@ -486,23 +448,45 @@ index 1b312d4a..9b80c673 100644
      static std::shared_ptr<QColorTrcLut> create();
  
 diff --git a/src/gui/painting/qdrawhelper.cpp b/src/gui/painting/qdrawhelper.cpp
-index 35c44b82..4a151b52 100644
+index 51bc4a5a..1b33554f 100644
 --- a/src/gui/painting/qdrawhelper.cpp
 +++ b/src/gui/painting/qdrawhelper.cpp
-@@ -6239,7 +6239,7 @@ void qt_memfill64(quint64 *dest, quint64 color, qsizetype count)
- }
- #endif
+@@ -6368,7 +6368,7 @@ DrawHelper qDrawHelper[] =
  
--#if defined(QT_COMPILER_SUPPORTS_SSSE3) && defined(Q_CC_GNU) && !defined(Q_CC_CLANG)
-+#if defined(QT_COMPILER_SUPPORTS_SSSE3) && defined(Q_CC_GNU) && !defined(Q_CC_CLANG) && !defined(__e2k__)
- __attribute__((optimize("no-tree-vectorize")))
- #endif
- void qt_memfill24(quint24 *dest, quint24 color, qsizetype count)
+ static_assert(std::size(qDrawHelper) == QImage::NImageFormats);
+ 
+-#if !defined(Q_PROCESSOR_X86)
++#if !(defined(Q_PROCESSOR_X86) || defined(Q_PROCESSOR_E2K))
+ void qt_memfill64(quint64 *dest, quint64 color, qsizetype count)
+ {
+     qt_memfill_template<quint64>(dest, color, count);
+@@ -6435,7 +6435,7 @@ void qt_memfill16(quint16 *dest, quint16 value, qsizetype count)
+     qt_memfill32(reinterpret_cast<quint32*>(dest), value32, count / 2);
+ }
+ 
+-#if defined(Q_PROCESSOR_X86)
++#if defined(Q_PROCESSOR_X86) || defined(Q_PROCESSOR_E2K)
+ void (*qt_memfill32)(quint32 *dest, quint32 value, qsizetype count) = nullptr;
+ void (*qt_memfill64)(quint64 *dest, quint64 value, qsizetype count) = nullptr;
+ #elif !defined(__ARM_NEON__) && !defined(__MIPS_DSP__)
+diff --git a/src/gui/painting/qdrawhelper_p.h b/src/gui/painting/qdrawhelper_p.h
+index 7110bf0f..860fe0c2 100644
+--- a/src/gui/painting/qdrawhelper_p.h
++++ b/src/gui/painting/qdrawhelper_p.h
+@@ -142,7 +142,7 @@ struct quint24 {
+ 
+ void qBlendGradient(int count, const QT_FT_Span *spans, void *userData);
+ void qBlendTexture(int count, const QT_FT_Span *spans, void *userData);
+-#ifdef Q_PROCESSOR_X86
++#if defined(Q_PROCESSOR_X86) || defined(Q_PROCESSOR_E2K)
+ extern void (*qt_memfill64)(quint64 *dest, quint64 value, qsizetype count);
+ extern void (*qt_memfill32)(quint32 *dest, quint32 value, qsizetype count);
+ #else
 diff --git a/src/gui/platform/unix/qunixnativeinterface.cpp b/src/gui/platform/unix/qunixnativeinterface.cpp
-index 4ea88a59..3fe35cb6 100644
+index 09561d9a..52b67778 100644
 --- a/src/gui/platform/unix/qunixnativeinterface.cpp
 +++ b/src/gui/platform/unix/qunixnativeinterface.cpp
-@@ -66,14 +66,24 @@ QT_DEFINE_PRIVATE_NATIVE_INTERFACE(QGLXIntegration);
+@@ -68,14 +68,24 @@ QT_DEFINE_PRIVATE_NATIVE_INTERFACE(QGLXIntegration);
  
  QOpenGLContext *QNativeInterface::QGLXContext::fromNative(GLXContext configBasedContext, QOpenGLContext *shareContext)
  {
@@ -527,7 +511,7 @@ index 4ea88a59..3fe35cb6 100644
  }
  #endif // QT_CONFIG(xcb_glx_plugin)
  
-@@ -126,8 +136,13 @@ QT_DEFINE_PRIVATE_NATIVE_INTERFACE(QEGLIntegration);
+@@ -144,8 +154,13 @@ QT_DEFINE_PRIVATE_NATIVE_INTERFACE(QEGLIntegration);
  
  QOpenGLContext *QNativeInterface::QEGLContext::fromNative(EGLContext context, EGLDisplay display, QOpenGLContext *shareContext)
  {
@@ -541,24 +525,6 @@ index 4ea88a59..3fe35cb6 100644
  }
  #endif // QT_CONFIG(egl)
  
-diff --git a/src/gui/platform/unix/qxkbcommon.cpp b/src/gui/platform/unix/qxkbcommon.cpp
-index fd368f82..1618b337 100644
---- a/src/gui/platform/unix/qxkbcommon.cpp
-+++ b/src/gui/platform/unix/qxkbcommon.cpp
-@@ -239,6 +239,13 @@ static constexpr const auto KeyTbl = qMakeArray(
-         Xkb2Qt<XKB_KEY_dead_small_schwa,        Qt::Key_Dead_Small_Schwa>,
-         Xkb2Qt<XKB_KEY_dead_capital_schwa,      Qt::Key_Dead_Capital_Schwa>,
-         Xkb2Qt<XKB_KEY_dead_greek,              Qt::Key_Dead_Greek>,
-+// removed in libxkbcommon-1.6.0
-+#ifndef XKB_KEY_dead_lowline
-+#define XKB_KEY_dead_lowline                  0xfe90
-+#define XKB_KEY_dead_aboveverticalline        0xfe91
-+#define XKB_KEY_dead_belowverticalline        0xfe92
-+#define XKB_KEY_dead_longsolidusoverlay       0xfe93 
-+#endif
-         Xkb2Qt<XKB_KEY_dead_lowline,            Qt::Key_Dead_Lowline>,
-         Xkb2Qt<XKB_KEY_dead_aboveverticalline,  Qt::Key_Dead_Aboveverticalline>,
-         Xkb2Qt<XKB_KEY_dead_belowverticalline,  Qt::Key_Dead_Belowverticalline>,
 diff --git a/src/plugins/platforms/xcb/gl_integrations/xcb_egl/qxcbeglcontext.h b/src/plugins/platforms/xcb/gl_integrations/xcb_egl/qxcbeglcontext.h
 index 30444932..1fa160a7 100644
 --- a/src/plugins/platforms/xcb/gl_integrations/xcb_egl/qxcbeglcontext.h
@@ -574,23 +540,24 @@ index 30444932..1fa160a7 100644
          : QEGLPlatformContext(glFormat, share, display, nullptr)
      {
 diff --git a/tests/auto/corelib/text/qlocale/tst_qlocale.cpp b/tests/auto/corelib/text/qlocale/tst_qlocale.cpp
-index f464b427..89628451 100644
+index dae96188..9d08ad19 100644
 --- a/tests/auto/corelib/text/qlocale/tst_qlocale.cpp
 +++ b/tests/auto/corelib/text/qlocale/tst_qlocale.cpp
-@@ -24,7 +24,7 @@
+@@ -22,7 +22,9 @@
+ 
  #include <float.h>
  #include <math.h>
++#ifndef __e2k__
+ #include <fenv.h>
++#endif
  
--#if defined(Q_OS_LINUX) && !defined(__UCLIBC__)
-+#if defined(Q_OS_LINUX) && !defined(__UCLIBC__) && !defined(__e2k__)
- #  include <fenv.h>
- #  define QT_USE_FENV
- #endif
+ #if defined(Q_OS_UNIX) && !defined(Q_OS_DARWIN)
+ #    include <stdlib.h>
 diff --git a/tests/auto/gui/painting/qpainter/tst_qpainter.cpp b/tests/auto/gui/painting/qpainter/tst_qpainter.cpp
-index eb705a02..55632b5a 100644
+index 9bb49eec..997cd659 100644
 --- a/tests/auto/gui/painting/qpainter/tst_qpainter.cpp
 +++ b/tests/auto/gui/painting/qpainter/tst_qpainter.cpp
-@@ -2832,7 +2832,7 @@ void tst_QPainter::monoImages()
+@@ -2848,7 +2848,7 @@ void tst_QPainter::monoImages()
  
  #if defined(Q_OS_DARWIN) || defined(Q_OS_FREEBSD) || defined(Q_OS_ANDROID)
  #  define TEST_FPE_EXCEPTIONS
