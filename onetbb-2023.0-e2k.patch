@@ -1,0 +1,139 @@
+From 488406985a3757a38d9b99d6f3c3827f48ac2562 Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Fri, 5 Jun 2026 16:23:38 +0700
+Subject: [PATCH] TBB-2023.0 e2k support
+
+---
+ cmake/compilers/LCC.cmake           |  2 ++
+ include/oneapi/tbb/detail/_config.h |  2 +-
+ src/tbb/co_context.h                |  8 ++++++++
+ src/tbb/concurrent_monitor.h        |  4 ++++
+ src/tbb/concurrent_monitor_mutex.h  |  2 ++
+ src/tbbmalloc/CMakeLists.txt        | 11 +++++++++++
+ test/common/vector_types.h          |  2 ++
+ 7 files changed, 30 insertions(+), 1 deletion(-)
+ create mode 100644 cmake/compilers/LCC.cmake
+
+diff --git a/cmake/compilers/LCC.cmake b/cmake/compilers/LCC.cmake
+new file mode 100644
+index 0000000..046788e
+--- /dev/null
++++ b/cmake/compilers/LCC.cmake
+@@ -0,0 +1,2 @@
++include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/compilers/GNU.cmake)
++
+diff --git a/include/oneapi/tbb/detail/_config.h b/include/oneapi/tbb/detail/_config.h
+index 1cf8ac3..971804f 100644
+--- a/include/oneapi/tbb/detail/_config.h
++++ b/include/oneapi/tbb/detail/_config.h
+@@ -208,7 +208,7 @@
+ 
+ /** __TBB_WEAK_SYMBOLS_PRESENT denotes that the system supports the weak symbol mechanism **/
+ #ifndef __TBB_WEAK_SYMBOLS_PRESENT
+-    #define __TBB_WEAK_SYMBOLS_PRESENT ( !__EMSCRIPTEN__ && !_WIN32 && !__APPLE__ && !__sun && (__TBB_GCC_VERSION >= 40000 || __INTEL_COMPILER ) )
++    #define __TBB_WEAK_SYMBOLS_PRESENT ( !__EMSCRIPTEN__ && !_WIN32 && !__APPLE__ && !__sun && !__e2k__ && (__TBB_GCC_VERSION >= 40000 || __INTEL_COMPILER ) )
+ #endif
+ 
+ /** Presence of compiler features **/
+diff --git a/src/tbb/co_context.h b/src/tbb/co_context.h
+index 457b119..14a2df0 100644
+--- a/src/tbb/co_context.h
++++ b/src/tbb/co_context.h
+@@ -344,7 +344,12 @@ inline void create_coroutine(coroutine_type& c, std::size_t stack_size, void* ar
+     unsigned hi = unsigned(std::uint64_t(addr) >> 32);
+     __TBB_ASSERT(sizeof(addr) == 8 || hi == 0, nullptr);
+ 
++#ifdef __e2k__
++    err = makecontext_e2k(&c.my_context, (coroutine_func_t)co_local_wait_for_all, 2, hi, lo);
++    __TBB_ASSERT_EX(err >= 0, nullptr);
++#else
+     makecontext(&c.my_context, (coroutine_func_t)co_local_wait_for_all, 2, hi, lo);
++#endif
+ }
+ 
+ inline void current_coroutine(coroutine_type& c) {
+@@ -359,6 +364,9 @@ inline void swap_coroutine(coroutine_type& prev_coroutine, coroutine_type& new_c
+ 
+ inline void destroy_coroutine(coroutine_type& c) {
+     const std::size_t REG_PAGE_SIZE = governor::default_page_size();
++#ifdef __e2k__
++    freecontext_e2k(&c.my_context);
++#endif
+     // Free stack memory with guarded pages
+     munmap((void*)((std::uintptr_t)c.my_stack - REG_PAGE_SIZE), c.my_stack_size + 2 * REG_PAGE_SIZE);
+     // Clear the stack state afterwards
+diff --git a/src/tbb/concurrent_monitor.h b/src/tbb/concurrent_monitor.h
+index 734c923..4ed2a58 100644
+--- a/src/tbb/concurrent_monitor.h
++++ b/src/tbb/concurrent_monitor.h
+@@ -42,7 +42,11 @@ public:
+     };
+ 
+     // ctor
++#ifdef __EDG__
++    circular_doubly_linked_list_with_sentinel() : count(0), head(&head, &head) {}
++#else
+     constexpr circular_doubly_linked_list_with_sentinel() : count(0), head(&head, &head) {}
++#endif
+ 
+     circular_doubly_linked_list_with_sentinel(const circular_doubly_linked_list_with_sentinel&) = delete;
+     circular_doubly_linked_list_with_sentinel& operator=(const circular_doubly_linked_list_with_sentinel&) = delete;
+diff --git a/src/tbb/concurrent_monitor_mutex.h b/src/tbb/concurrent_monitor_mutex.h
+index cae6526..e1b415f 100644
+--- a/src/tbb/concurrent_monitor_mutex.h
++++ b/src/tbb/concurrent_monitor_mutex.h
+@@ -33,7 +33,9 @@ public:
+ 
+     constexpr concurrent_monitor_mutex() {}
+ 
++#ifndef __EDG__
+     ~concurrent_monitor_mutex() = default;
++#endif
+ 
+     void destroy() {
+ #if !__TBB_USE_FUTEX
+diff --git a/src/tbbmalloc/CMakeLists.txt b/src/tbbmalloc/CMakeLists.txt
+index afefc45..630c633 100644
+--- a/src/tbbmalloc/CMakeLists.txt
++++ b/src/tbbmalloc/CMakeLists.txt
+@@ -68,6 +68,16 @@ target_compile_options(tbbmalloc
+     ${TBB_COMMON_COMPILE_FLAGS}
+ )
+ 
++if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "LCC")
++enable_language(CXX)
++
++set_target_properties(tbbmalloc PROPERTIES
++    DEFINE_SYMBOL ""
++    VERSION ${TBBMALLOC_BINARY_VERSION}.${TBB_BINARY_MINOR_VERSION}
++    SOVERSION ${TBBMALLOC_BINARY_VERSION}
++    LINKER_LANGUAGE CXX
++)
++else()
+ enable_language(C)
+ 
+ # Avoid use of target_link_libraries here as it changes /DEF option to \DEF on Windows.
+@@ -77,6 +87,7 @@ set_target_properties(tbbmalloc PROPERTIES
+     SOVERSION ${TBBMALLOC_BINARY_VERSION}
+     LINKER_LANGUAGE C
+ )
++endif()
+ 
+ tbb_handle_ipo(tbbmalloc)
+ 
+diff --git a/test/common/vector_types.h b/test/common/vector_types.h
+index 23dc444..024a68b 100644
+--- a/test/common/vector_types.h
++++ b/test/common/vector_types.h
+@@ -114,6 +114,8 @@ bool have_AVX() {
+     const int ECX = 2;
+     __cpuid(info, 1);
+     result = (info[ECX] & avx_mask) != 0;
++#elif defined(__e2k__)
++    result = avx_mask;
+ #elif defined(__GNUC__)
+     int ECX;
+     __asm__( "cpuid"
+-- 
+2.43.0
+
