@@ -1,0 +1,462 @@
+From 5c07139067a7bbce18a5dccc65885d52ba1c418a Mon Sep 17 00:00:00 2001
+From: Ilya Kurdyukov <jpegqs@gmail.com>
+Date: Tue, 23 Jun 2026 16:01:21 +0700
+Subject: [PATCH] blender-4.5.10 e2k support
+
+Using LCC 1.29.16
+---
+ .../btSequentialImpulseConstraintSolver.cpp              | 4 ++++
+ extern/fast_float/fast_float.h                           | 2 +-
+ intern/cycles/kernel/osl/osl.h                           | 4 ++++
+ intern/cycles/util/math_float3.h                         | 6 +++---
+ intern/cycles/util/math_float4.h                         | 2 +-
+ intern/cycles/util/optimization.h                        | 9 +++++++++
+ intern/cycles/util/simd.h                                | 4 ++--
+ intern/cycles/util/system.cpp                            | 7 +++++++
+ intern/cycles/util/transform.h                           | 2 +-
+ intern/libmv/libmv/build/build_config.h                  | 8 ++++++++
+ source/blender/blenkernel/intern/curves_attributes.cc    | 2 +-
+ .../blenkernel/intern/grease_pencil_attributes.cc        | 4 ++--
+ source/blender/blenkernel/intern/instances_attributes.cc | 2 +-
+ source/blender/blenkernel/intern/mesh_attributes.cc      | 2 +-
+ source/blender/blenkernel/intern/node_tree_update.cc     | 2 +-
+ .../blender/blenkernel/intern/pointcloud_attributes.cc   | 2 +-
+ source/blender/blenkernel/intern/volume.cc               | 3 +++
+ source/blender/blenlib/BLI_build_config.h                | 3 +++
+ source/blender/blenlib/BLI_enumerable_thread_specific.hh | 7 +++++++
+ source/blender/blenlib/BLI_hash.hh                       | 3 +++
+ source/blender/blenlib/BLI_math_matrix_types.hh          | 5 +++++
+ source/blender/blenlib/BLI_memory_utils.hh               | 1 +
+ source/blender/blenlib/BLI_utildefines.h                 | 2 +-
+ source/blender/blenlib/BLI_virtual_array.hh              | 3 +++
+ source/blender/draw/engines/eevee/eevee_lookdev.cc       | 3 +++
+ .../functions/intern/lazy_function_graph_executor.cc     | 4 ++++
+ 26 files changed, 80 insertions(+), 16 deletions(-)
+
+diff --git a/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp b/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
+index d2641c58..a0af3a4d 100644
+--- a/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
++++ b/extern/bullet2/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.cpp
+@@ -115,7 +115,11 @@ static inline __m128 btSimdDot3(__m128 vec0, __m128 vec1)
+ 
+ #define USE_FMA 1
+ #define USE_FMA3_INSTEAD_FMA4 1
++#ifdef __e2k__
++#define USE_SSE4_DOT 0
++#else
+ #define USE_SSE4_DOT 1
++#endif
+ 
+ #define SSE4_DP(a, b) _mm_dp_ps(a, b, 0x7f)
+ #define SSE4_DP_FP(a, b) _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7f))
+diff --git a/extern/fast_float/fast_float.h b/extern/fast_float/fast_float.h
+index 155363a0..b3918fa3 100644
+--- a/extern/fast_float/fast_float.h
++++ b/extern/fast_float/fast_float.h
+@@ -2352,7 +2352,7 @@ struct pow5_tables {
+     298023223876953125UL, 1490116119384765625UL, 7450580596923828125UL,
+   };
+ #ifdef FASTFLOAT_64BIT_LIMB
+-  constexpr static limb large_power_of_5[] = {
++  constexpr static limb large_power_of_5[5] = {
+     1414648277510068013UL, 9180637584431281687UL, 4539964771860779200UL,
+     10482974169319127550UL, 198276706040285095UL};
+ #else
+diff --git a/intern/cycles/kernel/osl/osl.h b/intern/cycles/kernel/osl/osl.h
+index bcb056ed..f79f18c1 100644
+--- a/intern/cycles/kernel/osl/osl.h
++++ b/intern/cycles/kernel/osl/osl.h
+@@ -85,7 +85,11 @@ ccl_device void flatten_closure_tree(KernelGlobals kg,
+       case OSL_CLOSURE_MUL_ID: {
+         const ccl_private OSLClosureMul *mul = static_cast<const ccl_private OSLClosureMul *>(
+             closure);
++#ifdef __EDG__
++        weight = weight * mul->weight;
++#else
+         weight *= mul->weight;
++#endif
+         closure = mul->closure;
+         continue;
+       }
+diff --git a/intern/cycles/util/math_float3.h b/intern/cycles/util/math_float3.h
+index 5ceb88a3..9b8ff1e1 100644
+--- a/intern/cycles/util/math_float3.h
++++ b/intern/cycles/util/math_float3.h
+@@ -217,7 +217,7 @@ ccl_device_inline int3 operator>=(const float3 a, const float3 b)
+ 
+ ccl_device_inline float dot(const float3 a, const float3 b)
+ {
+-#  if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__)
++#  if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+   return _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7F));
+ #  else
+   return a.x * b.x + a.y * b.y + a.z * b.z;
+@@ -237,7 +237,7 @@ ccl_device_inline float dot_xy(const float3 a, const float3 b)
+ 
+ ccl_device_inline float len(const float3 a)
+ {
+-#if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__)
++#if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+   return _mm_cvtss_f32(_mm_sqrt_ss(_mm_dp_ps(a.m128, a.m128, 0x7F)));
+ #else
+   return sqrtf(dot(a, a));
+@@ -281,7 +281,7 @@ ccl_device_inline float3 cross(const float3 a, const float3 b)
+ 
+ ccl_device_inline float3 normalize(const float3 a)
+ {
+-#  if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__)
++#  if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+   const __m128 norm = _mm_sqrt_ps(_mm_dp_ps(a.m128, a.m128, 0x7F));
+   return float3(_mm_div_ps(a.m128, norm));
+ #  else
+diff --git a/intern/cycles/util/math_float4.h b/intern/cycles/util/math_float4.h
+index ab36a162..4d25de6a 100644
+--- a/intern/cycles/util/math_float4.h
++++ b/intern/cycles/util/math_float4.h
+@@ -372,7 +372,7 @@ ccl_device_inline float reduce_max(const float4 a)
+ #if !defined(__KERNEL_METAL__)
+ ccl_device_inline float dot(const float4 a, const float4 b)
+ {
+-#  if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__)
++#  if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__) && !defined(__e2k__)
+ #    if defined(__KERNEL_NEON__)
+   const __m128 t = vmulq_f32(a, b);
+   return vaddvq_f32(t);
+diff --git a/intern/cycles/util/optimization.h b/intern/cycles/util/optimization.h
+index 4eb231ea..ce23fc98 100644
+--- a/intern/cycles/util/optimization.h
++++ b/intern/cycles/util/optimization.h
+@@ -39,6 +39,15 @@
+ #    define __KERNEL_SSE3__
+ #    define __KERNEL_SSE42__
+ 
++#  elif defined(__e2k__)
++
++#    define __KERNEL_SSE__
++#    define __KERNEL_SSE2__
++#    define __KERNEL_SSE3__
++#    define __KERNEL_SSSE3__
++#    define __KERNEL_SSE41__
++#    define __KERNEL_SSE42__
++
+ #  endif
+ 
+ #endif
+diff --git a/intern/cycles/util/simd.h b/intern/cycles/util/simd.h
+index a6c8438b..d2d52800 100644
+--- a/intern/cycles/util/simd.h
++++ b/intern/cycles/util/simd.h
+@@ -20,7 +20,7 @@
+ #  include "util/windows.h"
+ #elif defined(_MSC_VER) && !defined(__KERNEL_NEON__)
+ #  include <intrin.h>
+-#elif (defined(__x86_64__) || defined(__i386__))
++#elif (defined(__x86_64__) || defined(__i386__) || defined(__e2k__))
+ #  include <x86intrin.h>
+ #elif defined(__KERNEL_NEON__)
+ #  define SSE2NEON_PRECISE_MINMAX 1
+@@ -236,7 +236,7 @@ type shuffle_neon(const type &a, const type &b)
+ #  endif
+ #endif
+ 
+-#if defined(__LZCNT__)
++#if defined(__LZCNT__) && !defined(__e2k__)
+ #  define _lzcnt_u32 __lzcnt32
+ #  define _lzcnt_u64 __lzcnt64
+ #endif
+diff --git a/intern/cycles/util/system.cpp b/intern/cycles/util/system.cpp
+index 3c98a10a..0379ded4 100644
+--- a/intern/cycles/util/system.cpp
++++ b/intern/cycles/util/system.cpp
+@@ -210,6 +210,13 @@ bool system_cpu_support_avx2()
+   CPUCapabilities &caps = system_cpu_capabilities();
+   return caps.avx2;
+ }
++#elif defined(__e2k__)
++bool system_cpu_support_sse2()  { return true; }
++bool system_cpu_support_sse3()  { return true; }
++bool system_cpu_support_sse41() { return true; }
++bool system_cpu_support_sse42() { return true; }
++bool system_cpu_support_avx()   { return false; }
++bool system_cpu_support_avx2()  { return false; }
+ #else
+ 
+ bool system_cpu_support_sse42()
+diff --git a/intern/cycles/util/transform.h b/intern/cycles/util/transform.h
+index 35aa9370..13dc4906 100644
+--- a/intern/cycles/util/transform.h
++++ b/intern/cycles/util/transform.h
+@@ -437,7 +437,7 @@ ccl_device_forceinline float3 transform_inverse_cross(const float3 a_, const flo
+ 
+ ccl_device_forceinline float transform_inverse_dot(const float3 a_, const float3 b_)
+ {
+-#if defined(__KERNEL_SSE__) && defined(__KERNEL_SSE42__)
++#if defined(__KERNEL_SSE__) && defined(__KERNEL_SSE42__) && !defined(__e2k__)
+   const __m128 a = (const __m128 &)a_;
+   const __m128 b = (const __m128 &)b_;
+   return _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7F));
+diff --git a/intern/libmv/libmv/build/build_config.h b/intern/libmv/libmv/build/build_config.h
+index 09e67e2d..0b242864 100644
+--- a/intern/libmv/libmv/build/build_config.h
++++ b/intern/libmv/libmv/build/build_config.h
+@@ -308,6 +308,11 @@
+ #  define ARCH_CPU_PPC64 1
+ #  define ARCH_CPU_64_BITS 1
+ #  define ARCH_CPU_LITTLE_ENDIAN 1
++#elif defined(__e2k__)
++#  define ARCH_CPU_E2K_FAMILY 1
++#  define ARCH_CPU_E2K 1
++#  define ARCH_CPU_64_BITS 1
++#  define ARCH_CPU_LITTLE_ENDIAN 1
+ #elif defined(__ARMEL__)
+ #  define ARCH_CPU_ARM_FAMILY 1
+ #  define ARCH_CPU_ARMEL 1
+@@ -392,6 +397,9 @@
+ #if !defined(ARCH_CPU_MIPS_FAMILY)
+ #  define ARCH_CPU_MIPS_FAMILY 0
+ #endif
++#if !defined(ARCH_CPU_E2K_FAMILY)
++#  define ARCH_CPU_E2K_FAMILY 0
++#endif
+ #if !defined(ARCH_CPU_PPC64_FAMILY)
+ #  define ARCH_CPU_PPC64_FAMILY 0
+ #endif
+diff --git a/source/blender/blenkernel/intern/curves_attributes.cc b/source/blender/blenkernel/intern/curves_attributes.cc
+index bd05b976..660ae246 100644
+--- a/source/blender/blenkernel/intern/curves_attributes.cc
++++ b/source/blender/blenkernel/intern/curves_attributes.cc
+@@ -383,9 +383,9 @@ static GeometryAttributeProviders create_attribute_providers_for_curve()
+ 
+ /** \} */
+ 
++static const GeometryAttributeProviders providers = create_attribute_providers_for_curve();
+ static AttributeAccessorFunctions get_curves_accessor_functions()
+ {
+-  static const GeometryAttributeProviders providers = create_attribute_providers_for_curve();
+   AttributeAccessorFunctions fn =
+       attribute_accessor_functions::accessor_functions_for_providers<providers>();
+   fn.domain_size = [](const void *owner, const AttrDomain domain) {
+diff --git a/source/blender/blenkernel/intern/grease_pencil_attributes.cc b/source/blender/blenkernel/intern/grease_pencil_attributes.cc
+index 39b0d181..4c4af098 100644
+--- a/source/blender/blenkernel/intern/grease_pencil_attributes.cc
++++ b/source/blender/blenkernel/intern/grease_pencil_attributes.cc
+@@ -42,10 +42,10 @@ static GVArray adapt_grease_pencil_attribute_domain(const GreasePencil & /*greas
+   return {};
+ }
+ 
++static const GeometryAttributeProviders providers =
++    create_attribute_providers_for_grease_pencil();
+ static AttributeAccessorFunctions get_grease_pencil_accessor_functions()
+ {
+-  static const GeometryAttributeProviders providers =
+-      create_attribute_providers_for_grease_pencil();
+   AttributeAccessorFunctions fn =
+       attribute_accessor_functions::accessor_functions_for_providers<providers>();
+   fn.domain_size = [](const void *owner, const AttrDomain domain) {
+diff --git a/source/blender/blenkernel/intern/instances_attributes.cc b/source/blender/blenkernel/intern/instances_attributes.cc
+index d3acfc78..78391abc 100644
+--- a/source/blender/blenkernel/intern/instances_attributes.cc
++++ b/source/blender/blenkernel/intern/instances_attributes.cc
+@@ -65,9 +65,9 @@ static GeometryAttributeProviders create_attribute_providers_for_instances()
+                                     {&instance_custom_data});
+ }
+ 
++static const GeometryAttributeProviders providers = create_attribute_providers_for_instances();
+ static AttributeAccessorFunctions get_instances_accessor_functions()
+ {
+-  static const GeometryAttributeProviders providers = create_attribute_providers_for_instances();
+   AttributeAccessorFunctions fn =
+       attribute_accessor_functions::accessor_functions_for_providers<providers>();
+   fn.domain_size = [](const void *owner, const AttrDomain domain) {
+diff --git a/source/blender/blenkernel/intern/mesh_attributes.cc b/source/blender/blenkernel/intern/mesh_attributes.cc
+index 9d84c5f9..803fece1 100644
+--- a/source/blender/blenkernel/intern/mesh_attributes.cc
++++ b/source/blender/blenkernel/intern/mesh_attributes.cc
+@@ -981,9 +981,9 @@ static GeometryAttributeProviders create_attribute_providers_for_mesh()
+                                      &face_custom_data});
+ }
+ 
++static const GeometryAttributeProviders providers = create_attribute_providers_for_mesh();
+ static AttributeAccessorFunctions get_mesh_accessor_functions()
+ {
+-  static const GeometryAttributeProviders providers = create_attribute_providers_for_mesh();
+   AttributeAccessorFunctions fn =
+       attribute_accessor_functions::accessor_functions_for_providers<providers>();
+   fn.domain_size = [](const void *owner, const AttrDomain domain) {
+diff --git a/source/blender/blenkernel/intern/node_tree_update.cc b/source/blender/blenkernel/intern/node_tree_update.cc
+index 835b8357..69aa8f9e 100644
+--- a/source/blender/blenkernel/intern/node_tree_update.cc
++++ b/source/blender/blenkernel/intern/node_tree_update.cc
+@@ -2059,7 +2059,7 @@ void BKE_ntree_update_after_single_tree_change(Main &bmain,
+                                                bNodeTree &modified_tree,
+                                                const NodeTreeUpdateExtraParams &params)
+ {
+-  BKE_ntree_update(bmain, blender::Span{&modified_tree}, params);
++  BKE_ntree_update(bmain, blender::Span({&modified_tree}), params);
+ }
+ 
+ void BKE_ntree_update_without_main(bNodeTree &tree)
+diff --git a/source/blender/blenkernel/intern/pointcloud_attributes.cc b/source/blender/blenkernel/intern/pointcloud_attributes.cc
+index e3fa4746..55cac1fd 100644
+--- a/source/blender/blenkernel/intern/pointcloud_attributes.cc
++++ b/source/blender/blenkernel/intern/pointcloud_attributes.cc
+@@ -64,9 +64,9 @@ static GeometryAttributeProviders create_attribute_providers_for_pointcloud()
+   return GeometryAttributeProviders({&position, &radius, &id}, {&point_custom_data});
+ }
+ 
++static const GeometryAttributeProviders providers = create_attribute_providers_for_pointcloud();
+ static AttributeAccessorFunctions get_pointcloud_accessor_functions()
+ {
+-  static const GeometryAttributeProviders providers = create_attribute_providers_for_pointcloud();
+   AttributeAccessorFunctions fn =
+       attribute_accessor_functions::accessor_functions_for_providers<providers>();
+   fn.domain_size = [](const void *owner, const AttrDomain domain) {
+diff --git a/source/blender/blenkernel/intern/volume.cc b/source/blender/blenkernel/intern/volume.cc
+index 41aeb34a..18b5a955 100644
+--- a/source/blender/blenkernel/intern/volume.cc
++++ b/source/blender/blenkernel/intern/volume.cc
+@@ -968,6 +968,9 @@ struct CreateGridOp {
+     else {
+       return GridType::create();
+     }
++#ifdef __EDG__
++    return 0;
++#endif
+   }
+ };
+ #endif
+diff --git a/source/blender/blenlib/BLI_build_config.h b/source/blender/blenlib/BLI_build_config.h
+index bbbb75ed..1ad60911 100644
+--- a/source/blender/blenlib/BLI_build_config.h
++++ b/source/blender/blenlib/BLI_build_config.h
+@@ -313,6 +313,9 @@
+ #  define ARCH_CPU_ARM64 1
+ #  define ARCH_CPU_64_BITS 1
+ #  define ARCH_CPU_LITTLE_ENDIAN 1
++#elif defined(__e2k__)
++#  define ARCH_CPU_64_BITS 1
++#  define ARCH_CPU_LITTLE_ENDIAN 1
+ #elif defined(__pnacl__) || defined(__asmjs__) || defined(__wasm__)
+ #  define ARCH_CPU_32_BITS 1
+ #  define ARCH_CPU_LITTLE_ENDIAN 1
+diff --git a/source/blender/blenlib/BLI_enumerable_thread_specific.hh b/source/blender/blenlib/BLI_enumerable_thread_specific.hh
+index 4b9de833..999eea90 100644
+--- a/source/blender/blenlib/BLI_enumerable_thread_specific.hh
++++ b/source/blender/blenlib/BLI_enumerable_thread_specific.hh
+@@ -40,7 +40,14 @@ namespace blender::threading {
+ #ifndef WITH_TBB
+ namespace enumerable_thread_specific_utils {
+ inline std::atomic<int> next_id = 0;
++#ifdef __EDG__
++extern thread_local int thread_id;
++#ifdef EDG_THREAD_FIX
++thread_local int thread_id = next_id.fetch_add(1, std::memory_order_relaxed);
++#endif
++#else
+ inline thread_local int thread_id = next_id.fetch_add(1, std::memory_order_relaxed);
++#endif
+ }  // namespace enumerable_thread_specific_utils
+ #endif /* !WITH_TBB */
+ 
+diff --git a/source/blender/blenlib/BLI_hash.hh b/source/blender/blenlib/BLI_hash.hh
+index 738d639f..7ffb0cab 100644
+--- a/source/blender/blenlib/BLI_hash.hh
++++ b/source/blender/blenlib/BLI_hash.hh
+@@ -92,6 +92,9 @@ template<typename T> struct DefaultHash {
+       /* If this results in a compiler error, no hash function for the type has been found. */
+       return value.hash();
+     }
++#ifdef __EDG__
++    return 0;
++#endif
+   }
+ 
+   template<typename U> uint64_t operator()(const U &value) const
+diff --git a/source/blender/blenlib/BLI_math_matrix_types.hh b/source/blender/blenlib/BLI_math_matrix_types.hh
+index b3392831..773d6ea7 100644
+--- a/source/blender/blenlib/BLI_math_matrix_types.hh
++++ b/source/blender/blenlib/BLI_math_matrix_types.hh
+@@ -410,7 +410,12 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
+     /* This is the reference implementation.
+      * Might be overloaded with vectorized / optimized code. */
+     row_type result(0);
++#ifdef __EDG__
++    const int nrow = NumRow;
++    unroll<NumCol>([&](auto c) { unroll<nrow>([&](auto r) { result[c] += b[c][r] * a[r]; }); });
++#else
+     unroll<NumCol>([&](auto c) { unroll<NumRow>([&](auto r) { result[c] += b[c][r] * a[r]; }); });
++#endif
+     return result;
+   }
+ 
+diff --git a/source/blender/blenlib/BLI_memory_utils.hh b/source/blender/blenlib/BLI_memory_utils.hh
+index b24c7b55..e2702df0 100644
+--- a/source/blender/blenlib/BLI_memory_utils.hh
++++ b/source/blender/blenlib/BLI_memory_utils.hh
+@@ -11,6 +11,7 @@
+ #include <algorithm>
+ #include <memory>
+ #include <type_traits>
++#include <cstddef> // std::byte
+ 
+ #include "BLI_utildefines.h"
+ #include "MEM_guardedalloc.h"
+diff --git a/source/blender/blenlib/BLI_utildefines.h b/source/blender/blenlib/BLI_utildefines.h
+index 17ccaa74..215ea0a5 100644
+--- a/source/blender/blenlib/BLI_utildefines.h
++++ b/source/blender/blenlib/BLI_utildefines.h
+@@ -263,7 +263,7 @@ inline constexpr int64_t power_of_2_max(const int64_t x)
+ /* assuming a static array */
+ #ifndef __cplusplus
+ #  if defined(__GNUC__) && !defined(__cplusplus) && !defined(__clang__) && \
+-      !defined(__INTEL_COMPILER)
++      !defined(__INTEL_COMPILER) && !defined(__EDG__)
+ #    define ARRAY_SIZE(arr) \
+       ((sizeof(struct { int isnt_array : ((const void *)&(arr) == &(arr)[0]); }) * 0) + \
+        (sizeof(arr) / sizeof(*(arr))))
+diff --git a/source/blender/blenlib/BLI_virtual_array.hh b/source/blender/blenlib/BLI_virtual_array.hh
+index abcd27df..486d6799 100644
+--- a/source/blender/blenlib/BLI_virtual_array.hh
++++ b/source/blender/blenlib/BLI_virtual_array.hh
+@@ -481,6 +481,9 @@ template<typename T> struct VArrayAnyExtraInfo {
+       BLI_assert_unreachable();
+       return {};
+     }
++#ifdef __EDG__
++    return {};
++#endif
+   }
+ };
+ 
+diff --git a/source/blender/draw/engines/eevee/eevee_lookdev.cc b/source/blender/draw/engines/eevee/eevee_lookdev.cc
+index b34abba4..ff0cf34b 100644
+--- a/source/blender/draw/engines/eevee/eevee_lookdev.cc
++++ b/source/blender/draw/engines/eevee/eevee_lookdev.cc
+@@ -30,6 +30,9 @@ namespace blender::eevee {
+  * \{ */
+ 
+ LookdevWorld::LookdevWorld()
++#ifdef __EDG__
++: world{}
++#endif
+ {
+   /* Create a dummy World data block to hold the nodetree generated for studio-lights. */
+   world = BKE_id_new_nomain<::World>("Lookdev");
+diff --git a/source/blender/functions/intern/lazy_function_graph_executor.cc b/source/blender/functions/intern/lazy_function_graph_executor.cc
+index 8105278e..eeba9924 100644
+--- a/source/blender/functions/intern/lazy_function_graph_executor.cc
++++ b/source/blender/functions/intern/lazy_function_graph_executor.cc
+@@ -43,6 +43,10 @@
+ 
+ #include <atomic>
+ 
++#ifdef __EDG__
++#define EDG_THREAD_FIX
++#endif
++
+ #include "BLI_enumerable_thread_specific.hh"
+ #include "BLI_function_ref.hh"
+ #include "BLI_mutex.hh"
+-- 
+2.43.0
+
